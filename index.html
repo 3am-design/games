@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>中國象棋 - Board Games</title>
+  <!-- 引入 Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Noto+Sans+TC:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <!-- 引入 Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      future: { hoverOnlyWhenSupported: true }
+    }
+  </script>
+  <style>
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+    
+    @keyframes pulse-fast { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .animate-thinking { animation: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+    html, body { 
+      overscroll-behavior-y: none; 
+      background-color: #000000; 
+      font-family: 'Inter', sans-serif;
+      color: #ffffff;
+      height: 100%;
+      height: -webkit-fill-available;
+      overflow: hidden;
+      margin: 0;
+      touch-action: manipulation;
+    }
+    
+    .app-container {
+      height: 100vh;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    
+    button { 
+      -webkit-tap-highlight-color: transparent; 
+      outline: none;
+      touch-action: manipulation;
+    }
+
+    .key-base { transition: background-color 0.2s ease-out, color 0.2s ease-out, border-color 0.2s, opacity 0.2s; }
+    .key-base:active { opacity: 0.5; transition: none; }
+
+    .chess-piece {
+      cursor: pointer;
+      transition: transform 0.2s ease, filter 0.2s ease;
+    }
+    @media (hover: hover) {
+      .chess-piece:hover { filter: brightness(1.2); }
+      .valid-move:hover { fill: rgba(255, 255, 255, 0.4); }
+    }
+    .valid-move {
+      cursor: pointer;
+      transition: fill 0.2s ease;
+    }
+    
+    .font-chess { font-family: 'Noto Sans TC', 'Inter', sans-serif; }
+    
+    /* Range Slider 樣式 */
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      background: transparent;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 24px;
+      width: 24px;
+      border-radius: 50%;
+      background: #ffffff;
+      cursor: pointer;
+      margin-top: -10px;
+      box-shadow: 0 0 10px rgba(255,255,255,0.5);
+    }
+    input[type=range]::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 4px;
+      cursor: pointer;
+      background: #333333;
+      border-radius: 2px;
+    }
+  </style>
+</head>
+<body class="bg-black selection:bg-white/30">
+
+  <div id="app" class="app-container"></div>
+
+  <script>
+    // --- 系統常數與初始設定 ---
+    const GRID_SIZE = 40;
+    const BOARD_WIDTH = 8; 
+    const BOARD_HEIGHT = 9; 
+    
+    const PIECE_TEXT = {
+      'R': { r: '車', h: '馬', e: '相', a: '仕', g: '帥', c: '炮', s: '兵' },
+      'B': { r: '車', h: '馬', e: '象', a: '士', g: '將', c: '砲', s: '卒' }
+    };
+
+    // AI 棋子基礎分數估值
+    const PIECE_VALUES = { 'g': 10000, 'r': 900, 'c': 450, 'h': 400, 'e': 200, 'a': 200, 's': 100 };
+
+    const cloneState = (state) => JSON.parse(JSON.stringify(state));
+
+    // --- 遊戲與系統狀態 ---
+    let gameState = null;
+    let historyStack = [];
+    let isMenuOpen = true;
+    
+    let settings = {
+      mode: 'PvE', // 'PvE' or 'PvP'
+      aiDifficulty: 5, // 1 to 10
+      playerColor: 'R' // 玩家固定為紅方，白方為 AI
+    };
+
+    // 初始化棋盤
+    const getInitialBoard = () => {
+      const board = Array(10).fill(null).map(() => Array(9).fill(null));
+      const layout = [
+        ['r', 'h', 'e', 'a', 'g', 'a', 'e', 'h', 'r'],
+        ['.', '.', '.', '.', '.', '.', '.', '.', '.'],
+        ['.', 'c', '.', '.', '.', '.', '.', 'c', '.'],
+        ['s', '.', 's', '.', 's', '.', 's', '.', 's'],
+        ['.', '.', '.', '.', '.', '.', '.', '.', '.'],
+        ['.', '.', '.', '.', '.', '.', '.', '.', '.'],
+        ['S', '.', 'S', '.', 'S', '.', 'S', '.', 'S'],
+        ['.', 'C', '.', '.', '.', '.', '.', 'C', '.'],
+        ['.', '.', '.', '.', '.', '.', '.', '.', '.'],
+        ['R', 'H', 'E', 'A', 'G', 'A', 'E', 'H', 'R']
+      ];
+
+      for (let y = 0; y < 10; y++) {
+        for (let x = 0; x < 9; x++) {
+          const char = layout[y][x];
+          if (char !== '.') {
+            const color = char === char.toUpperCase() ? 'R' : 'B';
+            const type = char.toLowerCase();
+            board[y][x] = { color, type, label: PIECE_TEXT[color][type] };
+          }
+        }
+      }
+      return board;
+    };
+
+    // --- 核心邏輯：規則引擎 ---
+    const isInsidePalace = (x, y, color) => {
+      if (x < 3 || x > 5) return false;
+      if (color === 'B' && y > 2) return false;
+      if (color === 'R' && y < 7) return false;
+      return true;
+    };
+
+    // 計算特定棋子所有合法步數 (優化效能版，供 AI 使用)
+    const getValidMoves = (board, sx, sy) => {
+      const piece = board[sy][sx];
+      if (!piece) return [];
+      const moves = [];
+      const { color, type } = piece;
+
+      const addMoveIfValid = (nx, ny) => {
+        if (nx < 0 || nx > 8 || ny < 0 || ny > 9) return false;
+        const target = board[ny][nx];
+        if (!target || target.color !== color) {
+          moves.push({ x: nx, y: ny });
+        }
+        return !target; 
+      };
+
+      if (type === 'r') {
+        for (let x = sx + 1; x <= 8; x++) if (!addMoveIfValid(x, sy)) break;
+        for (let x = sx - 1; x >= 0; x--) if (!addMoveIfValid(x, sy)) break;
+        for (let y = sy + 1; y <= 9; y++) if (!addMoveIfValid(sx, y)) break;
+        for (let y = sy - 1; y >= 0; y--) if (!addMoveIfValid(sx, y)) break;
+      } 
+      else if (type === 'h') {
+        const dirs = [
+          { dx: 1, dy: 2, bx: 0, by: 1 }, { dx: 2, dy: 1, bx: 1, by: 0 },
+          { dx: 2, dy: -1, bx: 1, by: 0 }, { dx: 1, dy: -2, bx: 0, by: -1 },
+          { dx: -1, dy: -2, bx: 0, by: -1 }, { dx: -2, dy: -1, bx: -1, by: 0 },
+          { dx: -2, dy: 1, bx: -1, by: 0 }, { dx: -1, dy: 2, bx: 0, by: 1 }
+        ];
+        dirs.forEach(d => {
+          if (sx + d.bx >= 0 && sx + d.bx <= 8 && sy + d.by >= 0 && sy + d.by <= 9 && !board[sy + d.by][sx + d.bx]) {
+            addMoveIfValid(sx + d.dx, sy + d.dy);
+          }
+        });
+      }
+      else if (type === 'e') {
+        const dirs = [{ dx: 2, dy: 2, bx: 1, by: 1 }, { dx: 2, dy: -2, bx: 1, by: -1 }, { dx: -2, dy: -2, bx: -1, by: -1 }, { dx: -2, dy: 2, bx: -1, by: 1 }];
+        dirs.forEach(d => {
+          const ny = sy + d.dy;
+          if ((color === 'R' && ny < 5) || (color === 'B' && ny > 4)) return;
+          if (sx + d.bx >= 0 && sx + d.bx <= 8 && sy + d.by >= 0 && sy + d.by <= 9 && !board[sy + d.by][sx + d.bx]) {
+            addMoveIfValid(sx + d.dx, ny);
+          }
+        });
+      }
+      else if (type === 'a') {
+        const dirs = [{ dx: 1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: 1 }, { dx: -1, dy: -1 }];
+        dirs.forEach(d => {
+          const nx = sx + d.dx, ny = sy + d.dy;
+          if (isInsidePalace(nx, ny, color)) addMoveIfValid(nx, ny);
+        });
+      }
+      else if (type === 'g') {
+        const dirs = [{ dx: 0, dy: 1 }, { dx: 0, dy: -1 }, { dx: 1, dy: 0 }, { dx: -1, dy: 0 }];
+        dirs.forEach(d => {
+          const nx = sx + d.dx, ny = sy + d.dy;
+          if (isInsidePalace(nx, ny, color)) addMoveIfValid(nx, ny);
+        });
+        // 飛將
+        let searchDir = color === 'R' ? -1 : 1;
+        for (let y = sy + searchDir; y >= 0 && y <= 9; y += searchDir) {
+          if (board[y][sx]) {
+            if (board[y][sx].type === 'g') moves.push({ x: sx, y });
+            break;
+          }
+        }
+      }
+      else if (type === 'c') {
+        const checkCannonDir = (dx, dy) => {
+          let jumped = false;
+          for (let i = 1; i < 10; i++) {
+            const nx = sx + dx * i, ny = sy + dy * i;
+            if (nx < 0 || nx > 8 || ny < 0 || ny > 9) break;
+            const target = board[ny][nx];
+            if (!jumped) {
+              if (!target) moves.push({ x: nx, y: ny });
+              else jumped = true;
+            } else {
+              if (target) {
+                if (target.color !== color) moves.push({ x: nx, y: ny });
+                break;
+              }
+            }
+          }
+        };
+        checkCannonDir(1, 0); checkCannonDir(-1, 0); checkCannonDir(0, 1); checkCannonDir(0, -1);
+      }
+      else if (type === 's') {
+        const dy = color === 'R' ? -1 : 1;
+        addMoveIfValid(sx, sy + dy);
+        if ((color === 'R' && sy < 5) || (color === 'B' && sy > 4)) {
+          addMoveIfValid(sx - 1, sy);
+          addMoveIfValid(sx + 1, sy);
+        }
+      }
+      return moves;
+    };
+
+
+    // --- 電腦 AI 邏輯 (Minimax with Alpha-Beta Pruning) ---
+
+    // 取得某方所有可能步數
+    const getAllMoves = (board, color) => {
+      let moves = [];
+      for (let y = 0; y <= 9; y++) {
+        for (let x = 0; x <= 8; x++) {
+          const p = board[y][x];
+          if (p && p.color === color) {
+            let vMoves = getValidMoves(board, x, y);
+            vMoves.forEach(m => moves.push({ from: {x, y}, to: {x: m.x, y: m.y} }));
+          }
+        }
+      }
+      return moves;
+    };
+
+    // 盤面分數估值函數 (AI 判斷優劣)
+    const evaluateBoard = (board) => {
+      let score = 0;
+      for (let y = 0; y <= 9; y++) {
+        for (let x = 0; x <= 8; x++) {
+          const p = board[y][x];
+          if (p) {
+            let val = PIECE_VALUES[p.type];
+            // 過河兵價值提升
+            if (p.type === 's') {
+              if (p.color === 'R' && y < 5) val += 50 + (4-y)*10;
+              if (p.color === 'B' && y > 4) val += 50 + (y-5)*10;
+            }
+            score += p.color === 'B' ? val : -val; // 白方(AI)視角：白方分數為正，紅方為負
+          }
+        }
+      }
+      return score;
+    };
+
+    // 執行及復原移動 (提高 AI 遍歷效能)
+    const doMove = (board, move) => {
+      const captured = board[move.to.y][move.to.x];
+      board[move.to.y][move.to.x] = board[move.from.y][move.from.x];
+      board[move.from.y][move.from.x] = null;
+      return captured;
+    };
+
+    const undoMove = (board, move, captured) => {
+      board[move.from.y][move.from.x] = board[move.to.y][move.to.x];
+      board[move.to.y][move.to.x] = captured;
+    };
+
+    // Minimax 核心演算法
+    const minimax = (board, depth, alpha, beta, isMaximizing) => {
+      if (depth === 0) return evaluateBoard(board);
+
+      const color = isMaximizing ? 'B' : 'R';
+      let moves = getAllMoves(board, color);
+
+      // 簡單的排序：優先考慮會食子嘅步法 (幫助 Alpha-beta 提早剪枝)
+      moves.sort((a, b) => {
+        let scoreA = board[a.to.y][a.to.x] ? PIECE_VALUES[board[a.to.y][a.to.x].type] : 0;
+        let scoreB = board[b.to.y][b.to.x] ? PIECE_VALUES[board[b.to.y][b.to.x].type] : 0;
+        return scoreB - scoreA; 
+      });
+
+      if (moves.length === 0) return isMaximizing ? -100000 : 100000;
+
+      if (isMaximizing) {
+        let maxEval = -Infinity;
+        for (let i = 0; i < moves.length; i++) {
+          let move = moves[i];
+          let captured = doMove(board, move);
+          
+          let currentEval = 0;
+          if (captured && captured.type === 'g') {
+            currentEval = 100000; // 直接贏
+          } else {
+            currentEval = minimax(board, depth - 1, alpha, beta, false);
+          }
+          
+          undoMove(board, move, captured);
+          maxEval = Math.max(maxEval, currentEval);
+          alpha = Math.max(alpha, currentEval);
+          if (beta <= alpha) break; // Pruning
+        }
+        return maxEval;
+      } else {
+        let minEval = Infinity;
+        for (let i = 0; i < moves.length; i++) {
+          let move = moves[i];
+          let captured = doMove(board, move);
+          
+          let currentEval = 0;
+          if (captured && captured.type === 'g') {
+            currentEval = -100000; // 直接輸
+          } else {
+            currentEval = minimax(board, depth - 1, alpha, beta, true);
+          }
+
+          undoMove(board, move, captured);
+          minEval = Math.min(minEval, currentEval);
+          beta = Math.min(beta, currentEval);
+          if (beta <= alpha) break; // Pruning
+        }
+        return minEval;
+      }
+    };
+
+    const calculateAIMove = () => {
+      const diff = settings.aiDifficulty;
+      
+      // 根據 1-10 難度分配：搜索深度 (depth) 與隨機率 (randomness)
+      let depth = 1;
+      let randomness = 0;
+
+      if (diff === 1) { depth = 1; randomness = 0.8; }
+      else if (diff === 2) { depth = 1; randomness = 0.4; }
+      else if (diff === 3) { depth = 2; randomness = 0.5; }
+      else if (diff === 4) { depth = 2; randomness = 0.2; }
+      else if (diff === 5) { depth = 2; randomness = 0.05; }
+      else if (diff === 6) { depth = 3; randomness = 0.3; }
+      else if (diff === 7) { depth = 3; randomness = 0.1; }
+      else if (diff === 8) { depth = 3; randomness = 0; }
+      else if (diff === 9) { depth = 4; randomness = 0.1; }
+      else if (diff === 10) { depth = 4; randomness = 0; } // 最高難度：無隨機，睇4步
+
+      let moves = getAllMoves(gameState.board, 'B');
+      
+      if (moves.length === 0) return null;
+
+      // 隨機發波 (低難度特權)
+      if (Math.random() < randomness) {
+         return moves[Math.floor(Math.random() * moves.length)];
+      }
+
+      // 開始思考最佳步數
+      let bestMove = null;
+      let bestValue = -Infinity;
+      
+      // 提早為第一層排序，優先睇食子步數
+      moves.sort((a, b) => {
+        let scoreA = gameState.board[a.to.y][a.to.x] ? PIECE_VALUES[gameState.board[a.to.y][a.to.x].type] : 0;
+        let scoreB = gameState.board[b.to.y][b.to.x] ? PIECE_VALUES[gameState.board[b.to.y][b.to.x].type] : 0;
+        return scoreB - scoreA; 
+      });
+
+      for (let i = 0; i < moves.length; i++) {
+        let move = moves[i];
+        let captured = doMove(gameState.board, move);
+        
+        let moveValue = 0;
+        if (captured && captured.type === 'g') {
+           moveValue = 100000;
+        } else {
+           moveValue = minimax(gameState.board, depth - 1, -Infinity, Infinity, false);
+        }
+
+        undoMove(gameState.board, move, captured);
+
+        if (moveValue > bestValue) {
+          bestValue = moveValue;
+          bestMove = move;
+        } else if (moveValue === bestValue && Math.random() < 0.5) {
+          // 如果分數一樣，隨機揀一個等佢冇咁死板
+          bestMove = move;
+        }
+      }
+
+      return bestMove;
+    };
+
+    const executeAIMove = () => {
+      const move = calculateAIMove();
+      if (!move) return;
+
+      historyStack.push(cloneState(gameState));
+      
+      const movingPiece = gameState.board[move.from.y][move.from.x];
+      const targetPiece = gameState.board[move.to.y][move.to.x];
+
+      if (targetPiece) {
+        gameState.captured[gameState.turn].push(targetPiece);
+        if (targetPiece.type === 'g') {
+          gameState.winner = gameState.turn;
+        }
+      }
+
+      gameState.board[move.to.y][move.to.x] = movingPiece;
+      gameState.board[move.from.y][move.from.x] = null;
+      
+      if (!gameState.winner) {
+        gameState.turn = 'R'; // 轉返紅方
+        gameState.turnCount++;
+      }
+
+      gameState.isThinking = false;
+      render();
+    };
+
+    // --- 互動與控制 ---
+    window.setMode = (mode) => {
+      settings.mode = mode;
+      renderMenu();
+    };
+
+    window.setDifficulty = (e) => {
+      settings.aiDifficulty = parseInt(e.target.value);
+      renderMenu();
+    };
+
+    window.openMenu = () => {
+      isMenuOpen = true;
+      render();
+    };
+
+    // 初始化遊戲
+    window.initGame = () => {
+      isMenuOpen = false;
+      gameState = {
+        board: getInitialBoard(),
+        turn: 'R', // 'R' or 'B'
+        selectedPiece: null, 
+        validMoves: [],
+        winner: null,
+        captured: { 'R': [], 'B': [] },
+        turnCount: 1,
+        isThinking: false
+      };
+      historyStack = [];
+      render();
+    };
+
+    window.handleUndo = () => {
+      if (historyStack.length === 0 || gameState.winner || gameState.isThinking) return;
+      
+      if (settings.mode === 'PvE') {
+         // 單人模式悔棋要退兩步 (退返玩家自己回合)
+         if (historyStack.length >= 2) {
+           historyStack.pop(); // AI 的步
+           gameState = historyStack.pop(); // 玩家的步
+         }
+      } else {
+         gameState = historyStack.pop();
+      }
+      render();
+    };
+
+    window.handleSquareClick = (x, y) => {
+      if (gameState.winner || gameState.isThinking) return;
+      
+      const piece = gameState.board[y][x];
+      const isSelected = gameState.selectedPiece && gameState.selectedPiece.x === x && gameState.selectedPiece.y === y;
+
+      if (isSelected) {
+        gameState.selectedPiece = null;
+        gameState.validMoves = [];
+        render();
+        return;
+      }
+
+      const isValidMove = gameState.validMoves.find(m => m.x === x && m.y === y);
+      if (gameState.selectedPiece && isValidMove) {
+        historyStack.push(cloneState(gameState));
+        
+        const sx = gameState.selectedPiece.x;
+        const sy = gameState.selectedPiece.y;
+        const movingPiece = gameState.board[sy][sx];
+        const targetPiece = gameState.board[y][x];
+
+        if (targetPiece) {
+          gameState.captured[gameState.turn].push(targetPiece);
+          if (targetPiece.type === 'g') gameState.winner = gameState.turn;
+        }
+
+        gameState.board[y][x] = movingPiece;
+        gameState.board[sy][sx] = null;
+        
+        if (!gameState.winner) {
+          gameState.turn = gameState.turn === 'R' ? 'B' : 'R';
+          if (gameState.turn === 'R') gameState.turnCount++;
+        }
+
+        gameState.selectedPiece = null;
+        gameState.validMoves = [];
+        
+        // 如果係 AI 回合，觸發 AI
+        if (!gameState.winner && settings.mode === 'PvE' && gameState.turn === 'B') {
+          gameState.isThinking = true;
+          render();
+          // 用 setTimeout 讓瀏覽器有時間更新畫面顯示「AI 思考中」
+          setTimeout(executeAIMove, 100); 
+        } else {
+          render();
+        }
+        return;
+      }
+
+      // 如果點擊自己嘅棋子，高亮及顯示步數
+      if (piece && piece.color === gameState.turn) {
+        // PVE 模式下，玩家只能點擊自己顏色
+        if (settings.mode === 'PvE' && piece.color !== settings.playerColor) return;
+
+        gameState.selectedPiece = { x, y };
+        gameState.validMoves = getValidMoves(gameState.board, x, y);
+        render();
+      } else {
+        gameState.selectedPiece = null;
+        gameState.validMoves = [];
+        render();
+      }
+    };
+
+    // --- 渲染函數 ---
+    const generateBoardSVG = () => {
+      const OFFSET_X = 20;
+      const OFFSET_Y = 20;
+      let svg = `<g stroke="#475569" stroke-width="1.5">`;
+
+      for (let i = 0; i <= BOARD_HEIGHT; i++) {
+        svg += `<line x1="${OFFSET_X}" y1="${OFFSET_Y + i * GRID_SIZE}" x2="${OFFSET_X + BOARD_WIDTH * GRID_SIZE}" y2="${OFFSET_Y + i * GRID_SIZE}" />`;
+      }
+      
+      for (let i = 0; i <= BOARD_WIDTH; i++) {
+        svg += `<line x1="${OFFSET_X + i * GRID_SIZE}" y1="${OFFSET_Y}" x2="${OFFSET_X + i * GRID_SIZE}" y2="${OFFSET_Y + 4 * GRID_SIZE}" />`;
+        if (i === 0 || i === BOARD_WIDTH) { 
+          svg += `<line x1="${OFFSET_X + i * GRID_SIZE}" y1="${OFFSET_Y + 4 * GRID_SIZE}" x2="${OFFSET_X + i * GRID_SIZE}" y2="${OFFSET_Y + 5 * GRID_SIZE}" />`;
+        }
+        svg += `<line x1="${OFFSET_X + i * GRID_SIZE}" y1="${OFFSET_Y + 5 * GRID_SIZE}" x2="${OFFSET_X + i * GRID_SIZE}" y2="${OFFSET_Y + BOARD_HEIGHT * GRID_SIZE}" />`;
+      }
+
+      svg += `<line x1="${OFFSET_X + 3 * GRID_SIZE}" y1="${OFFSET_Y}" x2="${OFFSET_X + 5 * GRID_SIZE}" y2="${OFFSET_Y + 2 * GRID_SIZE}" />`;
+      svg += `<line x1="${OFFSET_X + 5 * GRID_SIZE}" y1="${OFFSET_Y}" x2="${OFFSET_X + 3 * GRID_SIZE}" y2="${OFFSET_Y + 2 * GRID_SIZE}" />`;
+      svg += `<line x1="${OFFSET_X + 3 * GRID_SIZE}" y1="${OFFSET_Y + 7 * GRID_SIZE}" x2="${OFFSET_X + 5 * GRID_SIZE}" y2="${OFFSET_Y + 9 * GRID_SIZE}" />`;
+      svg += `<line x1="${OFFSET_X + 5 * GRID_SIZE}" y1="${OFFSET_Y + 7 * GRID_SIZE}" x2="${OFFSET_X + 3 * GRID_SIZE}" y2="${OFFSET_Y + 9 * GRID_SIZE}" />`;
+
+      svg += `</g>
+        <text x="${OFFSET_X + 2 * GRID_SIZE}" y="${OFFSET_Y + 4.5 * GRID_SIZE}" fill="#475569" font-size="20" class="font-chess" text-anchor="middle" dominant-baseline="central">楚 河</text>
+        <text x="${OFFSET_X + 6 * GRID_SIZE}" y="${OFFSET_Y + 4.5 * GRID_SIZE}" fill="#475569" font-size="20" class="font-chess" text-anchor="middle" dominant-baseline="central">漢 界</text>
+      `;
+
+      const drawCross = (x, y) => {
+        const cx = OFFSET_X + x * GRID_SIZE;
+        const cy = OFFSET_Y + y * GRID_SIZE;
+        const s = 4, l = 10;
+        let res = `<g stroke="#475569" stroke-width="1.5">`;
+        if (x > 0) res += `<polyline points="${cx-l},${cy-s} ${cx-s},${cy-s} ${cx-s},${cy-l}" fill="none"/><polyline points="${cx-l},${cy+s} ${cx-s},${cy+s} ${cx-s},${cy+l}" fill="none"/>`;
+        if (x < 8) res += `<polyline points="${cx+l},${cy-s} ${cx+s},${cy-s} ${cx+s},${cy-l}" fill="none"/><polyline points="${cx+l},${cy+s} ${cx+s},${cy+s} ${cx+s},${cy+l}" fill="none"/>`;
+        return res + `</g>`;
+      };
+      [ {x:1, y:2}, {x:7, y:2}, {x:0, y:3}, {x:2, y:3}, {x:4, y:3}, {x:6, y:3}, {x:8, y:3},
+        {x:1, y:7}, {x:7, y:7}, {x:0, y:6}, {x:2, y:6}, {x:4, y:6}, {x:6, y:6}, {x:8, y:6}
+      ].forEach(pos => svg += drawCross(pos.x, pos.y));
+
+      let interactionSVG = `<g opacity="0">`;
+      for (let y = 0; y <= BOARD_HEIGHT; y++) {
+        for (let x = 0; x <= BOARD_WIDTH; x++) {
+          interactionSVG += `<rect x="${OFFSET_X + x * GRID_SIZE - 20}" y="${OFFSET_Y + y * GRID_SIZE - 20}" width="40" height="40" fill="transparent" onclick="window.handleSquareClick(${x}, ${y})" style="cursor:pointer;" />`;
+        }
+      }
+      interactionSVG += `</g>`;
+
+      let validMovesSVG = ``;
+      gameState.validMoves.forEach(m => {
+        const cx = OFFSET_X + m.x * GRID_SIZE;
+        const cy = OFFSET_Y + m.y * GRID_SIZE;
+        const isCapture = gameState.board[m.y][m.x] !== null;
+        if (isCapture) {
+          validMovesSVG += `<path d="M ${cx-15} ${cy-15} L ${cx-8} ${cy-15} M ${cx-15} ${cy-15} L ${cx-15} ${cy-8} M ${cx+15} ${cy-15} L ${cx+8} ${cy-15} M ${cx+15} ${cy-15} L ${cx+15} ${cy-8} M ${cx-15} ${cy+15} L ${cx-8} ${cy+15} M ${cx-15} ${cy+15} L ${cx-15} ${cy+8} M ${cx+15} ${cy+15} L ${cx+8} ${cy+15} M ${cx+15} ${cy+15} L ${cx+15} ${cy+8}" fill="none" stroke="#22d3ee" stroke-width="2" class="valid-move" onclick="window.handleSquareClick(${m.x}, ${m.y})" />`;
+        } else {
+          validMovesSVG += `<circle cx="${cx}" cy="${cy}" r="6" fill="#22d3ee" opacity="0.6" class="valid-move" onclick="window.handleSquareClick(${m.x}, ${m.y})" />`;
+        }
+      });
+
+      let piecesSVG = ``;
+      for (let y = 0; y <= BOARD_HEIGHT; y++) {
+        for (let x = 0; x <= BOARD_WIDTH; x++) {
+          const piece = gameState.board[y][x];
+          if (piece) {
+            const cx = OFFSET_X + x * GRID_SIZE;
+            const cy = OFFSET_Y + y * GRID_SIZE;
+            const isSelected = gameState.selectedPiece && gameState.selectedPiece.x === x && gameState.selectedPiece.y === y;
+            const bgColor = '#111111';
+            const strokeColor = piece.color === 'R' ? '#ef4444' : '#f8fafc';
+            const textColor = piece.color === 'R' ? '#ef4444' : '#f8fafc';
+            const glow = isSelected ? `<circle cx="${cx}" cy="${cy}" r="18" fill="none" stroke="#22d3ee" stroke-width="2" />` : '';
+            
+            piecesSVG += `
+              <g class="chess-piece" transform="translate(${cx}, ${cy})" onclick="window.handleSquareClick(${x}, ${y})">
+                ${glow}
+                <circle cx="0" cy="0" r="16" fill="${bgColor}" stroke="${strokeColor}" stroke-width="1.5" />
+                <circle cx="0" cy="0" r="13" fill="none" stroke="${strokeColor}" stroke-width="0.5" opacity="0.5" />
+                <text x="0" y="1" fill="${textColor}" font-size="18" class="font-chess" text-anchor="middle" dominant-baseline="central">${piece.label}</text>
+              </g>
+            `;
+          }
+        }
+      }
+
+      return svg + interactionSVG + validMovesSVG + piecesSVG;
+    };
+
+    const renderMenu = () => {
+      const menuContainer = document.getElementById('menu-layer');
+      if (!menuContainer) return;
+      
+      const isPvE = settings.mode === 'PvE';
+      
+      menuContainer.innerHTML = `
+        <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-y-auto animate-fade-in">
+          <div class="flex-1 flex flex-col items-center justify-center gap-10 pb-10 px-6 w-full mt-4 lg:mt-0">
+            <div class="text-white text-2xl lg:text-3xl font-black tracking-[0.2em] uppercase font-chess text-center">
+              中 國 象 棋<br><span class="text-[12px] lg:text-[14px] text-neutral-500 font-sans tracking-[0.3em] font-medium block mt-2">CHINESE CHESS</span>
+            </div>
+
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-4">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase">GAME MODE 遊戲模式</div>
+              <div class="flex w-full gap-2">
+                <button onclick="window.setMode('PvE')" class="flex-1 py-4 lg:py-5 rounded-lg text-[12px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${isPvE ? 'bg-white text-black font-bold' : 'bg-[#111] text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">單人 (對電腦)</button>
+                <button onclick="window.setMode('PvP')" class="flex-1 py-4 lg:py-5 rounded-lg text-[12px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${!isPvE ? 'bg-white text-black font-bold' : 'bg-[#111] text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">雙人 (對戰)</button>
+              </div>
+            </div>
+
+            ${isPvE ? `
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-4 animate-fade-in">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase flex justify-between w-full">
+                <span>AI DIFFICULTY 電腦難度</span>
+                <span class="text-white font-bold">LEVEL ${settings.aiDifficulty}</span>
+              </div>
+              <div class="w-full px-2 py-4">
+                <input type="range" min="1" max="10" value="${settings.aiDifficulty}" oninput="window.setDifficulty(event)" class="w-full">
+                <div class="flex justify-between text-[10px] text-neutral-600 mt-3 font-bold px-1">
+                  <span>新手 (LV.1)</span>
+                  <span>大師 (LV.10)</span>
+                </div>
+              </div>
+            </div>
+            ` : '<div class="h-[96px] w-full max-w-[340px] lg:max-w-[440px]"></div>'}
+
+            <div class="w-full max-w-[340px] lg:max-w-[440px] mt-4">
+              <button onclick="window.initGame()" class="w-full bg-red-600 hover:bg-red-500 active:bg-red-700 text-white py-4 lg:py-5 rounded-lg font-bold tracking-[0.2em] text-[14px] lg:text-[16px] uppercase shadow-[0_0_20px_rgba(220,38,38,0.4)] transition-all">START GAME 開始</button>
+            </div>
+          </div>
+        </div>
+      `;
+    };
+
+    function render() {
+      const appDiv = document.getElementById('app');
+
+      if (isMenuOpen) {
+        appDiv.innerHTML = `<div id="menu-layer"></div>`;
+        renderMenu();
+        return;
+      }
+
+      if (!gameState) return;
+
+      let statusBannerHTML = '';
+      if (gameState.winner) {
+        const winnerName = gameState.winner === 'R' ? '紅方 (RED)' : '白方 (WHITE)';
+        const bannerBg = gameState.winner === 'R' ? 'bg-[#6a0404]' : 'bg-[#333333]';
+        statusBannerHTML = `<div class="w-full ${bannerBg} rounded-lg py-3.5 flex items-center justify-center font-bold text-[14px] lg:text-[17px] tracking-[0.15em] text-white uppercase animate-pulse shadow-lg">${winnerName} 獲勝 WIN!!!</div>`;
+      } else if (gameState.isThinking) {
+        statusBannerHTML = `
+          <div class="w-full bg-[#111111] rounded-lg py-3.5 lg:py-4 flex items-center justify-center px-6 font-bold text-[12px] lg:text-[16px] tracking-[0.2em] text-[#22d3ee] border border-[#22d3ee]/30 animate-thinking shadow-[0_0_15px_rgba(34,211,238,0.1)]">
+             <span>AI 思考中 THINKING...</span>
+        </div>`;
+      } else {
+        const isPVE = settings.mode === 'PvE';
+        let turnText = gameState.turn === 'R' ? '紅方回合 RED TURN' : '白方回合 WHITE TURN';
+        if (isPVE) turnText = gameState.turn === 'R' ? '玩家回合 YOUR TURN' : 'AI 回合...';
+        
+        const turnColor = gameState.turn === 'R' ? 'text-red-500' : 'text-slate-100';
+        statusBannerHTML = `
+          <div class="w-full bg-[#111111] rounded-lg py-3.5 lg:py-4 flex items-center justify-between px-6 font-medium text-[12px] lg:text-[16px] tracking-[0.15em] text-neutral-300 uppercase border border-neutral-800">
+            <span>TURN ${gameState.turnCount}</span>
+            <span class="${turnColor} font-bold transition-colors duration-200">${turnText}</span>
+          </div>`;
+      }
+
+      const renderCaptured = (color) => {
+        const pieces = gameState.captured[color];
+        if (pieces.length === 0) return '<div class="text-neutral-600 text-[10px] uppercase tracking-widest py-1">NONE</div>';
+        return pieces.map(p => {
+            const textColor = p.color === 'R' ? 'text-red-500' : 'text-slate-100';
+            return `<div class="w-6 h-6 rounded-full border border-neutral-700 bg-black flex items-center justify-center ${textColor} text-[12px] font-chess">${p.label}</div>`;
+        }).join('');
+      };
+
+      const capturedAreaHTML = `
+        <div class="flex flex-col gap-3 px-4 lg:px-6 w-full">
+            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-3">
+                <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-16">WHITE</div>
+                <div class="flex-1 flex flex-wrap gap-1 justify-end">${renderCaptured('B')}</div>
+            </div>
+            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-3">
+                <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-16">RED</div>
+                <div class="flex-1 flex flex-wrap gap-1 justify-end">${renderCaptured('R')}</div>
+            </div>
+        </div>
+      `;
+
+      const winActionsHTML = `
+        <div class="flex-1 flex flex-col items-center justify-start pt-4 gap-5 w-full animate-fade-in pb-10 lg:pb-0">
+          <button onclick="window.openMenu()" class="w-[220px] lg:w-[260px] py-4 lg:py-5 rounded-lg bg-white text-black font-bold text-xs lg:text-[14px] tracking-[0.15em] uppercase hover:bg-neutral-200 transition-colors key-base">MAIN MENU 主選單</button>
+        </div>
+      `;
+
+      const controlPanelHTML = gameState.winner ? winActionsHTML : `
+        <div class="flex-none bg-black pb-6 lg:pb-0">
+            ${capturedAreaHTML}
+        </div>
+      `;
+
+      const dynamicSVG = generateBoardSVG();
+
+      appDiv.innerHTML = `
+        <div class="w-full h-full bg-black relative flex flex-col overflow-hidden">
+          
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-start justify-between z-30 w-full">
+            <div class="flex items-center gap-3">
+               <div class="w-6 h-6 rounded bg-red-600 text-white flex items-center justify-center font-bold text-[14px] font-chess">帥</div>
+               <div class="flex flex-col">
+                 <span class="text-white font-bold tracking-[0.15em] text-[12px] lg:text-[14px] uppercase">CHINESE CHESS</span>
+                 <span class="text-neutral-500 font-medium tracking-widest text-[8px] lg:text-[9px] uppercase">${settings.mode === 'PvE' ? `PVE - LEVEL ${settings.aiDifficulty}` : 'PVP MODE'}</span>
+               </div>
+            </div>
+            <div class="flex items-start gap-5 lg:gap-8">
+              <button onclick="window.handleUndo()" ${historyStack.length === 0 || gameState.winner || gameState.isThinking ? 'disabled style="opacity:0.2"' : ''} class="flex items-start justify-center opacity-70 hover:opacity-100 transition-opacity key-base uppercase text-[10px] lg:text-[12px] font-bold tracking-widest text-white mt-1.5">UNDO</button>
+              <button onclick="window.openMenu()" ${gameState.isThinking ? 'disabled style="opacity:0.2"' : ''} class="flex items-start justify-center opacity-70 hover:opacity-100 transition-opacity key-base uppercase text-[10px] lg:text-[12px] font-bold tracking-widest text-neutral-400 mt-1.5">MENU</button>
+            </div>
+          </header>
+
+          <main class="flex-1 w-full max-w-md lg:max-w-[1200px] mx-auto flex flex-col lg:flex-row min-h-0 relative z-10">
+            
+            <div class="flex-1 relative min-h-0 flex flex-col lg:justify-center lg:py-8 lg:pr-8">
+              <div class="flex-1 flex items-center justify-center pb-2 lg:pb-0 w-full h-full min-h-0 overflow-visible pt-4 lg:pt-0">
+                <svg viewBox="0 0 360 400" class="w-full max-w-[400px] lg:max-w-[500px] h-auto max-h-[75vh] lg:h-full lg:max-h-[85vh] transition-transform origin-center">
+                  ${dynamicSVG}
+                </svg>
+              </div>
+            </div>
+
+            <div class="flex-none lg:w-[400px] lg:h-full flex flex-col justify-end lg:justify-center bg-black z-10 relative">
+              <div class="flex-none lg:mb-4">
+                <div class="mt-2 mb-4 px-4 lg:px-6 h-12">${statusBannerHTML}</div>
+              </div>
+              <div class="flex-none">
+                ${controlPanelHTML}
+              </div>
+            </div>
+
+          </main>
+        </div>
+      `;
+    }
+
+    // 啟動遊戲
+    window.onload = () => { 
+      render(); 
+    };
+  </script>
+</body>
+</html>
