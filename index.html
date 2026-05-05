@@ -92,6 +92,11 @@
       touch-action: manipulation;
     }
 
+    /* 移除 iOS 點擊 SVG 元素時自帶的灰色高亮背景 */
+    svg, .chess-piece, .valid-move {
+      -webkit-tap-highlight-color: transparent;
+    }
+
     .key-base { transition: background-color 0.2s ease-out, color 0.2s ease-out, border-color 0.2s, opacity 0.2s; }
     .key-base:active { opacity: 0.5; transition: none; }
 
@@ -912,7 +917,10 @@
             const cx = OFFSET_X + x * GRID_SIZE; const cy = OFFSET_Y + y * GRID_SIZE;
             const isSelected = gameState.selectedPiece && gameState.selectedPiece.x === x && gameState.selectedPiece.y === y;
             const bgColor = '#111111'; const strokeColor = piece.color === 'R' ? '#ef4444' : '#f8fafc'; const textColor = piece.color === 'R' ? '#ef4444' : '#f8fafc';
-            const glow = isSelected ? `<circle cx="${cx}" cy="${cy}" r="18" fill="none" stroke="#22d3ee" stroke-width="2" />` : '';
+            
+            // 修正光環坐標問題：因為已經在 <g> 裡面用了 translate，所以這裡 cx/cy 必須是 0
+            const glow = isSelected ? `<circle cx="0" cy="0" r="18" fill="none" stroke="#22d3ee" stroke-width="2" />` : '';
+            
             let animTag = '';
             if (gameState.isAnimating && gameState.lastMove && gameState.lastMove.to.x === x && gameState.lastMove.to.y === y) {
                 const oldCx = OFFSET_X + gameState.lastMove.from.x * GRID_SIZE; const oldCy = OFFSET_Y + gameState.lastMove.from.y * GRID_SIZE;
