@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>中國象棋 - Board Games</title>
-  <!-- 引入 Google Fonts -->
+  <!-- 引入 Google Fonts，加入 300 (Light) 字重 -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Noto+Sans+TC:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Noto+Sans+TC:wght@300;400;600;700;900&display=swap" rel="stylesheet">
   <!-- 引入 Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -129,6 +129,9 @@
     input[type=range]::-moz-range-track { 
       width: 100%; height: 4px; cursor: pointer; background: #333333; border-radius: 2px; 
     }
+    
+    /* 強制將圖示轉為白色 */
+    .icon-white { filter: brightness(0) invert(1); }
   </style>
 </head>
 <body class="bg-black selection:bg-white/30">
@@ -542,7 +545,6 @@
         } else if (settings.mode === 'PvE' && gameState.turn === 'B') {
             gameState.isThinking = true;
             render();
-            // 統一思考延遲為 1000ms
             setTimeout(triggerAI, 1000);
         }
     };
@@ -644,10 +646,9 @@
                   if (gameState.turn === 'B') { 
                       gameState.isThinking = true;
                       render();
-                      // 統一延遲 1 秒先郁
                       setTimeout(triggerAI, 1000);
                   }
-              }, 3500); // 動畫維持 3.5 秒，預留 1 秒鐘展示最終結果
+              }, 3500); 
               return;
           } else {
               gameState.turn = settings.firstMove === 'AI' ? 'B' : 'R';
@@ -655,7 +656,6 @@
                   gameState.isThinking = true;
                   setTimeout(() => { 
                       render(); 
-                      // 統一延遲 1 秒先郁
                       setTimeout(triggerAI, 1000); 
                   }, 0);
               }
@@ -709,12 +709,19 @@
 
       return `
         <div id="menu-layer" class="fixed inset-0 z-50 bg-black flex flex-col overflow-y-auto ${menuJustOpened ? 'animate-fade-in' : ''}">
-          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-start justify-between z-30 w-full shrink-0">
-            <div class="flex items-start"><img src="./assets/Logo.svg" alt="Target" class="h-[19px] lg:h-[25px] object-contain opacity-90" onerror="this.style.display='none'"></div>
-            <button onclick="window.cancelMenu()" class="text-white text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-neutral-300 transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/x.svg" class="h-[12px] lg:h-[15px]" style="filter: invert(1)" onerror="this.style.display='none'; this.parentNode.innerText='X'"></button>
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-start justify-end z-30 w-full shrink-0">
+            <!-- 關閉按鈕，SVG 強制白色 -->
+            <button onclick="window.cancelMenu()" class="text-white text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-neutral-300 transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/x.svg" class="h-[12px] lg:h-[15px] icon-white" onerror="this.style.display='none'; this.parentNode.innerText='X'"></button>
           </header>
           
           <div class="flex-1 flex flex-col items-center justify-center gap-8 pb-10 px-6 w-full mt-4 lg:mt-0">
+            
+            <!-- 加入 Logo 於設定版面，與「中國象棋」幼字搭配 -->
+            <div class="flex flex-col items-center justify-center gap-3 mb-2">
+               <img src="./assets/Logo.svg" alt="Logo" class="h-[22px] lg:h-[28px] object-contain opacity-90 icon-white" onerror="this.style.display='none'">
+               <div class="text-white font-chess tracking-[0.4em] text-[13px] lg:text-[15px] font-light opacity-60">中國象棋</div>
+            </div>
+
             <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3">
               <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase">GAME MODE</div>
               <div class="flex w-full gap-2">
@@ -730,7 +737,6 @@
                   <span id="ai-diff-label" class="${diffColor}">${diffLabel}</span>
                 </div>
                 
-                <!-- 15 格數字鍵盤 -->
                 ${(() => {
                   let html = '<div class="grid grid-cols-5 gap-1.5 lg:gap-2 w-full mt-1">';
                   for (let i = 1; i <= 15; i++) {
@@ -878,7 +884,7 @@
                   <div class="text-[9px] lg:text-[11px] text-neutral-500 uppercase tracking-widest">${m.settings.mode} | ${m.settings.mode === 'PvE' ? `LV.${m.settings.aiDifficulty}` : 'PVP'} | 回合: ${Math.ceil(m.gameLog.length / 2)}</div>
                   <div class="text-[8px] lg:text-[10px] text-neutral-600 font-medium">${m.timestamp}</div>
                </div>
-               <img src="./assets/arrow.svg" alt="Detail" class="h-[10px] lg:h-[12px] opacity-20 group-hover:opacity-100 transition-opacity -rotate-90" onerror="this.style.display='none'">
+               <img src="./assets/arrow.svg" alt="Detail" class="h-[10px] lg:h-[12px] opacity-20 group-hover:opacity-100 transition-opacity -rotate-90 icon-white" onerror="this.style.display='none'">
             </div>
           `).join('');
 
@@ -896,7 +902,8 @@
           <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-hidden animate-fade-in">
             <header class="flex-none pt-6 pb-4 px-5 lg:px-12 flex items-start justify-center z-30 w-full border-b border-neutral-800 shrink-0 relative">
                <div class="text-white font-bold tracking-[0.15em] text-[12px] lg:text-[16px] uppercase pt-0.5">MATCH RECORD</div>
-               <button onclick="window.toggleRecord()" class="absolute right-5 lg:right-12 text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white active:text-white transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/x.svg" class="h-[12px] lg:h-[15px]" style="filter: invert(1)" onerror="this.style.display='none'; this.parentNode.innerText='X'"></button>
+               <!-- 關閉按鈕，SVG 強制白色 -->
+               <button onclick="window.toggleRecord()" class="absolute right-5 lg:right-12 text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white active:text-white transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/x.svg" class="h-[12px] lg:h-[15px] icon-white" onerror="this.style.display='none'; this.parentNode.innerText='X'"></button>
             </header>
             <div class="flex-1 overflow-y-auto hide-scrollbar flex flex-col pt-6 pb-10 px-5 max-w-[800px] w-full mx-auto">
               ${currentEntry}
@@ -926,12 +933,14 @@
           recordHTML = `
           <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-hidden animate-fade-in">
             <header class="flex-none pt-6 pb-4 px-5 lg:px-12 flex items-start justify-between z-30 w-full border-b border-neutral-800 shrink-0">
-               <button onclick="window.viewMatchDetail(null)" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white transition-colors pt-1 lg:pt-1.5 flex items-center gap-1.5 key-base"><img src="./assets/arrow.svg" class="h-[8px] rotate-90 opacity-60" onerror="this.style.display='none';"> BACK</button>
+               <!-- 返回按鈕，SVG 強制白色 -->
+               <button onclick="window.viewMatchDetail(null)" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white transition-colors pt-1 lg:pt-1.5 flex items-center gap-1.5 key-base"><img src="./assets/arrow.svg" class="h-[8px] rotate-90 opacity-60 icon-white" onerror="this.style.display='none';"> BACK</button>
                <div class="flex flex-col items-center">
                  <span class="text-white font-black tracking-[0.2em] text-[12px] lg:text-[16px] uppercase pt-0.5">LOG DETAIL</span>
                  <span class="text-[8px] text-neutral-600 tracking-widest uppercase">${matchData.isLive ? 'LIVE' : 'PAST MATCH'}</span>
                </div>
-               <button onclick="window.toggleRecord()" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white active:text-white transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/x.svg" class="h-[12px] lg:h-[15px]" style="filter: invert(1)" onerror="this.style.display='none'; this.parentNode.innerText='X'"></button>
+               <!-- 關閉按鈕，SVG 強制白色 -->
+               <button onclick="window.toggleRecord()" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white active:text-white transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/x.svg" class="h-[12px] lg:h-[15px] icon-white" onerror="this.style.display='none'; this.parentNode.innerText='X'"></button>
             </header>
             <div class="flex-1 overflow-y-auto hide-scrollbar flex flex-col pt-4 pb-10 px-5 max-w-[800px] w-full mx-auto">
               <div class="bg-[#111] rounded-lg p-4 lg:p-6 border border-neutral-800 shadow-sm flex flex-col">${logContent || '<div class="text-neutral-600 text-center py-10 text-xs">暫無步數</div>'}</div>
@@ -967,13 +976,36 @@
       let statusBannerHTML = '';
       if (gameState.winner) {
         statusBannerHTML = `<div class="w-full ${gameState.winner === 'R' ? 'bg-[#6a0404]' : 'bg-[#333333]'} rounded-lg py-3.5 flex items-center justify-center font-bold text-[14px] lg:text-[17px] tracking-[0.15em] text-white uppercase animate-pulse shadow-lg">${gameState.winner === 'R' ? '紅方 (RED)' : '白方 (WHITE)'} 獲勝 WIN!!!</div>`;
-      } else if (gameState.isThinking) {
-        statusBannerHTML = `<div class="w-full bg-[#111111] rounded-lg py-3.5 lg:py-4 flex items-center justify-center px-6 font-bold text-[12px] lg:text-[16px] tracking-[0.2em] animate-thinking border ${settings.aiDifficulty > 10 ? 'border-red-500/50 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-[#22d3ee]/30 text-[#22d3ee] shadow-[0_0_15px_rgba(34,211,238,0.1)]'}"><span>AI 思考中 THINKING...</span></div>`;
       } else {
         const isPVE = settings.mode === 'PvE';
-        let turnText = gameState.turn === 'R' ? '紅方回合 RED TURN' : '白方回合 WHITE TURN';
-        if (isPVE) turnText = gameState.turn === settings.playerColor ? '玩家回合 YOUR TURN' : 'AI 回合...';
-        statusBannerHTML = `<div class="w-full bg-[#111111] rounded-lg py-3.5 lg:py-4 flex items-center justify-between px-6 font-medium text-[12px] lg:text-[16px] tracking-[0.15em] text-neutral-300 uppercase border border-neutral-800"><span>TURN ${gameState.turnCount}</span><span class="${gameState.turn === 'R' ? 'text-red-500' : 'text-slate-100'} font-bold transition-colors duration-200">${turnText}</span></div>`;
+        let rightContent = '';
+        let borderClass = 'border-neutral-800';
+
+        if (isPVE) {
+            if (gameState.turn === settings.playerColor) {
+                rightContent = `<span class="text-red-500 font-bold">YOUR TURN</span>`;
+            } else {
+                if (gameState.isThinking) {
+                    if (settings.aiDifficulty > 10) {
+                        rightContent = `<div class="flex items-center gap-2"><span class="text-white font-bold">AI TURN</span><span class="text-red-500 font-bold animate-pulse">THINKING...</span></div>`;
+                        borderClass = 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]';
+                    } else {
+                        rightContent = `<div class="flex items-center gap-2"><span class="text-white font-bold">AI TURN</span><span class="text-[#22d3ee] font-bold animate-pulse">THINKING...</span></div>`;
+                        borderClass = 'border-[#22d3ee]/30 shadow-[0_0_15px_rgba(34,211,238,0.1)]';
+                    }
+                } else {
+                    rightContent = `<span class="text-white font-bold">AI TURN</span>`;
+                }
+            }
+        } else {
+            if (gameState.turn === 'R') {
+                rightContent = `<span class="text-red-500 font-bold">RED TURN</span>`;
+            } else {
+                rightContent = `<span class="text-white font-bold">WHITE TURN</span>`;
+            }
+        }
+
+        statusBannerHTML = `<div class="w-full bg-[#111111] rounded-lg py-3.5 lg:py-4 flex items-center justify-between px-6 font-medium text-[12px] lg:text-[16px] tracking-[0.15em] text-neutral-300 uppercase border ${borderClass} transition-colors duration-300"><span>TURN ${gameState.turnCount}</span>${rightContent}</div>`;
       }
 
       const renderCaptured = (color) => {
@@ -997,18 +1029,19 @@
       ` : `<div class="flex-none bg-black pb-6 lg:pb-0">${capturedAreaHTML}</div>`;
 
       appDiv.innerHTML = `
-        ${menuHTML}
         ${recordHTML}
         ${tossHTML}
         
         <div class="w-full h-full bg-black relative flex flex-col overflow-hidden">
           
           <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-start justify-between z-30 w-full shrink-0">
-            <div class="flex items-start"><img src="./assets/Logo.svg" alt="Target" class="h-[19px] lg:h-[25px] object-contain opacity-90" onerror="this.style.display='none'"></div>
+            <!-- 遊戲畫面左上角 Logo -->
+            <div class="flex items-start"><img src="./assets/Logo.svg" alt="Logo" class="h-[19px] lg:h-[25px] object-contain opacity-90 icon-white" onerror="this.style.display='none'"></div>
             <div class="flex items-start gap-5 lg:gap-8">
-              <button onclick="window.openMenu()" ${gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-start justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/setting.svg" alt="Settings" class="h-[14px] lg:h-[18px] object-contain" onerror="this.style.display='none'; this.parentNode.innerText='SET'"></button>
-              <button onclick="window.toggleRecord()" class="flex items-start justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/record.svg" alt="Record" class="h-[16px] lg:h-[22px] object-contain" onerror="this.style.display='none'; this.parentNode.innerText='REC'"></button>
-              <button onclick="window.handleUndo()" ${historyStack.length === 0 || gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-start justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/back.svg" alt="Undo" class="h-[14px] lg:h-[18px] object-contain" onerror="this.style.display='none'; this.parentNode.innerText='UNDO'"></button>
+              <!-- 其他 Header 功能圖示，強制純白 -->
+              <button onclick="window.openMenu()" ${gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-start justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/setting.svg" alt="Settings" class="h-[14px] lg:h-[18px] object-contain icon-white" onerror="this.style.display='none'; this.parentNode.innerText='SET'"></button>
+              <button onclick="window.toggleRecord()" class="flex items-start justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/record.svg" alt="Record" class="h-[16px] lg:h-[22px] object-contain icon-white" onerror="this.style.display='none'; this.parentNode.innerText='REC'"></button>
+              <button onclick="window.handleUndo()" ${historyStack.length === 0 || gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-start justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/back.svg" alt="Undo" class="h-[14px] lg:h-[18px] object-contain icon-white" onerror="this.style.display='none'; this.parentNode.innerText='UNDO'"></button>
             </div>
           </header>
 
