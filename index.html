@@ -25,13 +25,14 @@
     @keyframes pulse-fast { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .animate-thinking { animation: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
 
-    /* --- 新增：被食棋子擊飛動畫 --- */
+    /* --- 更新：被食棋子擊飛動畫 (先慢後快) --- */
     @keyframes captureFlyAway {
       0% { transform: scale(1) rotate(0deg); opacity: 1; }
-      100% { transform: translate(0, -50px) scale(0.3) rotate(180deg); opacity: 0; }
+      100% { transform: translate(0, -60px) scale(0.2) rotate(180deg); opacity: 0; }
     }
     .anim-capture-fly {
-      animation: captureFlyAway 0.6s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+      /* 使用 ease-in (0.6, 0, 1, 1) 營造先慢後快嘅感覺 */
+      animation: captureFlyAway 0.8s cubic-bezier(0.6, 0, 1, 1) forwards;
       transform-origin: center;
       pointer-events: none;
     }
@@ -120,6 +121,7 @@
       'B': { r: '車', h: '馬', e: '象', a: '士', g: '將', c: '砲', s: '卒' }
     };
 
+    // 棋子基礎價值
     const PIECE_VALUES = { 'g': 10000, 'r': 900, 'c': 450, 'h': 400, 'e': 200, 'a': 200, 's': 100 };
 
     const cloneState = (state) => JSON.parse(JSON.stringify(state));
@@ -294,7 +296,7 @@
     };
 
 
-    // --- 電腦 AI 邏輯 ---
+    // --- 電腦 AI 邏輯 (包含全新位置估值系統) ---
     const getAllMoves = (board, color) => {
       let moves = [];
       for (let y = 0; y <= 9; y++) {
@@ -309,6 +311,7 @@
       return moves;
     };
 
+    // 智能位置估值 (Positional Evaluation)
     const evaluateBoard = (board) => {
       let score = 0;
       for (let y = 0; y <= 9; y++) {
@@ -316,11 +319,31 @@
           const p = board[y][x];
           if (p) {
             let val = PIECE_VALUES[p.type];
-            if (p.type === 's') {
-              if (p.color === 'R' && y < 5) val += 50 + (4-y)*10;
-              if (p.color === 'B' && y > 4) val += 50 + (y-5)*10;
+            let isBlack = p.color === 'B';
+            // 將坐標標準化，rank 0 係自己底線，rank 9 係對方底線
+            let rank = isBlack ? y : 9 - y; 
+            
+            // 加入位置加權 (令 AI 識得佈局)
+            if (p.type === 's') { // 兵/卒
+              if (rank > 4) { // 過咗河
+                val += 30 + (rank - 4) * 20; // 越深入越值錢
+                if (x >= 2 && x <= 6) val += 20; // 靠近中路有額外加分
+                if (rank === 9) val -= 40; // 沉底兵價值大減 (行唔到)
+              }
+            } else if (p.type === 'h') { // 馬
+              if (x > 0 && x < 8 && y > 0 && y < 9) val += 30; // 鼓勵馬唔好留喺邊線 (馬不落邊)
+              if (rank > 4 && x > 1 && x < 7) val += 30; // 鼓勵過河馬威脅中路
+            } else if (p.type === 'r') { // 車
+              if (x === 4 || x === 3 || x === 5) val += 20; // 佔據中路或肋道
+              if (rank > 4) val += 20; // 鼓勵車壓入敵陣
+            } else if (p.type === 'c') { // 炮
+              if (x === 4) val += 20; // 鼓勵中炮
+              if (rank === 2 || rank === 0) val += 10; // 防守位加分
+            } else if (p.type === 'g') { // 將/帥
+              if (x === 4) val += 20; // 盡量留喺中線安全位
             }
-            score += p.color === 'B' ? val : -val; 
+            
+            score += isBlack ? val : -val; 
           }
         }
       }
@@ -345,6 +368,7 @@
       const color = isMaximizing ? 'B' : 'R';
       let moves = getAllMoves(board, color);
 
+      // 基本排序以加快 Alpha-Beta 剪枝
       moves.sort((a, b) => {
         let scoreA = board[a.to.y][a.to.x] ? PIECE_VALUES[board[a.to.y][a.to.x].type] : 0;
         let scoreB = board[b.to.y][b.to.x] ? PIECE_VALUES[board[b.to.y][b.to.x].type] : 0;
@@ -391,11 +415,12 @@
       let depth = 1;
       let randomness = 0;
 
-      if (diff <= 3) { depth = 1; randomness = 1.0 - (diff * 0.2); }
-      else if (diff <= 6) { depth = 2; randomness = 0.5 - ((diff-3) * 0.1); }
-      else if (diff <= 10) { depth = 3; randomness = 0.3 - ((diff-6) * 0.05); }
-      else if (diff <= 14) { depth = 4; randomness = 0.1 - ((diff-10) * 0.02); }
-      else { depth = 4; randomness = 0; } 
+      // 難度曲線全面升級！
+      if (diff <= 3) { depth = 2; randomness = 0.5 - (diff * 0.1); } // LV 1-3: 有機會亂行, Depth 2
+      else if (diff <= 6) { depth = 3; randomness = 0.3 - ((diff-3) * 0.08); } // LV 4-6: 極少亂行, Depth 3
+      else if (diff <= 9) { depth = 4; randomness = 0.15 - ((diff-6) * 0.05); } // LV 7-9: 近乎無亂行, Depth 4
+      else if (diff <= 14) { depth = 4; randomness = 0; } // LV 10-14: 零容錯, Depth 4, 配合新估值非常強
+      else { depth = 5; randomness = 0; } // LV 15: Absolute Hell, Depth 5 極限推演 (需時可能 2~5秒)
 
       let moves = getAllMoves(gameState.board, 'B');
       if (moves.length === 0) return null;
@@ -474,7 +499,7 @@
             gameState.isAnimating = false;
             
             if (targetPiece) {
-                // 觸發 0.6秒 放射圓同埋擊飛動畫
+                // 觸發 0.8秒 放射圓同埋擊飛動畫 (時間延長，特效更大)
                 gameState.showCaptureEffect = { 
                     x: tx, y: ty, 
                     piece: targetPiece, 
@@ -487,7 +512,7 @@
                 setTimeout(() => {
                     gameState.showCaptureEffect = null;
                     completeMoveLogic(targetPiece);
-                }, 600); 
+                }, 800); 
             } else {
                 completeMoveLogic(null);
             }
@@ -516,13 +541,14 @@
         } else if (settings.mode === 'PvE' && gameState.turn === 'B') {
             gameState.isThinking = true;
             render();
+            // 延遲 150ms 等瀏覽器確保畫出 THINKING UI 先開始死鎖運算
             setTimeout(() => {
                 const aiMove = calculateAIMove();
                 if (aiMove) {
                     gameState.isThinking = false;
                     performMove(aiMove.from.x, aiMove.from.y, aiMove.to.x, aiMove.to.y);
                 }
-            }, 100);
+            }, 150);
         }
     };
 
@@ -733,11 +759,11 @@
 
           captureEffectsSVG += `
             <g pointer-events="none">
-              <!-- 佔領放射圓波紋 -->
-              <circle cx="${cx}" cy="${cy}" r="16" fill="none" stroke="${waveColor}" stroke-width="4">
-                 <animate attributeName="r" from="16" to="120" dur="0.6s" fill="freeze" />
-                 <animate attributeName="stroke-width" from="4" to="0" dur="0.6s" fill="freeze" />
-                 <animate attributeName="opacity" from="1" to="0" dur="0.6s" fill="freeze" />
+              <!-- 佔領放射圓波紋 (設定 overflow visible 解決被切斷問題，加入 keySplines 造出先慢後快) -->
+              <circle cx="${cx}" cy="${cy}" r="16" fill="none" stroke="${waveColor}" stroke-width="6">
+                 <animate attributeName="r" from="16" to="240" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" />
+                 <animate attributeName="stroke-width" from="6" to="0" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" />
+                 <animate attributeName="opacity" from="0.8" to="0" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" />
               </circle>
               <!-- 被擊飛嘅棋子 (使用 CSS 動畫) -->
               <g transform="translate(${cx}, ${cy})">
@@ -991,7 +1017,8 @@
             
             <div class="flex-1 relative min-h-0 flex flex-col lg:justify-center lg:py-8 lg:pr-8">
               <div class="flex-1 flex items-center justify-center pb-2 lg:pb-0 w-full h-full min-h-0 overflow-visible pt-4 lg:pt-0">
-                <svg viewBox="0 0 360 400" class="w-full max-w-[400px] lg:max-w-[500px] h-auto max-h-[75vh] lg:h-full lg:max-h-[85vh] transition-transform origin-center">
+                <!-- 更新：加入 overflow="visible" 容許特效擴展出棋盤 -->
+                <svg viewBox="0 0 360 400" overflow="visible" class="w-full max-w-[400px] lg:max-w-[500px] h-auto max-h-[75vh] lg:h-full lg:max-h-[85vh] transition-transform origin-center">
                   ${dynamicSVG}
                 </svg>
               </div>
