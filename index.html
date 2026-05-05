@@ -25,16 +25,45 @@
     @keyframes pulse-fast { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .animate-thinking { animation: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
 
-    /* --- 更新：被食棋子擊飛動畫 (先慢後快) --- */
+    /* --- 被食棋子擊飛動畫 --- */
     @keyframes captureFlyAway {
       0% { transform: scale(1) rotate(0deg); opacity: 1; }
       100% { transform: translate(0, -60px) scale(0.2) rotate(180deg); opacity: 0; }
     }
     .anim-capture-fly {
-      /* 使用 ease-in (0.6, 0, 1, 1) 營造先慢後快嘅感覺 */
       animation: captureFlyAway 0.8s cubic-bezier(0.6, 0, 1, 1) forwards;
       transform-origin: center;
       pointer-events: none;
+    }
+
+    /* --- 擲先後 3D 硬幣動畫 --- */
+    .coin-scene { perspective: 800px; width: 100px; height: 100px; }
+    @media (min-width: 1024px) { .coin-scene { width: 120px; height: 120px; } }
+    .coin-wrapper { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; }
+    .coin-face { position: absolute; width: 100%; height: 100%; border-radius: 50%; backface-visibility: hidden; display: flex; align-items: center; justify-content: center; font-weight: bold; font-family: 'Noto Sans TC', sans-serif; font-size: 2.25rem; border: 4px solid; background: #111; }
+    @media (min-width: 1024px) { .coin-face { font-size: 3rem; } }
+    .coin-front { color: #ef4444; border-color: #ef4444; transform: rotateY(0deg); }
+    .coin-back { color: #ffffff; border-color: #ffffff; transform: rotateY(180deg); }
+
+    @keyframes flipToRed {
+      0% { transform: rotateY(0deg) scale(1); }
+      50% { transform: rotateY(1800deg) scale(1.4); }
+      100% { transform: rotateY(3600deg) scale(1); }
+    }
+    @keyframes flipToWhite {
+      0% { transform: rotateY(0deg) scale(1); }
+      50% { transform: rotateY(1890deg) scale(1.4); }
+      100% { transform: rotateY(3780deg) scale(1); }
+    }
+    .anim-flip-red { animation: flipToRed 2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+    .anim-flip-white { animation: flipToWhite 2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+
+    @keyframes fadeInDelayed {
+      0%, 75% { opacity: 0; transform: translateY(10px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    .anim-fade-in-delayed {
+      animation: fadeInDelayed 2.2s ease-out forwards;
     }
 
     html, body { 
@@ -66,43 +95,39 @@
     .key-base { transition: background-color 0.2s ease-out, color 0.2s ease-out, border-color 0.2s, opacity 0.2s; }
     .key-base:active { opacity: 0.5; transition: none; }
 
-    .chess-piece {
-      cursor: pointer;
-      transition: filter 0.2s ease;
-    }
+    .chess-piece { cursor: pointer; transition: filter 0.2s ease; }
     @media (hover: hover) {
       .chess-piece:hover { filter: brightness(1.2); }
       .valid-move:hover { fill: rgba(255, 255, 255, 0.4); }
     }
-    .valid-move {
-      cursor: pointer;
-      transition: fill 0.2s ease;
-    }
-    
+    .valid-move { cursor: pointer; transition: fill 0.2s ease; }
     .font-chess { font-family: 'Noto Sans TC', 'Inter', sans-serif; }
     
-    /* Range Slider 樣式 */
-    input[type=range] {
-      -webkit-appearance: none;
-      width: 100%;
-      background: transparent;
+    /* --- Range Slider 手機優化 --- */
+    input[type=range] { 
+      -webkit-appearance: none; 
+      appearance: none;
+      width: 100%; 
+      background: transparent; 
+      outline: none;
+      touch-action: none;
     }
     input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      height: 24px;
-      width: 24px;
-      border-radius: 50%;
-      background: #ffffff;
-      cursor: pointer;
-      margin-top: -10px;
-      box-shadow: 0 0 10px rgba(255,255,255,0.5);
+      -webkit-appearance: none; 
+      appearance: none;
+      height: 24px; width: 24px; border-radius: 50%;
+      background: #ffffff; cursor: pointer; margin-top: -10px; box-shadow: 0 0 10px rgba(255,255,255,0.5);
+      position: relative; z-index: 50;
     }
-    input[type=range]::-webkit-slider-runnable-track {
-      width: 100%;
-      height: 4px;
-      cursor: pointer;
-      background: #333333;
-      border-radius: 2px;
+    input[type=range]::-webkit-slider-runnable-track { 
+      width: 100%; height: 4px; cursor: pointer; background: #333333; border-radius: 2px; 
+    }
+    input[type=range]::-moz-range-thumb {
+      height: 24px; width: 24px; border-radius: 50%; border: none;
+      background: #ffffff; cursor: pointer; box-shadow: 0 0 10px rgba(255,255,255,0.5);
+    }
+    input[type=range]::-moz-range-track { 
+      width: 100%; height: 4px; cursor: pointer; background: #333333; border-radius: 2px; 
     }
   </style>
 </head>
@@ -120,8 +145,6 @@
       'R': { r: '車', h: '馬', e: '相', a: '仕', g: '帥', c: '炮', s: '兵' },
       'B': { r: '車', h: '馬', e: '象', a: '士', g: '將', c: '砲', s: '卒' }
     };
-
-    // 棋子基礎價值
     const PIECE_VALUES = { 'g': 10000, 'r': 900, 'c': 450, 'h': 400, 'e': 200, 'a': 200, 's': 100 };
 
     const cloneState = (state) => JSON.parse(JSON.stringify(state));
@@ -130,6 +153,7 @@
     let gameState = null;
     let historyStack = [];
     let isMenuOpen = true;
+    let menuJustOpened = true;
     let isRecordOpen = false;
     let matchHistory = []; 
     let selectedHistoryMatch = null;
@@ -137,8 +161,10 @@
     let settings = {
       mode: 'PvE', 
       aiDifficulty: 5, 
+      firstMove: 'PLAYER', // 'PLAYER', 'AI', 'RANDOM'
       playerColor: 'R' 
     };
+    let pendingSettings = cloneState(settings);
 
     const loadHistory = () => {
       const saved = localStorage.getItem('chinese_chess_history');
@@ -208,9 +234,7 @@
       const addMoveIfValid = (nx, ny) => {
         if (nx < 0 || nx > 8 || ny < 0 || ny > 9) return false;
         const target = board[ny][nx];
-        if (!target || target.color !== color) {
-          moves.push({ x: nx, y: ny });
-        }
+        if (!target || target.color !== color) moves.push({ x: nx, y: ny });
         return !target; 
       };
 
@@ -228,9 +252,7 @@
           { dx: -2, dy: 1, bx: -1, by: 0 }, { dx: -1, dy: 2, bx: 0, by: 1 }
         ];
         dirs.forEach(d => {
-          if (sx + d.bx >= 0 && sx + d.bx <= 8 && sy + d.by >= 0 && sy + d.by <= 9 && !board[sy + d.by][sx + d.bx]) {
-            addMoveIfValid(sx + d.dx, sy + d.dy);
-          }
+          if (sx + d.bx >= 0 && sx + d.bx <= 8 && sy + d.by >= 0 && sy + d.by <= 9 && !board[sy + d.by][sx + d.bx]) addMoveIfValid(sx + d.dx, sy + d.dy);
         });
       }
       else if (type === 'e') {
@@ -238,9 +260,7 @@
         dirs.forEach(d => {
           const ny = sy + d.dy;
           if ((color === 'R' && ny < 5) || (color === 'B' && ny > 4)) return;
-          if (sx + d.bx >= 0 && sx + d.bx <= 8 && sy + d.by >= 0 && sy + d.by <= 9 && !board[sy + d.by][sx + d.bx]) {
-            addMoveIfValid(sx + d.dx, ny);
-          }
+          if (sx + d.bx >= 0 && sx + d.bx <= 8 && sy + d.by >= 0 && sy + d.by <= 9 && !board[sy + d.by][sx + d.bx]) addMoveIfValid(sx + d.dx, ny);
         });
       }
       else if (type === 'a') {
@@ -288,15 +308,13 @@
         const dy = color === 'R' ? -1 : 1;
         addMoveIfValid(sx, sy + dy);
         if ((color === 'R' && sy < 5) || (color === 'B' && sy > 4)) {
-          addMoveIfValid(sx - 1, sy);
-          addMoveIfValid(sx + 1, sy);
+          addMoveIfValid(sx - 1, sy); addMoveIfValid(sx + 1, sy);
         }
       }
       return moves;
     };
 
-
-    // --- 電腦 AI 邏輯 (包含全新位置估值系統) ---
+    // --- 電腦 AI 邏輯 ---
     const getAllMoves = (board, color) => {
       let moves = [];
       for (let y = 0; y <= 9; y++) {
@@ -311,7 +329,6 @@
       return moves;
     };
 
-    // 智能位置估值 (Positional Evaluation)
     const evaluateBoard = (board) => {
       let score = 0;
       for (let y = 0; y <= 9; y++) {
@@ -320,29 +337,26 @@
           if (p) {
             let val = PIECE_VALUES[p.type];
             let isBlack = p.color === 'B';
-            // 將坐標標準化，rank 0 係自己底線，rank 9 係對方底線
             let rank = isBlack ? y : 9 - y; 
             
-            // 加入位置加權 (令 AI 識得佈局)
-            if (p.type === 's') { // 兵/卒
-              if (rank > 4) { // 過咗河
-                val += 30 + (rank - 4) * 20; // 越深入越值錢
-                if (x >= 2 && x <= 6) val += 20; // 靠近中路有額外加分
-                if (rank === 9) val -= 40; // 沉底兵價值大減 (行唔到)
+            if (p.type === 's') {
+              if (rank > 4) {
+                val += 30 + (rank - 4) * 20; 
+                if (x >= 2 && x <= 6) val += 20; 
+                if (rank === 9) val -= 40; 
               }
-            } else if (p.type === 'h') { // 馬
-              if (x > 0 && x < 8 && y > 0 && y < 9) val += 30; // 鼓勵馬唔好留喺邊線 (馬不落邊)
-              if (rank > 4 && x > 1 && x < 7) val += 30; // 鼓勵過河馬威脅中路
-            } else if (p.type === 'r') { // 車
-              if (x === 4 || x === 3 || x === 5) val += 20; // 佔據中路或肋道
-              if (rank > 4) val += 20; // 鼓勵車壓入敵陣
-            } else if (p.type === 'c') { // 炮
-              if (x === 4) val += 20; // 鼓勵中炮
-              if (rank === 2 || rank === 0) val += 10; // 防守位加分
-            } else if (p.type === 'g') { // 將/帥
-              if (x === 4) val += 20; // 盡量留喺中線安全位
+            } else if (p.type === 'h') { 
+              if (x > 0 && x < 8 && y > 0 && y < 9) val += 30; 
+              if (rank > 4 && x > 1 && x < 7) val += 30; 
+            } else if (p.type === 'r') { 
+              if (x === 4 || x === 3 || x === 5) val += 20; 
+              if (rank > 4) val += 20; 
+            } else if (p.type === 'c') { 
+              if (x === 4) val += 20; 
+              if (rank === 2 || rank === 0) val += 10; 
+            } else if (p.type === 'g') { 
+              if (x === 4) val += 20; 
             }
-            
             score += isBlack ? val : -val; 
           }
         }
@@ -368,7 +382,6 @@
       const color = isMaximizing ? 'B' : 'R';
       let moves = getAllMoves(board, color);
 
-      // 基本排序以加快 Alpha-Beta 剪枝
       moves.sort((a, b) => {
         let scoreA = board[a.to.y][a.to.x] ? PIECE_VALUES[board[a.to.y][a.to.x].type] : 0;
         let scoreB = board[b.to.y][b.to.x] ? PIECE_VALUES[board[b.to.y][b.to.x].type] : 0;
@@ -415,14 +428,15 @@
       let depth = 1;
       let randomness = 0;
 
-      // 難度曲線全面升級！
-      if (diff <= 3) { depth = 2; randomness = 0.5 - (diff * 0.1); } // LV 1-3: 有機會亂行, Depth 2
-      else if (diff <= 6) { depth = 3; randomness = 0.3 - ((diff-3) * 0.08); } // LV 4-6: 極少亂行, Depth 3
-      else if (diff <= 9) { depth = 4; randomness = 0.15 - ((diff-6) * 0.05); } // LV 7-9: 近乎無亂行, Depth 4
-      else if (diff <= 14) { depth = 4; randomness = 0; } // LV 10-14: 零容錯, Depth 4, 配合新估值非常強
-      else { depth = 5; randomness = 0; } // LV 15: Absolute Hell, Depth 5 極限推演 (需時可能 2~5秒)
+      if (diff <= 3) { depth = 2; randomness = 0.5 - (diff * 0.1); } 
+      else if (diff <= 6) { depth = 3; randomness = 0.3 - ((diff-3) * 0.08); } 
+      else if (diff <= 9) { depth = 4; randomness = 0.15 - ((diff-6) * 0.05); } 
+      else if (diff <= 14) { depth = 4; randomness = 0; } 
+      else { depth = 5; randomness = 0; } 
 
-      let moves = getAllMoves(gameState.board, 'B');
+      const aiColor = 'B';
+      let moves = getAllMoves(gameState.board, aiColor);
+      
       if (moves.length === 0) return null;
 
       if (Math.random() < randomness) {
@@ -430,6 +444,8 @@
       }
 
       let bestMove = null;
+      const isMaximizing = true; 
+      
       let bestValue = -Infinity;
       
       moves.sort((a, b) => {
@@ -451,64 +467,52 @@
 
         undoMove(gameState.board, move, captured);
 
-        if (moveValue > bestValue) {
-          bestValue = moveValue;
-          bestMove = move;
-        } else if (moveValue === bestValue && Math.random() < 0.5) {
-          bestMove = move;
+        if (moveValue > bestValue) { 
+            bestValue = moveValue; bestMove = move; 
+        } else if (moveValue === bestValue && Math.random() < 0.5) { 
+            bestMove = move; 
         }
       }
       return bestMove;
     };
 
-    // --- 動畫與核心流程拆解 ---
+    const triggerAI = () => {
+       const aiMove = calculateAIMove();
+       if (aiMove) {
+          gameState.isThinking = false;
+          performMove(aiMove.from.x, aiMove.from.y, aiMove.to.x, aiMove.to.y);
+       }
+    };
+
+    // --- 動畫與核心流程 ---
     const performMove = (sx, sy, tx, ty) => {
         historyStack.push(cloneState(gameState));
         
         const movingPiece = gameState.board[sy][sx];
         const targetPiece = gameState.board[ty][tx];
 
-        const logEntry = {
-            turn: gameState.turn,
-            piece: movingPiece.label,
-            from: { x: sx, y: sy },
-            to: { x: tx, y: ty },
-            captured: targetPiece ? targetPiece.label : null
-        };
+        const logEntry = { turn: gameState.turn, piece: movingPiece.label, from: { x: sx, y: sy }, to: { x: tx, y: ty }, captured: targetPiece ? targetPiece.label : null };
         gameState.gameLog.push(logEntry);
 
-        // 第1步：更新棋盤陣列狀態
         gameState.board[ty][tx] = movingPiece;
         gameState.board[sy][sx] = null;
         
         gameState.lastMove = { from: {x: sx, y: sy}, to: {x: tx, y: ty} };
         gameState.isAnimating = true; 
         
-        // 如果有食棋，暫時儲存目標棋子，等滑行動畫播完先飛走
-        if (targetPiece) {
-            gameState.animatingCapture = targetPiece;
-        }
+        if (targetPiece) gameState.animatingCapture = targetPiece;
 
         gameState.selectedPiece = null;
         gameState.validMoves = [];
         
-        render(); // 開始播 0.4秒 滑行動畫
+        render(); 
 
-        // 第2步：滑行結束，進入食棋佔領動畫
         setTimeout(() => {
             gameState.isAnimating = false;
-            
             if (targetPiece) {
-                // 觸發 0.8秒 放射圓同埋擊飛動畫 (時間延長，特效更大)
-                gameState.showCaptureEffect = { 
-                    x: tx, y: ty, 
-                    piece: targetPiece, 
-                    capturerColor: movingPiece.color 
-                };
+                gameState.showCaptureEffect = { x: tx, y: ty, piece: targetPiece, capturerColor: movingPiece.color };
                 gameState.animatingCapture = null;
                 render();
-
-                // 第3步：特效播完，真正將棋子加入已捕獲區，進行換轉回合
                 setTimeout(() => {
                     gameState.showCaptureEffect = null;
                     completeMoveLogic(targetPiece);
@@ -519,13 +523,10 @@
         }, 400); 
     };
 
-    // 結算與回合切換
     const completeMoveLogic = (targetPiece) => {
         if (targetPiece) {
             gameState.captured[gameState.turn].push(targetPiece);
-            if (targetPiece.type === 'g') {
-                gameState.winner = gameState.turn;
-            }
+            if (targetPiece.type === 'g') gameState.winner = gameState.turn;
         }
 
         if (!gameState.winner) {
@@ -541,38 +542,74 @@
         } else if (settings.mode === 'PvE' && gameState.turn === 'B') {
             gameState.isThinking = true;
             render();
-            // 延遲 150ms 等瀏覽器確保畫出 THINKING UI 先開始死鎖運算
-            setTimeout(() => {
-                const aiMove = calculateAIMove();
-                if (aiMove) {
-                    gameState.isThinking = false;
-                    performMove(aiMove.from.x, aiMove.from.y, aiMove.to.x, aiMove.to.y);
-                }
-            }, 150);
+            // 統一思考延遲為 1000ms
+            setTimeout(triggerAI, 1000);
         }
     };
 
     // --- 互動與控制 ---
-    window.setMode = (mode) => { settings.mode = mode; renderMenu(); };
-    
-    // 更新：只局部更新難度文字，不重新 render 整個 Menu 避免閃爍
-    window.setDifficulty = (e) => { 
-      settings.aiDifficulty = parseInt(e.target.value); 
-      const diffLabelEl = document.getElementById('ai-diff-label');
-      if (diffLabelEl) {
-        let diffLabel = "普通 (LV.5)";
-        let diffVal = settings.aiDifficulty;
-        if (diffVal <= 3) diffLabel = `新手 (LV.${diffVal})`;
-        else if (diffVal <= 7) diffLabel = `進階 (LV.${diffVal})`;
-        else if (diffVal <= 10) diffLabel = `大師 (LV.${diffVal})`;
-        else diffLabel = `地獄 HELL (LV.${diffVal})`;
-        
-        diffLabelEl.className = diffVal > 10 ? 'text-red-500 font-black tracking-widest' : 'text-white font-bold';
-        diffLabelEl.innerText = diffLabel;
+    window.openMenu = () => { 
+        pendingSettings = cloneState(settings);
+        isMenuOpen = true; 
+        menuJustOpened = true; 
+        isRecordOpen = false;
+        render(); 
+        menuJustOpened = false;
+    };
+
+    window.cancelMenu = () => { isMenuOpen = false; render(); };
+
+    window.setSetting = (key, value) => {
+        if (pendingSettings) {
+            pendingSettings[key] = value;
+            
+            if (key === 'mode') {
+                document.querySelectorAll('.mode-btn').forEach(btn => {
+                    const isActive = btn.dataset.val === pendingSettings.mode;
+                    btn.className = `mode-btn flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${isActive ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}`;
+                });
+                const pveSettings = document.getElementById('pve-settings');
+                const emptySpace = document.getElementById('empty-space');
+                if (pveSettings) pveSettings.style.display = pendingSettings.mode === 'PvE' ? 'flex' : 'none';
+                if (emptySpace) emptySpace.style.display = pendingSettings.mode === 'PvE' ? 'none' : 'block';
+            }
+            else if (key === 'firstMove') {
+                document.querySelectorAll('.fm-btn').forEach(btn => {
+                    const isActive = btn.dataset.val === pendingSettings.firstMove;
+                    btn.className = `fm-btn flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${isActive ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}`;
+                });
+            }
+        }
+    };
+
+    window.setDifficulty = (val) => { 
+      if (pendingSettings) {
+          pendingSettings.aiDifficulty = val; 
+          
+          document.querySelectorAll('.diff-btn').forEach(btn => {
+              const bVal = parseInt(btn.dataset.val);
+              const isActive = bVal === pendingSettings.aiDifficulty;
+              let baseClass = "diff-btn flex items-center justify-center py-2 lg:py-2.5 rounded text-[12px] lg:text-[14px] transition-colors key-base ";
+              if (bVal <= 10) {
+                  btn.className = baseClass + (isActive ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900 hover:text-white');
+              } else {
+                  btn.className = baseClass + (isActive ? 'bg-red-600 text-white font-bold border border-red-600 shadow-[0_0_10px_rgba(220,38,38,0.4)]' : 'bg-[#111] text-red-500/70 font-medium border border-red-900/50 hover:bg-red-950/30 hover:text-red-500');
+              }
+          });
+
+          const diffLabelEl = document.getElementById('ai-diff-label');
+          if (diffLabelEl) {
+            let diffLabel = "普通 (LV.5)";
+            if (val <= 3) diffLabel = `新手 (LV.${val})`;
+            else if (val <= 7) diffLabel = `進階 (LV.${val})`;
+            else if (val <= 10) diffLabel = `大師 (LV.${val})`;
+            else diffLabel = `地獄 HELL (LV.${val})`;
+            diffLabelEl.className = val > 10 ? 'text-red-500 font-black tracking-widest' : 'text-white font-bold';
+            diffLabelEl.innerText = diffLabel;
+          }
       }
     };
     
-    window.openMenu = () => { isMenuOpen = true; isRecordOpen = false; render(); };
     window.toggleRecord = () => { isRecordOpen = !isRecordOpen; selectedHistoryMatch = null; render(); };
     
     window.viewMatchDetail = (matchId) => {
@@ -584,59 +621,70 @@
     window.initGame = () => {
       isMenuOpen = false;
       isRecordOpen = false;
+      
+      if (pendingSettings) settings = cloneState(pendingSettings);
+      
+      settings.playerColor = 'R'; 
+
       gameState = {
-        board: getInitialBoard(),
-        turn: 'R', 
-        selectedPiece: null, 
-        validMoves: [],
-        winner: null,
-        captured: { 'R': [], 'B': [] },
-        turnCount: 1,
-        isThinking: false,
-        isAnimating: false,
-        animatingCapture: null,
-        showCaptureEffect: null,
-        lastMove: null,
-        gameLog: []
+        board: getInitialBoard(), turn: 'R', selectedPiece: null, validMoves: [], winner: null,
+        captured: { 'R': [], 'B': [] }, turnCount: 1, isThinking: false, isAnimating: false,
+        animatingCapture: null, showCaptureEffect: null, lastMove: null, gameLog: [], isTossing: false
       };
       historyStack = [];
+
+      if (settings.mode === 'PvE') {
+          if (settings.firstMove === 'RANDOM') {
+              gameState.isTossing = true;
+              gameState.turn = Math.random() < 0.5 ? 'R' : 'B';
+              render(); 
+              setTimeout(() => {
+                  gameState.isTossing = false;
+                  render();
+                  if (gameState.turn === 'B') { 
+                      gameState.isThinking = true;
+                      render();
+                      // 統一延遲 1 秒先郁
+                      setTimeout(triggerAI, 1000);
+                  }
+              }, 3500); // 動畫維持 3.5 秒，預留 1 秒鐘展示最終結果
+              return;
+          } else {
+              gameState.turn = settings.firstMove === 'AI' ? 'B' : 'R';
+              if (gameState.turn === 'B') {
+                  gameState.isThinking = true;
+                  setTimeout(() => { 
+                      render(); 
+                      // 統一延遲 1 秒先郁
+                      setTimeout(triggerAI, 1000); 
+                  }, 0);
+              }
+          }
+      }
       render();
     };
 
     window.handleUndo = () => {
-      if (historyStack.length === 0 || gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect) return;
+      if (historyStack.length === 0 || gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing) return;
       if (settings.mode === 'PvE') {
-         if (historyStack.length >= 2) {
-           historyStack.pop(); 
-           gameState = historyStack.pop(); 
-         }
+         if (historyStack.length >= 2) { historyStack.pop(); gameState = historyStack.pop(); }
       } else {
          gameState = historyStack.pop();
       }
-      gameState.lastMove = null;
-      gameState.isAnimating = false;
-      gameState.showCaptureEffect = null;
+      gameState.lastMove = null; gameState.isAnimating = false; gameState.showCaptureEffect = null;
       render();
     };
 
     window.handleSquareClick = (x, y) => {
-      if (gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect) return;
+      if (gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing) return;
       
       const piece = gameState.board[y][x];
       const isSelected = gameState.selectedPiece && gameState.selectedPiece.x === x && gameState.selectedPiece.y === y;
 
-      if (isSelected) {
-        gameState.selectedPiece = null;
-        gameState.validMoves = [];
-        render();
-        return;
-      }
+      if (isSelected) { gameState.selectedPiece = null; gameState.validMoves = []; render(); return; }
 
       const isValidMove = gameState.validMoves.find(m => m.x === x && m.y === y);
-      if (gameState.selectedPiece && isValidMove) {
-        performMove(gameState.selectedPiece.x, gameState.selectedPiece.y, x, y);
-        return;
-      }
+      if (gameState.selectedPiece && isValidMove) { performMove(gameState.selectedPiece.x, gameState.selectedPiece.y, x, y); return; }
 
       if (piece && piece.color === gameState.turn) {
         if (settings.mode === 'PvE' && piece.color !== settings.playerColor) return;
@@ -644,27 +692,91 @@
         gameState.validMoves = getValidMoves(gameState.board, x, y);
         render();
       } else {
-        gameState.selectedPiece = null;
-        gameState.validMoves = [];
-        render();
+        gameState.selectedPiece = null; gameState.validMoves = []; render();
       }
+    };
+
+    // --- 獨立 Menu 渲染 ---
+    const getMenuHTML = () => {
+      if (!isMenuOpen) return '';
+      const isPvE = pendingSettings.mode === 'PvE';
+      let diffLabel = "普通 (LV.5)";
+      if (pendingSettings.aiDifficulty <= 3) diffLabel = `新手 (LV.${pendingSettings.aiDifficulty})`;
+      else if (pendingSettings.aiDifficulty <= 7) diffLabel = `進階 (LV.${pendingSettings.aiDifficulty})`;
+      else if (pendingSettings.aiDifficulty <= 10) diffLabel = `大師 (LV.${pendingSettings.aiDifficulty})`;
+      else diffLabel = `地獄 HELL (LV.${pendingSettings.aiDifficulty})`;
+      const diffColor = pendingSettings.aiDifficulty > 10 ? 'text-red-500 font-black tracking-widest' : 'text-white font-bold';
+
+      return `
+        <div id="menu-layer" class="fixed inset-0 z-50 bg-black flex flex-col overflow-y-auto ${menuJustOpened ? 'animate-fade-in' : ''}">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-start justify-between z-30 w-full shrink-0">
+            <div class="flex items-start"><img src="./assets/Logo.svg" alt="Target" class="h-[19px] lg:h-[25px] object-contain opacity-90" onerror="this.style.display='none'"></div>
+            <button onclick="window.cancelMenu()" class="text-white text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-neutral-300 transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/x.svg" class="h-[12px] lg:h-[15px]" style="filter: invert(1)" onerror="this.style.display='none'; this.parentNode.innerText='X'"></button>
+          </header>
+          
+          <div class="flex-1 flex flex-col items-center justify-center gap-8 pb-10 px-6 w-full mt-4 lg:mt-0">
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase">GAME MODE</div>
+              <div class="flex w-full gap-2">
+                <button data-val="PvE" onclick="window.setSetting('mode', 'PvE')" class="mode-btn flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.mode === 'PvE' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">單人 (對電腦)</button>
+                <button data-val="PvP" onclick="window.setSetting('mode', 'PvP')" class="mode-btn flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.mode === 'PvP' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">雙人 (對戰)</button>
+              </div>
+            </div>
+
+            <div id="pve-settings" class="w-full flex-col items-center gap-3 animate-fade-in" style="display: ${isPvE ? 'flex' : 'none'}">
+              <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3">
+                <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase flex justify-between w-full">
+                  <span>AI DIFFICULTY</span>
+                  <span id="ai-diff-label" class="${diffColor}">${diffLabel}</span>
+                </div>
+                
+                <!-- 15 格數字鍵盤 -->
+                ${(() => {
+                  let html = '<div class="grid grid-cols-5 gap-1.5 lg:gap-2 w-full mt-1">';
+                  for (let i = 1; i <= 15; i++) {
+                      const isActive = pendingSettings.aiDifficulty === i;
+                      let btnClass = "diff-btn flex items-center justify-center py-2 lg:py-2.5 rounded text-[12px] lg:text-[14px] transition-colors key-base ";
+                      if (i <= 10) {
+                          btnClass += isActive ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900 hover:text-white';
+                      } else {
+                          btnClass += isActive ? 'bg-red-600 text-white font-bold border border-red-600 shadow-[0_0_10px_rgba(220,38,38,0.4)]' : 'bg-[#111] text-red-500/70 font-medium border border-red-900/50 hover:bg-red-950/30 hover:text-red-500';
+                      }
+                      html += `<button data-val="${i}" onclick="window.setDifficulty(${i})" class="${btnClass}">${i}</button>`;
+                  }
+                  html += '</div>';
+                  return html;
+                })()}
+              </div>
+
+              <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3 mt-2">
+                <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase">FIRST MOVE</div>
+                <div class="flex w-full gap-2">
+                  <button data-val="PLAYER" onclick="window.setSetting('firstMove', 'PLAYER')" class="fm-btn flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === 'PLAYER' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">先攻</button>
+                  <button data-val="AI" onclick="window.setSetting('firstMove', 'AI')" class="fm-btn flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === 'AI' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">後攻</button>
+                  <button data-val="RANDOM" onclick="window.setSetting('firstMove', 'RANDOM')" class="fm-btn flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === 'RANDOM' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">隨機</button>
+                </div>
+              </div>
+            </div>
+            
+            <div id="empty-space" class="h-[180px] w-full max-w-[340px] lg:max-w-[440px]" style="display: ${!isPvE ? 'block' : 'none'}"></div>
+
+            <div class="w-full max-w-[340px] lg:max-w-[440px] mt-2">
+              <button onclick="window.initGame()" class="w-full bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black py-4 lg:py-5 rounded-lg font-bold tracking-[0.15em] text-[12px] lg:text-[16px] uppercase key-base">START GAME 開始</button>
+            </div>
+          </div>
+        </div>
+      `;
     };
 
     // --- 渲染函數 ---
     const generateBoardSVG = () => {
-      const OFFSET_X = 20;
-      const OFFSET_Y = 20;
+      const OFFSET_X = 20; const OFFSET_Y = 20;
       let svg = `<g stroke="#475569" stroke-width="1">`;
 
-      for (let i = 0; i <= BOARD_HEIGHT; i++) {
-        svg += `<line x1="${OFFSET_X}" y1="${OFFSET_Y + i * GRID_SIZE}" x2="${OFFSET_X + BOARD_WIDTH * GRID_SIZE}" y2="${OFFSET_Y + i * GRID_SIZE}" />`;
-      }
-      
+      for (let i = 0; i <= BOARD_HEIGHT; i++) svg += `<line x1="${OFFSET_X}" y1="${OFFSET_Y + i * GRID_SIZE}" x2="${OFFSET_X + BOARD_WIDTH * GRID_SIZE}" y2="${OFFSET_Y + i * GRID_SIZE}" />`;
       for (let i = 0; i <= BOARD_WIDTH; i++) {
         svg += `<line x1="${OFFSET_X + i * GRID_SIZE}" y1="${OFFSET_Y}" x2="${OFFSET_X + i * GRID_SIZE}" y2="${OFFSET_Y + 4 * GRID_SIZE}" />`;
-        if (i === 0 || i === BOARD_WIDTH) { 
-          svg += `<line x1="${OFFSET_X + i * GRID_SIZE}" y1="${OFFSET_Y + 4 * GRID_SIZE}" x2="${OFFSET_X + i * GRID_SIZE}" y2="${OFFSET_Y + 5 * GRID_SIZE}" />`;
-        }
+        if (i === 0 || i === BOARD_WIDTH) svg += `<line x1="${OFFSET_X + i * GRID_SIZE}" y1="${OFFSET_Y + 4 * GRID_SIZE}" x2="${OFFSET_X + i * GRID_SIZE}" y2="${OFFSET_Y + 5 * GRID_SIZE}" />`;
         svg += `<line x1="${OFFSET_X + i * GRID_SIZE}" y1="${OFFSET_Y + 5 * GRID_SIZE}" x2="${OFFSET_X + i * GRID_SIZE}" y2="${OFFSET_Y + BOARD_HEIGHT * GRID_SIZE}" />`;
       }
 
@@ -679,17 +791,13 @@
       `;
 
       const drawCross = (x, y) => {
-        const cx = OFFSET_X + x * GRID_SIZE;
-        const cy = OFFSET_Y + y * GRID_SIZE;
-        const s = 4, l = 10;
-        let res = `<g stroke="#475569" stroke-width="1">`;
+        const cx = OFFSET_X + x * GRID_SIZE; const cy = OFFSET_Y + y * GRID_SIZE;
+        const s = 4, l = 10; let res = `<g stroke="#475569" stroke-width="1">`;
         if (x > 0) res += `<polyline points="${cx-l},${cy-s} ${cx-s},${cy-s} ${cx-s},${cy-l}" fill="none"/><polyline points="${cx-l},${cy+s} ${cx-s},${cy+s} ${cx-s},${cy+l}" fill="none"/>`;
         if (x < 8) res += `<polyline points="${cx+l},${cy-s} ${cx+s},${cy-s} ${cx+s},${cy-l}" fill="none"/><polyline points="${cx+l},${cy+s} ${cx+s},${cy+s} ${cx+s},${cy+l}" fill="none"/>`;
         return res + `</g>`;
       };
-      [ {x:1, y:2}, {x:7, y:2}, {x:0, y:3}, {x:2, y:3}, {x:4, y:3}, {x:6, y:3}, {x:8, y:3},
-        {x:1, y:7}, {x:7, y:7}, {x:0, y:6}, {x:2, y:6}, {x:4, y:6}, {x:6, y:6}, {x:8, y:6}
-      ].forEach(pos => svg += drawCross(pos.x, pos.y));
+      [ {x:1, y:2}, {x:7, y:2}, {x:0, y:3}, {x:2, y:3}, {x:4, y:3}, {x:6, y:3}, {x:8, y:3}, {x:1, y:7}, {x:7, y:7}, {x:0, y:6}, {x:2, y:6}, {x:4, y:6}, {x:6, y:6}, {x:8, y:6} ].forEach(pos => svg += drawCross(pos.x, pos.y));
 
       let interactionSVG = `<g opacity="0">`;
       for (let y = 0; y <= BOARD_HEIGHT; y++) {
@@ -701,8 +809,7 @@
 
       let validMovesSVG = ``;
       gameState.validMoves.forEach(m => {
-        const cx = OFFSET_X + m.x * GRID_SIZE;
-        const cy = OFFSET_Y + m.y * GRID_SIZE;
+        const cx = OFFSET_X + m.x * GRID_SIZE; const cy = OFFSET_Y + m.y * GRID_SIZE;
         const isCapture = gameState.board[m.y][m.x] !== null;
         if (isCapture) {
           validMovesSVG += `<path d="M ${cx-15} ${cy-15} L ${cx-8} ${cy-15} M ${cx-15} ${cy-15} L ${cx-15} ${cy-8} M ${cx+15} ${cy-15} L ${cx+8} ${cy-15} M ${cx+15} ${cy-15} L ${cx+15} ${cy-8} M ${cx-15} ${cy+15} L ${cx-8} ${cy+15} M ${cx-15} ${cy+15} L ${cx-15} ${cy+8} M ${cx+15} ${cy+15} L ${cx+8} ${cy+15} M ${cx+15} ${cy+15} L ${cx+15} ${cy+8}" fill="none" stroke="#22d3ee" stroke-width="2" class="valid-move" onclick="window.handleSquareClick(${m.x}, ${m.y})" />`;
@@ -711,22 +818,13 @@
         }
       });
 
-      // 暫存畫出被食目標，等佢唔會係移動期間無故消失
       let baseTargetPieceSVG = '';
       if (gameState.isAnimating && gameState.animatingCapture) {
-          const cx = OFFSET_X + gameState.lastMove.to.x * GRID_SIZE;
-          const cy = OFFSET_Y + gameState.lastMove.to.y * GRID_SIZE;
+          const cx = OFFSET_X + gameState.lastMove.to.x * GRID_SIZE; const cy = OFFSET_Y + gameState.lastMove.to.y * GRID_SIZE;
           const p = gameState.animatingCapture;
           const strokeColor = p.color === 'R' ? '#ef4444' : '#f8fafc';
           const textColor = p.color === 'R' ? '#ef4444' : '#f8fafc';
-
-          baseTargetPieceSVG += `
-            <g transform="translate(${cx}, ${cy})" pointer-events="none">
-              <circle cx="0" cy="0" r="16" fill="#111111" stroke="${strokeColor}" stroke-width="1.5" />
-              <circle cx="0" cy="0" r="13" fill="none" stroke="${strokeColor}" stroke-width="0.5" opacity="0.5" />
-              <text x="0" y="0" fill="${textColor}" font-size="18" class="font-chess" text-anchor="middle" dominant-baseline="central">${p.label}</text>
-            </g>
-          `;
+          baseTargetPieceSVG += `<g transform="translate(${cx}, ${cy})" pointer-events="none"><circle cx="0" cy="0" r="16" fill="#111111" stroke="${strokeColor}" stroke-width="1.5" /><circle cx="0" cy="0" r="13" fill="none" stroke="${strokeColor}" stroke-width="0.5" opacity="0.5" /><text x="0" y="0" fill="${textColor}" font-size="18" class="font-chess" text-anchor="middle" dominant-baseline="central">${p.label}</text></g>`;
       }
 
       let piecesSVG = ``;
@@ -734,134 +832,42 @@
         for (let x = 0; x <= BOARD_WIDTH; x++) {
           const piece = gameState.board[y][x];
           if (piece) {
-            const cx = OFFSET_X + x * GRID_SIZE;
-            const cy = OFFSET_Y + y * GRID_SIZE;
+            const cx = OFFSET_X + x * GRID_SIZE; const cy = OFFSET_Y + y * GRID_SIZE;
             const isSelected = gameState.selectedPiece && gameState.selectedPiece.x === x && gameState.selectedPiece.y === y;
-            const bgColor = '#111111';
-            const strokeColor = piece.color === 'R' ? '#ef4444' : '#f8fafc';
-            const textColor = piece.color === 'R' ? '#ef4444' : '#f8fafc';
+            const bgColor = '#111111'; const strokeColor = piece.color === 'R' ? '#ef4444' : '#f8fafc'; const textColor = piece.color === 'R' ? '#ef4444' : '#f8fafc';
             const glow = isSelected ? `<circle cx="${cx}" cy="${cy}" r="18" fill="none" stroke="#22d3ee" stroke-width="2" />` : '';
-            
             let animTag = '';
             if (gameState.isAnimating && gameState.lastMove && gameState.lastMove.to.x === x && gameState.lastMove.to.y === y) {
-                const oldCx = OFFSET_X + gameState.lastMove.from.x * GRID_SIZE;
-                const oldCy = OFFSET_Y + gameState.lastMove.from.y * GRID_SIZE;
-                const dx = oldCx - cx;
-                const dy = oldCy - cy;
-                animTag = `<animateTransform attributeName="transform" type="translate" from="${dx} ${dy}" to="0 0" dur="0.4s" additive="sum" fill="freeze" />`;
+                const oldCx = OFFSET_X + gameState.lastMove.from.x * GRID_SIZE; const oldCy = OFFSET_Y + gameState.lastMove.from.y * GRID_SIZE;
+                animTag = `<animateTransform attributeName="transform" type="translate" from="${oldCx - cx} ${oldCy - cy}" to="0 0" dur="0.4s" additive="sum" fill="freeze" />`;
             }
-            
-            piecesSVG += `
-              <g class="chess-piece" transform="translate(${cx}, ${cy})" onclick="window.handleSquareClick(${x}, ${y})">
-                ${animTag}
-                ${glow}
-                <circle cx="0" cy="0" r="16" fill="${bgColor}" stroke="${strokeColor}" stroke-width="1.5" />
-                <circle cx="0" cy="0" r="13" fill="none" stroke="${strokeColor}" stroke-width="0.5" opacity="0.5" />
-                <text x="0" y="0" fill="${textColor}" font-size="18" class="font-chess" text-anchor="middle" dominant-baseline="central">${piece.label}</text>
-              </g>
-            `;
+            piecesSVG += `<g class="chess-piece" transform="translate(${cx}, ${cy})" onclick="window.handleSquareClick(${x}, ${y})">${animTag}${glow}<circle cx="0" cy="0" r="16" fill="${bgColor}" stroke="${strokeColor}" stroke-width="1.5" /><circle cx="0" cy="0" r="13" fill="none" stroke="${strokeColor}" stroke-width="0.5" opacity="0.5" /><text x="0" y="0" fill="${textColor}" font-size="18" class="font-chess" text-anchor="middle" dominant-baseline="central">${piece.label}</text></g>`;
           }
         }
       }
 
-      // 佔領波紋與擊飛特效 (Phase 2)
       let captureEffectsSVG = '';
       if (gameState.showCaptureEffect) {
-          const cx = OFFSET_X + gameState.showCaptureEffect.x * GRID_SIZE;
-          const cy = OFFSET_Y + gameState.showCaptureEffect.y * GRID_SIZE;
-          const p = gameState.showCaptureEffect.piece;
-          const waveColor = gameState.showCaptureEffect.capturerColor === 'R' ? '#ef4444' : '#f8fafc';
-          const strokeColor = p.color === 'R' ? '#ef4444' : '#f8fafc';
-          const textColor = p.color === 'R' ? '#ef4444' : '#f8fafc';
-
-          captureEffectsSVG += `
-            <g pointer-events="none">
-              <!-- 佔領放射圓波紋 (設定 overflow visible 解決被切斷問題，加入 keySplines 造出先慢後快) -->
-              <circle cx="${cx}" cy="${cy}" r="16" fill="none" stroke="${waveColor}" stroke-width="6">
-                 <animate attributeName="r" from="16" to="240" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" />
-                 <animate attributeName="stroke-width" from="6" to="0" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" />
-                 <animate attributeName="opacity" from="0.8" to="0" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" />
-              </circle>
-              <!-- 被擊飛嘅棋子 (使用 CSS 動畫) -->
-              <g transform="translate(${cx}, ${cy})">
-                 <g class="anim-capture-fly">
-                    <circle cx="0" cy="0" r="16" fill="#111111" stroke="${strokeColor}" stroke-width="1.5" />
-                    <circle cx="0" cy="0" r="13" fill="none" stroke="${strokeColor}" stroke-width="0.5" opacity="0.5" />
-                    <text x="0" y="0" fill="${textColor}" font-size="18" class="font-chess" text-anchor="middle" dominant-baseline="central">${p.label}</text>
-                 </g>
-              </g>
-            </g>
-          `;
+          const cx = OFFSET_X + gameState.showCaptureEffect.x * GRID_SIZE; const cy = OFFSET_Y + gameState.showCaptureEffect.y * GRID_SIZE;
+          const p = gameState.showCaptureEffect.piece; const waveColor = gameState.showCaptureEffect.capturerColor === 'R' ? '#ef4444' : '#f8fafc';
+          const strokeColor = p.color === 'R' ? '#ef4444' : '#f8fafc'; const textColor = p.color === 'R' ? '#ef4444' : '#f8fafc';
+          captureEffectsSVG += `<g pointer-events="none"><circle cx="${cx}" cy="${cy}" r="16" fill="none" stroke="${waveColor}" stroke-width="6"><animate attributeName="r" from="16" to="240" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" /><animate attributeName="stroke-width" from="6" to="0" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" /><animate attributeName="opacity" from="0.8" to="0" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" /></circle><g transform="translate(${cx}, ${cy})"><g class="anim-capture-fly"><circle cx="0" cy="0" r="16" fill="#111111" stroke="${strokeColor}" stroke-width="1.5" /><circle cx="0" cy="0" r="13" fill="none" stroke="${strokeColor}" stroke-width="0.5" opacity="0.5" /><text x="0" y="0" fill="${textColor}" font-size="18" class="font-chess" text-anchor="middle" dominant-baseline="central">${p.label}</text></g></g></g>`;
       }
 
       return svg + interactionSVG + validMovesSVG + baseTargetPieceSVG + piecesSVG + captureEffectsSVG;
     };
 
-    const renderMenu = () => {
-      const menuContainer = document.getElementById('menu-layer');
-      if (!menuContainer) return;
-      
-      const isPvE = settings.mode === 'PvE';
-      
-      let diffLabel = "普通 (LV.5)";
-      if (settings.aiDifficulty <= 3) diffLabel = `新手 (LV.${settings.aiDifficulty})`;
-      else if (settings.aiDifficulty <= 7) diffLabel = `進階 (LV.${settings.aiDifficulty})`;
-      else if (settings.aiDifficulty <= 10) diffLabel = `大師 (LV.${settings.aiDifficulty})`;
-      else diffLabel = `地獄 HELL (LV.${settings.aiDifficulty})`;
-      
-      const diffColor = settings.aiDifficulty > 10 ? 'text-red-500 font-black tracking-widest' : 'text-white font-bold';
-
-      menuContainer.innerHTML = `
-        <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-y-auto animate-fade-in">
-          <div class="flex-1 flex flex-col items-center justify-center gap-10 pb-10 px-6 w-full mt-4 lg:mt-0">
-            <div class="text-white text-2xl lg:text-3xl font-black tracking-[0.2em] uppercase font-chess text-center">
-              中 國 象 棋<br><span class="text-[12px] lg:text-[14px] text-neutral-500 font-sans tracking-[0.3em] font-medium block mt-2">CHINESE CHESS</span>
-            </div>
-
-            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-4">
-              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase">GAME MODE 遊戲模式</div>
-              <div class="flex w-full gap-2">
-                <button onclick="window.setMode('PvE')" class="flex-1 py-4 lg:py-5 rounded-lg text-[12px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${isPvE ? 'bg-white text-black font-bold' : 'bg-[#111] text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">單人 (對電腦)</button>
-                <button onclick="window.setMode('PvP')" class="flex-1 py-4 lg:py-5 rounded-lg text-[12px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${!isPvE ? 'bg-white text-black font-bold' : 'bg-[#111] text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">雙人 (對戰)</button>
-              </div>
-            </div>
-
-            ${isPvE ? `
-            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-4 animate-fade-in">
-              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase flex justify-between w-full">
-                <span>AI DIFFICULTY 電腦難度</span>
-                <span id="ai-diff-label" class="${diffColor}">${diffLabel}</span>
-              </div>
-              <div class="w-full px-2 py-4">
-                <input type="range" min="1" max="15" value="${settings.aiDifficulty}" oninput="window.setDifficulty(event)" class="w-full">
-                <div class="flex justify-between text-[10px] text-neutral-600 mt-3 font-bold px-1">
-                  <span>新手 (LV.1)</span>
-                  <span class="text-red-900/80">地獄 (LV.15)</span>
-                </div>
-              </div>
-            </div>
-            ` : '<div class="h-[96px] w-full max-w-[340px] lg:max-w-[440px]"></div>'}
-
-            <div class="w-full max-w-[340px] lg:max-w-[440px] mt-4">
-              <button onclick="window.initGame()" class="w-full bg-red-600 hover:bg-red-500 active:bg-red-700 text-white py-4 lg:py-5 rounded-lg font-bold tracking-[0.2em] text-[14px] lg:text-[16px] uppercase shadow-[0_0_20px_rgba(220,38,38,0.4)] transition-all">START GAME 開始</button>
-            </div>
-          </div>
-        </div>
-      `;
-    };
-
     function render() {
       const appDiv = document.getElementById('app');
-
-      if (isMenuOpen) {
-        appDiv.innerHTML = `<div id="menu-layer"></div>`;
-        renderMenu();
-        return;
-      }
       
-      if (!gameState) return;
+      const menuHTML = getMenuHTML();
 
-      // 歷史紀錄介面 (Record Overlay)
+      if (!gameState) {
+          appDiv.innerHTML = menuHTML;
+          return;
+      }
+
+      // 歷史紀錄介面
       let recordHTML = '';
       if (isRecordOpen) {
         if (!selectedHistoryMatch) {
@@ -869,12 +875,10 @@
             <div onclick="window.viewMatchDetail(${m.id})" class="bg-[#111] rounded-lg p-5 border border-neutral-800 hover:border-neutral-600 transition-colors cursor-pointer group flex items-center justify-between">
                <div class="flex flex-col gap-1">
                   <div class="text-[12px] lg:text-[15px] font-bold ${m.winner === 'R' ? 'text-red-500' : 'text-slate-100'} tracking-wider">${m.winner === 'R' ? '紅方' : '白方'} 獲勝</div>
-                  <div class="text-[9px] lg:text-[11px] text-neutral-500 uppercase tracking-widest">
-                    ${m.settings.mode} | ${m.settings.mode === 'PvE' ? `LV.${m.settings.aiDifficulty}` : 'PVP'} | 回合數: ${Math.ceil(m.gameLog.length / 2)}
-                  </div>
+                  <div class="text-[9px] lg:text-[11px] text-neutral-500 uppercase tracking-widest">${m.settings.mode} | ${m.settings.mode === 'PvE' ? `LV.${m.settings.aiDifficulty}` : 'PVP'} | 回合: ${Math.ceil(m.gameLog.length / 2)}</div>
                   <div class="text-[8px] lg:text-[10px] text-neutral-600 font-medium">${m.timestamp}</div>
                </div>
-               <div class="text-neutral-600 text-xs font-bold tracking-widest group-hover:text-white transition-colors">DETAIL</div>
+               <img src="./assets/arrow.svg" alt="Detail" class="h-[10px] lg:h-[12px] opacity-20 group-hover:opacity-100 transition-opacity -rotate-90" onerror="this.style.display='none'">
             </div>
           `).join('');
 
@@ -882,7 +886,7 @@
             <div onclick="window.viewMatchDetail('current')" class="bg-[#1a1a1a] rounded-lg p-5 border-2 border-dashed border-neutral-700 hover:border-white transition-colors cursor-pointer mb-4 flex items-center justify-between">
                <div class="flex flex-col gap-1">
                   <div class="text-[14px] lg:text-[17px] font-bold text-white tracking-wide">當前賽局 (Current Match)</div>
-                  <div class="text-[9px] lg:text-[11px] text-neutral-400 uppercase tracking-widest">已進行 ${Math.ceil(gameState.gameLog.length / 2)} 回合...</div>
+                  <div class="text-[9px] lg:text-[11px] text-neutral-400 uppercase tracking-widest">In Progress...</div>
                </div>
                <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
             </div>
@@ -891,173 +895,156 @@
           recordHTML = `
           <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-hidden animate-fade-in">
             <header class="flex-none pt-6 pb-4 px-5 lg:px-12 flex items-start justify-center z-30 w-full border-b border-neutral-800 shrink-0 relative">
-               <div class="text-white font-bold tracking-[0.15em] text-[12px] lg:text-[16px] uppercase pt-0.5">MATCH RECORD 對戰記錄</div>
-               <button onclick="window.toggleRecord()" class="absolute right-5 lg:right-12 text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white active:text-white transition-colors pt-1 lg:pt-1.5 key-base">CLOSE</button>
+               <div class="text-white font-bold tracking-[0.15em] text-[12px] lg:text-[16px] uppercase pt-0.5">MATCH RECORD</div>
+               <button onclick="window.toggleRecord()" class="absolute right-5 lg:right-12 text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white active:text-white transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/x.svg" class="h-[12px] lg:h-[15px]" style="filter: invert(1)" onerror="this.style.display='none'; this.parentNode.innerText='X'"></button>
             </header>
             <div class="flex-1 overflow-y-auto hide-scrollbar flex flex-col pt-6 pb-10 px-5 max-w-[800px] w-full mx-auto">
               ${currentEntry}
-              <div class="flex flex-col gap-3">
-                ${historyListHTML || '<div class="text-center py-20 text-neutral-700 tracking-widest text-[11px] uppercase">暫無記錄 No History</div>'}
-              </div>
+              <div class="flex flex-col gap-3">${historyListHTML || '<div class="text-center py-20 text-neutral-700 tracking-widest text-[11px] uppercase">No History Found</div>'}</div>
             </div>
           </div>
           `;
         } else {
-          let matchData = selectedHistoryMatch === 'current' ? {
-              settings: settings, gameLog: cloneState(gameState.gameLog), isLive: true
-          } : selectedHistoryMatch;
-
+          let matchData = selectedHistoryMatch === 'current' ? { settings, gameLog: cloneState(gameState.gameLog), isLive: true } : selectedHistoryMatch;
           let logContent = matchData.gameLog.slice().reverse().map((log, idx) => {
-              const actualMoveIdx = matchData.gameLog.length - idx;
-              const moveRound = Math.ceil(actualMoveIdx / 2);
+              const actualIdx = matchData.gameLog.length - idx;
               const colorClass = log.turn === 'R' ? 'text-red-500' : 'text-slate-100';
               const teamName = log.turn === 'R' ? '紅' : '白';
-              
-              const coordStr = (pt) => `(${pt.x + 1}, ${pt.y + 1})`; // 轉換坐標供閱讀 (1~9, 1~10)
-              const moveDesc = `${log.piece} : ${coordStr(log.from)} ➔ ${coordStr(log.to)}`;
+              const moveDesc = `${log.piece} : (${log.from.x + 1}, ${log.from.y + 1}) ➔ (${log.to.x + 1}, ${log.to.y + 1})`;
               const captureLabel = log.captured ? `<span class="ml-2 text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold uppercase border border-red-500/30">食 ${log.captured}</span>` : '';
-
               return `
               <div class="flex items-center justify-between py-3 lg:py-4 border-b border-neutral-800/50 last:border-0">
                   <div class="flex items-center gap-3">
-                      <div class="text-[10px] text-neutral-600 font-bold w-6">#${actualMoveIdx}</div>
+                      <div class="text-[10px] text-neutral-600 font-bold w-6">#${actualIdx}</div>
                       <div class="w-6 h-6 rounded border border-neutral-700 bg-neutral-800 flex items-center justify-center ${colorClass} text-[12px] font-chess">${teamName}</div>
                       <div class="text-[12px] lg:text-[14px] font-medium text-neutral-300 tracking-wide">${moveDesc}</div>
                   </div>
                   <div>${captureLabel}</div>
-              </div>
-              `;
+              </div>`;
           }).join('');
 
           recordHTML = `
           <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-hidden animate-fade-in">
             <header class="flex-none pt-6 pb-4 px-5 lg:px-12 flex items-start justify-between z-30 w-full border-b border-neutral-800 shrink-0">
-               <button onclick="window.viewMatchDetail(null)" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white transition-colors pt-1 lg:pt-1.5 flex items-center gap-1.5 key-base">
-                 BACK
-               </button>
+               <button onclick="window.viewMatchDetail(null)" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white transition-colors pt-1 lg:pt-1.5 flex items-center gap-1.5 key-base"><img src="./assets/arrow.svg" class="h-[8px] rotate-90 opacity-60" onerror="this.style.display='none';"> BACK</button>
                <div class="flex flex-col items-center">
-                 <span class="text-white font-black tracking-[0.2em] text-[12px] lg:text-[16px] uppercase pt-0.5">LOG DETAIL 步法詳情</span>
-                 <span class="text-[8px] text-neutral-600 tracking-widest uppercase">${matchData.isLive ? 'LIVE IN PROGRESS' : 'PAST MATCH'}</span>
+                 <span class="text-white font-black tracking-[0.2em] text-[12px] lg:text-[16px] uppercase pt-0.5">LOG DETAIL</span>
+                 <span class="text-[8px] text-neutral-600 tracking-widest uppercase">${matchData.isLive ? 'LIVE' : 'PAST MATCH'}</span>
                </div>
-               <button onclick="window.toggleRecord()" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white active:text-white transition-colors pt-1 lg:pt-1.5 key-base">CLOSE</button>
+               <button onclick="window.toggleRecord()" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white active:text-white transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/x.svg" class="h-[12px] lg:h-[15px]" style="filter: invert(1)" onerror="this.style.display='none'; this.parentNode.innerText='X'"></button>
             </header>
             <div class="flex-1 overflow-y-auto hide-scrollbar flex flex-col pt-4 pb-10 px-5 max-w-[800px] w-full mx-auto">
-              <div class="bg-[#111] rounded-lg p-4 lg:p-6 border border-neutral-800 shadow-sm flex flex-col">
-                 ${logContent || '<div class="text-neutral-600 text-center py-10 text-xs">暫無步數</div>'}
-              </div>
+              <div class="bg-[#111] rounded-lg p-4 lg:p-6 border border-neutral-800 shadow-sm flex flex-col">${logContent || '<div class="text-neutral-600 text-center py-10 text-xs">暫無步數</div>'}</div>
             </div>
           </div>
           `;
         }
       }
 
+      // --- 擲先後 3D 動畫過場 ---
+      let tossHTML = '';
+      if (gameState.isTossing) {
+         const tossMsg = gameState.turn === 'R' ? "紅方先行 (你先攻)" : "白方先行 (電腦先攻)";
+         const flipClass = gameState.turn === 'R' ? "anim-flip-red" : "anim-flip-white";
+         
+         tossHTML = `
+         <div class="fixed inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center">
+            <div class="text-neutral-500 text-[12px] tracking-[0.3em] font-medium mb-12 uppercase">TOSSING COIN...</div>
+            <div class="coin-scene mb-12 shadow-[0_0_30px_rgba(255,255,255,0.1)] rounded-full">
+               <div class="coin-wrapper ${flipClass}">
+                  <div class="coin-face coin-front">紅</div>
+                  <div class="coin-face coin-back">白</div>
+               </div>
+            </div>
+            <div class="text-white font-bold tracking-[0.2em] text-[18px] lg:text-[22px] opacity-0 anim-fade-in-delayed">
+               ${tossMsg}
+            </div>
+         </div>
+         `;
+      }
+
+      // --- 主界面渲染 ---
       let statusBannerHTML = '';
       if (gameState.winner) {
-        const winnerName = gameState.winner === 'R' ? '紅方 (RED)' : '白方 (WHITE)';
-        const bannerBg = gameState.winner === 'R' ? 'bg-[#6a0404]' : 'bg-[#333333]';
-        statusBannerHTML = `<div class="w-full ${bannerBg} rounded-lg py-3.5 flex items-center justify-center font-bold text-[14px] lg:text-[17px] tracking-[0.15em] text-white uppercase animate-pulse shadow-lg">${winnerName} 獲勝 WIN!!!</div>`;
+        statusBannerHTML = `<div class="w-full ${gameState.winner === 'R' ? 'bg-[#6a0404]' : 'bg-[#333333]'} rounded-lg py-3.5 flex items-center justify-center font-bold text-[14px] lg:text-[17px] tracking-[0.15em] text-white uppercase animate-pulse shadow-lg">${gameState.winner === 'R' ? '紅方 (RED)' : '白方 (WHITE)'} 獲勝 WIN!!!</div>`;
       } else if (gameState.isThinking) {
-        const hellClass = settings.aiDifficulty > 10 ? 'border-red-500/50 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-[#22d3ee]/30 text-[#22d3ee] shadow-[0_0_15px_rgba(34,211,238,0.1)]';
-        statusBannerHTML = `
-          <div class="w-full bg-[#111111] rounded-lg py-3.5 lg:py-4 flex items-center justify-center px-6 font-bold text-[12px] lg:text-[16px] tracking-[0.2em] animate-thinking border ${hellClass}">
-             <span>AI 思考中 THINKING...</span>
-        </div>`;
+        statusBannerHTML = `<div class="w-full bg-[#111111] rounded-lg py-3.5 lg:py-4 flex items-center justify-center px-6 font-bold text-[12px] lg:text-[16px] tracking-[0.2em] animate-thinking border ${settings.aiDifficulty > 10 ? 'border-red-500/50 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-[#22d3ee]/30 text-[#22d3ee] shadow-[0_0_15px_rgba(34,211,238,0.1)]'}"><span>AI 思考中 THINKING...</span></div>`;
       } else {
         const isPVE = settings.mode === 'PvE';
         let turnText = gameState.turn === 'R' ? '紅方回合 RED TURN' : '白方回合 WHITE TURN';
-        if (isPVE) turnText = gameState.turn === 'R' ? '玩家回合 YOUR TURN' : 'AI 回合...';
-        
-        const turnColor = gameState.turn === 'R' ? 'text-red-500' : 'text-slate-100';
-        statusBannerHTML = `
-          <div class="w-full bg-[#111111] rounded-lg py-3.5 lg:py-4 flex items-center justify-between px-6 font-medium text-[12px] lg:text-[16px] tracking-[0.15em] text-neutral-300 uppercase border border-neutral-800">
-            <span>TURN ${gameState.turnCount}</span>
-            <span class="${turnColor} font-bold transition-colors duration-200">${turnText}</span>
-          </div>`;
+        if (isPVE) turnText = gameState.turn === settings.playerColor ? '玩家回合 YOUR TURN' : 'AI 回合...';
+        statusBannerHTML = `<div class="w-full bg-[#111111] rounded-lg py-3.5 lg:py-4 flex items-center justify-between px-6 font-medium text-[12px] lg:text-[16px] tracking-[0.15em] text-neutral-300 uppercase border border-neutral-800"><span>TURN ${gameState.turnCount}</span><span class="${gameState.turn === 'R' ? 'text-red-500' : 'text-slate-100'} font-bold transition-colors duration-200">${turnText}</span></div>`;
       }
 
       const renderCaptured = (color) => {
         const pieces = gameState.captured[color];
         if (pieces.length === 0) return '<div class="text-neutral-600 text-[10px] uppercase tracking-widest py-1">NONE</div>';
-        return pieces.map(p => {
-            const textColor = p.color === 'R' ? 'text-red-500' : 'text-slate-100';
-            return `<div class="w-6 h-6 rounded-full border border-neutral-700 bg-black flex items-center justify-center ${textColor} text-[12px] font-chess">${p.label}</div>`;
-        }).join('');
+        return pieces.map(p => `<div class="w-6 h-6 rounded-full border border-neutral-700 bg-black flex items-center justify-center ${p.color === 'R' ? 'text-red-500' : 'text-slate-100'} text-[12px] font-chess">${p.label}</div>`).join('');
       };
 
       const capturedAreaHTML = `
         <div class="flex flex-col gap-3 px-4 lg:px-6 w-full">
-            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-3">
-                <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-16">WHITE</div>
-                <div class="flex-1 flex flex-wrap gap-1 justify-end">${renderCaptured('B')}</div>
-            </div>
-            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-3">
-                <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-16">RED</div>
-                <div class="flex-1 flex flex-wrap gap-1 justify-end">${renderCaptured('R')}</div>
-            </div>
+            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-3"><div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-16">WHITE</div><div class="flex-1 flex flex-wrap gap-1 justify-end">${renderCaptured('B')}</div></div>
+            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-3"><div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-16">RED</div><div class="flex-1 flex flex-wrap gap-1 justify-end">${renderCaptured('R')}</div></div>
         </div>
       `;
 
-      const winActionsHTML = `
+      const controlPanelHTML = gameState.winner ? `
         <div class="flex-1 flex flex-col items-center justify-start pt-4 gap-5 w-full animate-fade-in pb-10 lg:pb-0">
-          <button onclick="window.openMenu()" class="w-[220px] lg:w-[260px] py-4 lg:py-5 rounded-lg bg-white text-black font-bold text-xs lg:text-[14px] tracking-[0.15em] uppercase hover:bg-neutral-200 transition-colors key-base">MAIN MENU 主選單</button>
+          <button onclick="window.toggleRecord()" class="w-[220px] lg:w-[260px] py-4 lg:py-5 rounded-lg border border-neutral-800 text-white font-medium text-xs lg:text-[14px] tracking-[0.15em] uppercase hover:bg-neutral-900 transition-colors key-base">MATCH RECORD</button>
+          <button onclick="window.openMenu()" class="w-[220px] lg:w-[260px] py-4 lg:py-5 rounded-lg bg-white text-black font-medium text-xs lg:text-[14px] tracking-[0.15em] uppercase hover:bg-neutral-200 transition-colors key-base">MAIN MENU 主選單</button>
         </div>
-      `;
-
-      const controlPanelHTML = gameState.winner ? winActionsHTML : `
-        <div class="flex-none bg-black pb-6 lg:pb-0">
-            ${capturedAreaHTML}
-        </div>
-      `;
-
-      const dynamicSVG = generateBoardSVG();
+      ` : `<div class="flex-none bg-black pb-6 lg:pb-0">${capturedAreaHTML}</div>`;
 
       appDiv.innerHTML = `
+        ${menuHTML}
         ${recordHTML}
+        ${tossHTML}
+        
         <div class="w-full h-full bg-black relative flex flex-col overflow-hidden">
           
-          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-start justify-between z-30 w-full">
-            <div class="flex items-center gap-3">
-               <div class="w-6 h-6 rounded bg-red-600 text-white flex items-center justify-center font-bold text-[14px] font-chess">帥</div>
-               <div class="flex flex-col">
-                 <span class="text-white font-bold tracking-[0.15em] text-[12px] lg:text-[14px] uppercase">CHINESE CHESS</span>
-                 <span class="text-neutral-500 font-medium tracking-widest text-[8px] lg:text-[9px] uppercase">${settings.mode === 'PvE' ? `PVE - LEVEL ${settings.aiDifficulty}` : 'PVP MODE'}</span>
-               </div>
-            </div>
-            <div class="flex items-start gap-4 lg:gap-6">
-              <button onclick="window.toggleRecord()" class="flex items-start justify-center opacity-70 hover:opacity-100 transition-opacity key-base uppercase text-[10px] lg:text-[12px] font-bold tracking-widest text-neutral-400 mt-1.5">RECORD</button>
-              <button onclick="window.handleUndo()" ${historyStack.length === 0 || gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect ? 'disabled style="opacity:0.2"' : ''} class="flex items-start justify-center opacity-70 hover:opacity-100 transition-opacity key-base uppercase text-[10px] lg:text-[12px] font-bold tracking-widest text-white mt-1.5">UNDO</button>
-              <button onclick="window.openMenu()" ${gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect ? 'disabled style="opacity:0.2"' : ''} class="flex items-start justify-center opacity-70 hover:opacity-100 transition-opacity key-base uppercase text-[10px] lg:text-[12px] font-bold tracking-widest text-neutral-400 mt-1.5">MENU</button>
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-start justify-between z-30 w-full shrink-0">
+            <div class="flex items-start"><img src="./assets/Logo.svg" alt="Target" class="h-[19px] lg:h-[25px] object-contain opacity-90" onerror="this.style.display='none'"></div>
+            <div class="flex items-start gap-5 lg:gap-8">
+              <button onclick="window.openMenu()" ${gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-start justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/setting.svg" alt="Settings" class="h-[14px] lg:h-[18px] object-contain" onerror="this.style.display='none'; this.parentNode.innerText='SET'"></button>
+              <button onclick="window.toggleRecord()" class="flex items-start justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/record.svg" alt="Record" class="h-[16px] lg:h-[22px] object-contain" onerror="this.style.display='none'; this.parentNode.innerText='REC'"></button>
+              <button onclick="window.handleUndo()" ${historyStack.length === 0 || gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-start justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/back.svg" alt="Undo" class="h-[14px] lg:h-[18px] object-contain" onerror="this.style.display='none'; this.parentNode.innerText='UNDO'"></button>
             </div>
           </header>
 
+          <div class="absolute top-[60px] lg:top-[85px] left-5 lg:left-12 z-20 pointer-events-none">
+            <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase">
+              CHINESE CHESS <span class="mx-1 opacity-50">|</span> ${settings.mode === 'PvE' ? `LV.${settings.aiDifficulty}` : 'PVP'}<br>
+              ${settings.mode === 'PvE' ? (settings.firstMove === 'PLAYER' ? 'PLAYER FIRST 先攻' : settings.firstMove === 'AI' ? 'AI FIRST 後攻' : 'RANDOM FIRST 隨機') : 'VERSUS'}<br>
+              ROUND ${Math.ceil(gameState.gameLog.length / 2) + 1}
+            </div>
+          </div>
+
           <main class="flex-1 w-full max-w-md lg:max-w-[1200px] mx-auto flex flex-col lg:flex-row min-h-0 relative z-10">
-            
             <div class="flex-1 relative min-h-0 flex flex-col lg:justify-center lg:py-8 lg:pr-8">
-              <div class="flex-1 flex items-center justify-center pb-2 lg:pb-0 w-full h-full min-h-0 overflow-visible pt-4 lg:pt-0">
-                <!-- 更新：加入 overflow="visible" 容許特效擴展出棋盤 -->
+              <div class="flex-1 flex items-center justify-center pb-2 lg:pb-0 w-full h-full min-h-0 overflow-visible pt-10 lg:pt-0">
                 <svg viewBox="0 0 360 400" overflow="visible" class="w-full max-w-[400px] lg:max-w-[500px] h-auto max-h-[75vh] lg:h-full lg:max-h-[85vh] transition-transform origin-center">
-                  ${dynamicSVG}
+                  ${generateBoardSVG()}
                 </svg>
               </div>
             </div>
 
-            <div class="flex-none lg:w-[400px] lg:h-full flex flex-col justify-end lg:justify-center bg-black z-10 relative">
+            <div class="flex-none lg:w-[480px] lg:h-full flex flex-col justify-end lg:justify-center bg-black z-10 relative">
               <div class="flex-none lg:mb-4">
-                <div class="mt-2 mb-4 px-4 lg:px-6 h-12">${statusBannerHTML}</div>
+                <div class="mt-4 mb-4 px-4 lg:px-6 h-12">${statusBannerHTML}</div>
               </div>
               <div class="flex-none">
                 ${controlPanelHTML}
               </div>
             </div>
-
           </main>
         </div>
       `;
     }
 
-    // 啟動遊戲
     window.onload = () => { 
       loadHistory();
+      if (!pendingSettings) pendingSettings = cloneState(settings);
       render(); 
     };
   </script>
