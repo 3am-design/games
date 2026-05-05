@@ -108,7 +108,6 @@
     .valid-move { cursor: pointer; transition: fill 0.2s ease; }
     .font-chess { font-family: 'Noto Sans TC', 'Inter', sans-serif; }
     
-    /* Range Slider 手機優化 */
     input[type=range] { 
       -webkit-appearance: none; 
       appearance: none;
@@ -135,8 +134,8 @@
       width: 100%; height: 4px; cursor: pointer; background: #333333; border-radius: 2px; 
     }
     
-    /* 強制將 SVG 圖示轉為純白色 */
     .icon-white { filter: brightness(0) invert(1); }
+    .icon-hint-active { filter: brightness(0) saturate(100%) invert(48%) sepia(90%) saturate(3362%) hue-rotate(206deg) brightness(102%) contrast(94%); }
   </style>
 </head>
 <body class="bg-black selection:bg-white/30">
@@ -155,7 +154,6 @@
     };
     const PIECE_VALUES = { 'g': 10000, 'r': 900, 'c': 450, 'h': 400, 'e': 200, 'a': 200, 's': 100 };
 
-    // AI 三國武將隨機名單
     const AI_NAMES = ['呂布', '趙雲', '關羽', '張飛', '諸葛亮', '曹操', '司馬懿', '周瑜', '孫權', '馬超', '黃忠', '典韋', '夏侯惇', '張遼', '甘寧', '太史慈', '董卓', '陸遜'];
 
     const cloneState = (state) => JSON.parse(JSON.stringify(state));
@@ -169,6 +167,9 @@
     let matchHistory = []; 
     let selectedHistoryMatch = null;
     
+    let isHintMode = false;
+    let currentHints = [];
+
     let settings = {
       mode: 'PvE', 
       aiDifficulty: 5, 
@@ -179,7 +180,6 @@
     };
     let pendingSettings = cloneState(settings);
 
-    // 安全讀取 localStorage
     const loadHistory = () => {
       try {
         const saved = localStorage.getItem('chinese_chess_history');
@@ -188,7 +188,6 @@
           if (Array.isArray(parsed)) matchHistory = parsed;
         }
       } catch (e) {
-        console.error("Failed to parse history data:", e);
         matchHistory = [];
       }
     };
@@ -196,9 +195,7 @@
     const saveHistory = () => {
       try {
         localStorage.setItem('chinese_chess_history', JSON.stringify(matchHistory));
-      } catch (e) {
-        console.error("Failed to save history:", e);
-      }
+      } catch (e) {}
     };
 
     const recordFinishedGame = () => {
@@ -243,7 +240,7 @@
       return board;
     };
 
-    // --- 核心邏輯：規則引擎 ---
+    // --- 核心邏輯：規則引擎 (基礎物理步法) ---
     const isInsidePalace = (x, y, color) => {
       if (x < 3 || x > 5) return false;
       if (color === 'B' && y > 2) return false;
@@ -340,8 +337,60 @@
       return moves;
     };
 
+    // --- 將軍檢測 (Check Detection) ---
+    const doMove = (board, move) => {
+      const captured = board[move.to.y][move.to.x];
+      board[move.to.y][move.to.x] = board[move.from.y][move.from.x];
+      board[move.from.y][move.from.x] = null;
+      return captured;
+    };
+
+    const undoMove = (board, move, captured) => {
+      board[move.from.y][move.from.x] = board[move.to.y][move.to.x];
+      board[move.to.y][move.to.x] = captured;
+    };
+
+    const isInCheck = (board, color) => {
+      let gx = -1, gy = -1;
+      for (let y = 0; y <= 9; y++) {
+        for (let x = 0; x <= 8; x++) {
+          const p = board[y][x];
+          if (p && p.type === 'g' && p.color === color) { gx = x; gy = y; break; }
+        }
+        if (gx !== -1) break;
+      }
+      if (gx === -1) return false; 
+
+      const oppColor = color === 'R' ? 'B' : 'R';
+      for (let y = 0; y <= 9; y++) {
+        for (let x = 0; x <= 8; x++) {
+          const p = board[y][x];
+          if (p && p.color === oppColor) {
+            const moves = getValidMoves(board, x, y);
+            for (let i = 0; i < moves.length; i++) {
+              if (moves[i].x === gx && moves[i].y === gy) return true;
+            }
+          }
+        }
+      }
+      return false;
+    };
+
+    // 嚴格嘅步法過濾：不能留下自己被將軍嘅狀態 (解將 / 防自殺)
+    const getStrictValidMoves = (board, sx, sy) => {
+      const moves = getValidMoves(board, sx, sy);
+      const p = board[sy][sx];
+      if (!p) return [];
+      return moves.filter(m => {
+        const captured = doMove(board, { from: { x: sx, y: sy }, to: m });
+        const check = isInCheck(board, p.color);
+        undoMove(board, { from: { x: sx, y: sy }, to: m }, captured);
+        return !check;
+      });
+    };
+
     // --- 電腦 AI 邏輯 ---
-    const getAllMoves = (board, color) => {
+    const getAllMovesPseudo = (board, color) => {
       let moves = [];
       for (let y = 0; y <= 9; y++) {
         for (let x = 0; x <= 8; x++) {
@@ -394,23 +443,12 @@
       return score;
     };
 
-    const doMove = (board, move) => {
-      const captured = board[move.to.y][move.to.x];
-      board[move.to.y][move.to.x] = board[move.from.y][move.from.x];
-      board[move.from.y][move.from.x] = null;
-      return captured;
-    };
-
-    const undoMove = (board, move, captured) => {
-      board[move.from.y][move.from.x] = board[move.to.y][move.to.x];
-      board[move.to.y][move.to.x] = captured;
-    };
-
     const minimax = (board, depth, alpha, beta, isMaximizing) => {
       if (depth === 0) return evaluateBoard(board);
 
       const color = isMaximizing ? 'B' : 'R';
-      let moves = getAllMoves(board, color);
+      // Minimax 內部為求速度保留 Pseudo moves，透過擊殺 General 判定勝負
+      let moves = getAllMovesPseudo(board, color);
 
       moves.sort((a, b) => {
         let scoreA = board[a.to.y][a.to.x] ? PIECE_VALUES[board[a.to.y][a.to.x].type] : 0;
@@ -465,9 +503,19 @@
       else { depth = 5; randomness = 0; } 
 
       const aiColor = 'B';
-      let moves = getAllMoves(gameState.board, aiColor);
+      // 確保 AI 最終選擇嘅步法必須嚴格合法 (包括解將)
+      let moves = [];
+      for (let y = 0; y <= 9; y++) {
+        for (let x = 0; x <= 8; x++) {
+          const p = gameState.board[y][x];
+          if (p && p.color === aiColor) {
+            let vMoves = getStrictValidMoves(gameState.board, x, y);
+            vMoves.forEach(m => moves.push({ from: {x, y}, to: {x: m.x, y: m.y} }));
+          }
+        }
+      }
       
-      if (moves.length === 0) return null;
+      if (moves.length === 0) return null; // 絕殺無解
 
       if (Math.random() < randomness) {
          return moves[Math.floor(Math.random() * moves.length)];
@@ -518,6 +566,75 @@
        }
     };
 
+    // --- 計算 AI 提示 (Hint Mode) ---
+    const updateHintsLogic = () => {
+        if (!isHintMode || !gameState || gameState.winner || gameState.isThinking || gameState.isTossing) {
+            currentHints = [];
+            return;
+        }
+        if (settings.mode === 'PvE' && gameState.turn !== settings.playerColor) {
+            currentHints = [];
+            return;
+        }
+
+        const color = gameState.turn;
+        let depth = 4;
+        
+        // 嚴格過濾合法步法，確保若被將軍，必定只顯示能解將嘅棋
+        let moves = [];
+        for (let y = 0; y <= 9; y++) {
+            for (let x = 0; x <= 8; x++) {
+                const p = gameState.board[y][x];
+                if (p && p.color === color) {
+                    let vMoves = getStrictValidMoves(gameState.board, x, y);
+                    vMoves.forEach(m => moves.push({ from: {x, y}, to: {x: m.x, y: m.y} }));
+                }
+            }
+        }
+
+        if (moves.length === 0) { currentHints = []; return; }
+
+        let evaluatedMoves = [];
+        for (let i = 0; i < moves.length; i++) {
+            let move = moves[i];
+            let captured = doMove(gameState.board, move);
+            let moveValue = 0;
+
+            if (captured && captured.type === 'g') {
+                moveValue = color === 'B' ? 100000 : -100000;
+            } else {
+                moveValue = minimax(gameState.board, depth - 1, -Infinity, Infinity, color === 'R');
+            }
+
+            undoMove(gameState.board, move, captured);
+            evaluatedMoves.push({ move, score: moveValue });
+        }
+
+        if (color === 'B') {
+            evaluatedMoves.sort((a, b) => b.score - a.score);
+        } else {
+            evaluatedMoves.sort((a, b) => a.score - b.score);
+        }
+
+        currentHints = evaluatedMoves.slice(0, 3).map(e => e.move);
+    };
+
+    window.toggleHintMode = () => {
+        isHintMode = !isHintMode;
+        if (isHintMode && gameState && !gameState.winner && !gameState.isThinking && !gameState.isTossing) {
+            gameState.isCalculatingHints = true;
+            render();
+            setTimeout(() => {
+                updateHintsLogic();
+                gameState.isCalculatingHints = false;
+                render();
+            }, 10);
+        } else {
+            currentHints = [];
+            render();
+        }
+    };
+
     // --- 動畫與核心流程 ---
     const performMove = (sx, sy, tx, ty) => {
         historyStack.push(cloneState(gameState));
@@ -533,6 +650,7 @@
         
         gameState.lastMove = { from: {x: sx, y: sy}, to: {x: tx, y: ty} };
         gameState.isAnimating = true; 
+        currentHints = []; 
         
         if (targetPiece) gameState.animatingCapture = targetPiece;
 
@@ -566,9 +684,28 @@
         if (!gameState.winner) {
             gameState.turn = gameState.turn === 'R' ? 'B' : 'R';
             if (gameState.turn === 'R') gameState.turnCount++;
-        }
 
-        render();
+            // 判斷當前方是否被將軍
+            gameState.inCheck = isInCheck(gameState.board, gameState.turn);
+
+            // 絕殺判斷 (Checkmate)
+            let hasMoves = false;
+            for (let y = 0; y <= 9; y++) {
+                for (let x = 0; x <= 8; x++) {
+                    const p = gameState.board[y][x];
+                    if (p && p.color === gameState.turn) {
+                        if (getStrictValidMoves(gameState.board, x, y).length > 0) {
+                            hasMoves = true; break;
+                        }
+                    }
+                }
+                if (hasMoves) break;
+            }
+            if (!hasMoves) {
+                // 完全無步可行，宣佈絕殺，由對手獲勝
+                gameState.winner = gameState.turn === 'R' ? 'B' : 'R';
+            }
+        }
 
         if (gameState.winner) {
             recordFinishedGame();
@@ -577,6 +714,18 @@
             gameState.isThinking = true;
             render();
             setTimeout(triggerAI, 1000);
+        } else {
+            if (isHintMode) {
+                gameState.isCalculatingHints = true;
+                render();
+                setTimeout(() => {
+                    updateHintsLogic();
+                    gameState.isCalculatingHints = false;
+                    render();
+                }, 10);
+            } else {
+                render();
+            }
         }
     };
 
@@ -593,7 +742,6 @@
         render(); 
     };
 
-    // 局部更新設定狀態及渲染 Menu
     const updateMenuDOM = () => {
         const isPvE = pendingSettings.mode === 'PvE';
         
@@ -691,11 +839,14 @@
         board: getInitialBoard(), turn: 'R', selectedPiece: null, validMoves: [], winner: null,
         captured: { 'R': [], 'B': [] }, turnCount: 1, isThinking: false, isAnimating: false,
         animatingCapture: null, showCaptureEffect: null, lastMove: null, gameLog: [], isTossing: false,
+        isCalculatingHints: false,
+        inCheck: false,
         redName: p1Name,
         whiteName: p2Name,
         startingTurn: 'R' 
       };
       historyStack = [];
+      currentHints = [];
 
       if (settings.mode === 'PvE') {
           if (settings.firstMove === 'RANDOM') {
@@ -710,6 +861,9 @@
                       gameState.isThinking = true;
                       render();
                       setTimeout(triggerAI, 1000);
+                  } else if (isHintMode) {
+                      gameState.isCalculatingHints = true; render();
+                      setTimeout(() => { updateHintsLogic(); gameState.isCalculatingHints = false; render(); }, 10);
                   }
               }, 3500); 
               return;
@@ -722,10 +876,17 @@
                       render(); 
                       setTimeout(triggerAI, 1000); 
                   }, 0);
+              } else if (isHintMode) {
+                  gameState.isCalculatingHints = true; render();
+                  setTimeout(() => { updateHintsLogic(); gameState.isCalculatingHints = false; render(); }, 10);
               }
           }
       } else {
           gameState.startingTurn = 'R';
+          if (isHintMode) {
+              gameState.isCalculatingHints = true; render();
+              setTimeout(() => { updateHintsLogic(); gameState.isCalculatingHints = false; render(); }, 10);
+          }
       }
       render();
     };
@@ -738,7 +899,14 @@
          gameState = historyStack.pop();
       }
       gameState.lastMove = null; gameState.isAnimating = false; gameState.showCaptureEffect = null;
-      render();
+      gameState.inCheck = isInCheck(gameState.board, gameState.turn); // Undo 都要更新將軍狀態
+      
+      if (isHintMode) {
+          gameState.isCalculatingHints = true; render();
+          setTimeout(() => { updateHintsLogic(); gameState.isCalculatingHints = false; render(); }, 10);
+      } else {
+          render();
+      }
     };
 
     window.handleSquareClick = (x, y) => {
@@ -755,7 +923,8 @@
       if (piece && piece.color === gameState.turn) {
         if (settings.mode === 'PvE' && piece.color !== settings.playerColor) return;
         gameState.selectedPiece = { x, y };
-        gameState.validMoves = getValidMoves(gameState.board, x, y);
+        // 玩家點擊時，採用 STRICT moves 確保唔會自殺 / 強制解將
+        gameState.validMoves = getStrictValidMoves(gameState.board, x, y);
         render();
       } else {
         gameState.selectedPiece = null; gameState.validMoves = []; render();
@@ -798,7 +967,7 @@
 
       return `
         <div id="menu-layer" class="fixed inset-0 z-50 bg-black flex flex-col overflow-y-auto ${menuJustOpened ? 'animate-fade-in' : ''}">
-          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-start justify-end z-30 w-full shrink-0">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-end z-30 w-full shrink-0">
             ${closeBtnHTML}
           </header>
           <div class="flex-1 flex flex-col items-center justify-center gap-8 pb-10 px-6 w-full mt-4 lg:mt-0">
@@ -889,6 +1058,22 @@
       }
       interactionSVG += `</g>`;
 
+      // 將軍 (Check) UI - 帥/將 光圈提示
+      let checkGlowSVG = '';
+      if (gameState.inCheck && !gameState.winner) {
+          for(let y = 0; y <= 9; y++) {
+              for(let x = 0; x <= 8; x++) {
+                  const p = gameState.board[y][x];
+                  if(p && p.type === 'g' && p.color === gameState.turn) {
+                      const cx = OFFSET_X + x * GRID_SIZE;
+                      const cy = OFFSET_Y + y * GRID_SIZE;
+                      checkGlowSVG += `<circle cx="${cx}" cy="${cy}" r="24" fill="none" stroke="#ef4444" stroke-width="2" opacity="0.8" class="animate-pulse" pointer-events="none" />`;
+                      checkGlowSVG += `<circle cx="${cx}" cy="${cy}" r="16" fill="#ef4444" opacity="0.3" class="animate-pulse" pointer-events="none" />`;
+                  }
+              }
+          }
+      }
+
       let validMovesSVG = ``;
       gameState.validMoves.forEach(m => {
         const cx = OFFSET_X + m.x * GRID_SIZE; const cy = OFFSET_Y + m.y * GRID_SIZE;
@@ -918,7 +1103,6 @@
             const isSelected = gameState.selectedPiece && gameState.selectedPiece.x === x && gameState.selectedPiece.y === y;
             const bgColor = '#111111'; const strokeColor = piece.color === 'R' ? '#ef4444' : '#f8fafc'; const textColor = piece.color === 'R' ? '#ef4444' : '#f8fafc';
             
-            // 修正光環坐標問題：因為已經在 <g> 裡面用了 translate，所以這裡 cx/cy 必須是 0
             const glow = isSelected ? `<circle cx="0" cy="0" r="18" fill="none" stroke="#22d3ee" stroke-width="2" />` : '';
             
             let animTag = '';
@@ -939,7 +1123,24 @@
           captureEffectsSVG += `<g pointer-events="none"><circle cx="${cx}" cy="${cy}" r="16" fill="none" stroke="${waveColor}" stroke-width="6"><animate attributeName="r" from="16" to="240" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" /><animate attributeName="stroke-width" from="6" to="0" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" /><animate attributeName="opacity" from="0.8" to="0" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" /></circle><g transform="translate(${cx}, ${cy})"><g class="anim-capture-fly"><circle cx="0" cy="0" r="16" fill="#111111" stroke="${strokeColor}" stroke-width="1.5" /><circle cx="0" cy="0" r="13" fill="none" stroke="${strokeColor}" stroke-width="0.5" opacity="0.5" /><text x="0" y="0" fill="${textColor}" font-size="18" class="font-chess" text-anchor="middle" dominant-baseline="central">${p.label}</text></g></g></g>`;
       }
 
-      return svg + interactionSVG + validMovesSVG + baseTargetPieceSVG + piecesSVG + captureEffectsSVG;
+      let hintsSVG = '';
+      if (isHintMode && currentHints.length > 0 && !gameState.isCalculatingHints) {
+          currentHints.forEach((hint, index) => {
+              const sx = OFFSET_X + hint.from.x * GRID_SIZE;
+              const sy = OFFSET_Y + hint.from.y * GRID_SIZE;
+              const tx = OFFSET_X + hint.to.x * GRID_SIZE;
+              const ty = OFFSET_Y + hint.to.y * GRID_SIZE;
+
+              const color = '#3b82f6'; 
+              const strokeWidth = index === 0 ? 3 : 2;
+              const opacity = index === 0 ? 1 : (index === 1 ? 0.6 : 0.25);
+
+              hintsSVG += `<circle cx="${sx}" cy="${sy}" r="19" fill="none" stroke="${color}" stroke-width="${strokeWidth}" opacity="${opacity}" class="animate-pulse" pointer-events="none" />`;
+              hintsSVG += `<circle cx="${tx}" cy="${ty}" r="14" fill="none" stroke="${color}" stroke-width="${strokeWidth}" opacity="${opacity}" stroke-dasharray="4" class="animate-pulse" pointer-events="none" />`;
+          });
+      }
+
+      return svg + checkGlowSVG + interactionSVG + validMovesSVG + baseTargetPieceSVG + piecesSVG + hintsSVG + captureEffectsSVG;
     };
 
     function render() {
@@ -952,7 +1153,6 @@
           return;
       }
 
-      // 歷史紀錄介面
       let recordHTML = '';
       if (isRecordOpen) {
         if (!selectedHistoryMatch) {
@@ -979,7 +1179,7 @@
 
           recordHTML = `
           <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-hidden animate-fade-in">
-            <header class="flex-none pt-6 pb-4 px-5 lg:px-12 flex items-start justify-center z-30 w-full border-b border-neutral-800 shrink-0 relative">
+            <header class="flex-none pt-6 pb-4 px-5 lg:px-12 flex items-center justify-center z-30 w-full border-b border-neutral-800 shrink-0 relative">
                <div class="text-white font-bold tracking-[0.15em] text-[12px] lg:text-[16px] uppercase pt-0.5">MATCH RECORD</div>
                <button onclick="window.toggleRecord()" class="absolute right-5 lg:right-12 text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white active:text-white transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white"></button>
             </header>
@@ -1010,7 +1210,7 @@
 
           recordHTML = `
           <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-hidden animate-fade-in">
-            <header class="flex-none pt-6 pb-4 px-5 lg:px-12 flex items-start justify-between z-30 w-full border-b border-neutral-800 shrink-0">
+            <header class="flex-none pt-6 pb-4 px-5 lg:px-12 flex items-center justify-between z-30 w-full border-b border-neutral-800 shrink-0">
                <button onclick="window.viewMatchDetail(null)" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white transition-colors pt-1 lg:pt-1.5 flex items-center gap-1.5 key-base"><img src="./assets/arrow.svg" alt="<" class="h-[8px] rotate-90 opacity-60 icon-white"> BACK</button>
                <div class="flex flex-col items-center">
                  <span class="text-white font-black tracking-[0.2em] text-[12px] lg:text-[16px] uppercase pt-0.5">LOG DETAIL</span>
@@ -1026,7 +1226,6 @@
         }
       }
 
-      // --- 擲先後 3D 動畫過場 ---
       let tossHTML = '';
       if (gameState.isTossing) {
          const tossMsg = gameState.turn === 'R' ? `${gameState.redName} 先攻` : `${gameState.whiteName} 先攻`;
@@ -1047,7 +1246,6 @@
          `;
       }
 
-      // --- 主界面渲染 ---
       let statusBannerHTML = '';
       if (gameState.winner) {
         const winnerDisplay = gameState.winner === 'R' ? gameState.redName : gameState.whiteName;
@@ -1059,7 +1257,6 @@
 
         if (isPVE) {
             if (gameState.turn === settings.playerColor) {
-                // 玩家回合: YOUR TURN
                 rightContent = `<span class="text-red-500 font-bold tracking-wider uppercase">${gameState.redName} TURN</span>`;
             } else {
                 if (gameState.isThinking) {
@@ -1070,7 +1267,6 @@
                 }
             }
         } else {
-            // PvP 模式
             if (gameState.turn === 'R') {
                 rightContent = `<span class="text-red-500 font-bold tracking-wider uppercase">${gameState.redName} TURN</span>`;
             } else {
@@ -1078,7 +1274,14 @@
             }
         }
 
-        statusBannerHTML = `<div class="w-full bg-[#111111] rounded-lg py-3.5 lg:py-4 flex items-center justify-between px-6 font-medium text-[12px] lg:text-[16px] tracking-[0.15em] text-neutral-300 uppercase border ${borderClass} transition-colors duration-300"><span>TURN ${gameState.turnCount}</span>${rightContent}</div>`;
+        let checkWarningHTML = gameState.inCheck && !gameState.winner 
+          ? `<span class="text-[#ef4444] font-black animate-pulse tracking-widest ml-3 border border-[#ef4444] px-2 py-0.5 rounded text-[11px] bg-red-900/20 shadow-[0_0_8px_rgba(239,68,68,0.5)]">將軍</span>` 
+          : '';
+
+        statusBannerHTML = `<div class="w-full bg-[#111111] rounded-lg py-3.5 lg:py-4 flex items-center justify-between px-6 font-medium text-[12px] lg:text-[16px] tracking-[0.15em] text-neutral-300 uppercase border ${borderClass} transition-colors duration-300">
+            <div class="flex items-center"><span>TURN ${gameState.turnCount}</span>${checkWarningHTML}</div>
+            ${rightContent}
+        </div>`;
       }
 
       const renderCaptured = (color) => {
@@ -1107,7 +1310,6 @@
         </div>
       ` : `<div class="flex-none bg-black pb-6 lg:pb-0">${capturedAreaHTML}</div>`;
 
-      // 準備左上角嘅顯示字眼
       let modeDisplay = '';
       if (settings.mode === 'PvE') {
           if (settings.firstMove === 'PLAYER') modeDisplay = '先攻';
@@ -1136,12 +1338,15 @@
         
         <div class="w-full h-full bg-black relative flex flex-col overflow-hidden">
           
-          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-start justify-between z-30 w-full shrink-0">
-            <div class="flex items-start"><img src="./assets/Logo.svg" alt="CHESS" class="h-[19px] lg:h-[25px] object-contain opacity-90 icon-white"></div>
-            <div class="flex items-start gap-5 lg:gap-8">
-              <button onclick="window.openMenu()" ${gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-start justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/setting.svg" alt="SET" class="h-[14px] lg:h-[18px] object-contain icon-white"></button>
-              <button onclick="window.toggleRecord()" class="flex items-start justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/record.svg" alt="REC" class="h-[16px] lg:h-[22px] object-contain icon-white"></button>
-              <button onclick="window.handleUndo()" ${historyStack.length === 0 || gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-start justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/back.svg" alt="UNDO" class="h-[14px] lg:h-[18px] object-contain icon-white"></button>
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+            <div class="flex items-center"><img src="./assets/Logo.svg" alt="CHESS" class="h-[19px] lg:h-[25px] object-contain opacity-90 icon-white"></div>
+            <div class="flex items-center gap-4 lg:gap-6">
+              <button onclick="window.toggleHintMode()" ${gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-center justify-center transition-all duration-300 key-base ${isHintMode ? 'opacity-100 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]' : 'opacity-70 hover:opacity-100'}">
+                <img src="./assets/ai.svg" alt="AI" class="h-[19px] lg:h-[24px] object-contain ${isHintMode ? 'icon-hint-active' : 'icon-white'}">
+              </button>
+              <button onclick="window.handleUndo()" ${historyStack.length === 0 || gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/back.svg" alt="UNDO" class="h-[14px] lg:h-[18px] object-contain icon-white"></button>
+              <button onclick="window.toggleRecord()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/record.svg" alt="REC" class="h-[16px] lg:h-[22px] object-contain icon-white"></button>
+              <button onclick="window.openMenu()" ${gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/setting.svg" alt="SET" class="h-[14px] lg:h-[18px] object-contain icon-white"></button>
             </div>
           </header>
 
