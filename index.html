@@ -42,8 +42,8 @@
     .coin-wrapper { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; }
     .coin-face { position: absolute; width: 100%; height: 100%; border-radius: 50%; backface-visibility: hidden; display: flex; align-items: center; justify-content: center; font-weight: bold; font-family: 'Noto Sans TC', sans-serif; font-size: 2.25rem; border: 4px solid; background: #111; }
     @media (min-width: 1024px) { .coin-face { font-size: 3rem; } }
-    .coin-front { color: #ef4444; border-color: #ef4444; transform: rotateY(0deg); }
-    .coin-back { color: #ffffff; border-color: #ffffff; transform: rotateY(180deg); }
+    .coin-front { background: #ef4444; border-color: #ef4444; transform: rotateY(0deg); }
+    .coin-back { background: #ffffff; border-color: #ffffff; transform: rotateY(180deg); }
 
     @keyframes flipToRed {
       0% { transform: rotateY(0deg) scale(1); }
@@ -602,8 +602,8 @@
         if(pveSettings) pveSettings.style.display = isPvE ? 'flex' : 'none';
         if(emptySpace) emptySpace.style.display = isPvE ? 'none' : 'block';
 
-        const p2InputContainer = document.getElementById('p2-input-container');
-        if(p2InputContainer) p2InputContainer.style.display = isPvE ? 'none' : 'block';
+        const p2Input = document.getElementById('input-p2');
+        if(p2Input) p2Input.style.display = isPvE ? 'none' : 'block';
         const p1Input = document.getElementById('input-p1');
         if(p1Input) p1Input.placeholder = isPvE ? "你的名字" : "玩家 1";
 
@@ -687,7 +687,8 @@
         captured: { 'R': [], 'B': [] }, turnCount: 1, isThinking: false, isAnimating: false,
         animatingCapture: null, showCaptureEffect: null, lastMove: null, gameLog: [], isTossing: false,
         redName: p1Name,
-        whiteName: p2Name
+        whiteName: p2Name,
+        startingTurn: 'R' 
       };
       historyStack = [];
 
@@ -695,6 +696,7 @@
           if (settings.firstMove === 'RANDOM') {
               gameState.isTossing = true;
               gameState.turn = Math.random() < 0.5 ? 'R' : 'B';
+              gameState.startingTurn = gameState.turn;
               render(); 
               setTimeout(() => {
                   gameState.isTossing = false;
@@ -708,6 +710,7 @@
               return;
           } else {
               gameState.turn = settings.firstMove === 'AI' ? 'B' : 'R';
+              gameState.startingTurn = gameState.turn;
               if (gameState.turn === 'B') {
                   gameState.isThinking = true;
                   setTimeout(() => { 
@@ -716,6 +719,8 @@
                   }, 0);
               }
           }
+      } else {
+          gameState.startingTurn = 'R';
       }
       render();
     };
@@ -808,10 +813,8 @@
             <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3">
               <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase w-full text-center">PLAYER NAME</div>
               <div class="flex w-full gap-2">
-                <input type="text" id="input-p1" value="${pendingSettings.player1Name}" oninput="window.setPlayerName('player1Name', this.value)" placeholder="${isPvE ? '你的名字' : '玩家 1'}" class="flex-1 bg-[#111] border border-neutral-800 rounded-lg py-3.5 px-4 text-[12px] lg:text-[14px] text-white text-center focus:outline-none focus:border-neutral-500 transition-colors placeholder-neutral-600 font-medium tracking-widest">
-                <div id="p2-input-container" class="flex-1" style="display: ${isPvE ? 'none' : 'block'}">
-                  <input type="text" id="input-p2" value="${pendingSettings.player2Name}" oninput="window.setPlayerName('player2Name', this.value)" placeholder="玩家 2" class="w-full bg-[#111] border border-neutral-800 rounded-lg py-3.5 px-4 text-[12px] lg:text-[14px] text-white text-center focus:outline-none focus:border-neutral-500 transition-colors placeholder-neutral-600 font-medium tracking-widest">
-                </div>
+                <input type="text" id="input-p1" value="${pendingSettings.player1Name}" oninput="window.setPlayerName('player1Name', this.value)" placeholder="${isPvE ? '你的名字' : '玩家 1'}" class="flex-1 min-w-0 bg-[#111] border border-neutral-800 rounded-lg py-3.5 px-4 text-[12px] lg:text-[14px] text-white text-center focus:outline-none focus:border-neutral-500 transition-colors placeholder-neutral-600 font-medium tracking-widest">
+                <input type="text" id="input-p2" value="${pendingSettings.player2Name}" oninput="window.setPlayerName('player2Name', this.value)" placeholder="玩家 2" class="flex-1 min-w-0 bg-[#111] border border-neutral-800 rounded-lg py-3.5 px-4 text-[12px] lg:text-[14px] text-white text-center focus:outline-none focus:border-neutral-500 transition-colors placeholder-neutral-600 font-medium tracking-widest" style="display: ${isPvE ? 'none' : 'block'}">
               </div>
             </div>
 
@@ -835,7 +838,7 @@
             
             <div id="empty-space" class="h-[120px] w-full max-w-[340px] lg:max-w-[440px]" style="display: ${!isPvE ? 'block' : 'none'}"></div>
             <div class="w-full max-w-[340px] lg:max-w-[440px] mt-2">
-              <button onclick="window.initGame()" class="w-full bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black py-4 lg:py-5 rounded-lg font-bold tracking-[0.15em] text-[12px] lg:text-[16px] uppercase key-base">${gameState ? "RESTART 重新開始" : "START GAME 開始"}</button>
+              <button onclick="window.initGame()" class="w-full bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black py-4 lg:py-5 rounded-lg font-bold tracking-[0.15em] text-[12px] lg:text-[16px] uppercase key-base">${gameState ? "RESTART 重新開始" : "開始新棋局"}</button>
             </div>
           </div>
         </div>
@@ -1018,19 +1021,18 @@
       // --- 擲先後 3D 動畫過場 ---
       let tossHTML = '';
       if (gameState.isTossing) {
-         const tossMsg = gameState.turn === 'R' ? `紅方先行 (${gameState.redName} 先攻)` : `白方先行 (${gameState.whiteName} 先攻)`;
+         const tossMsg = gameState.turn === 'R' ? `${gameState.redName} 先攻` : `${gameState.whiteName} 先攻`;
          const flipClass = gameState.turn === 'R' ? "anim-flip-red" : "anim-flip-white";
          
          tossHTML = `
          <div class="fixed inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center">
-            <div class="text-neutral-500 text-[12px] tracking-[0.3em] font-medium mb-12 uppercase">TOSSING COIN...</div>
             <div class="coin-scene mb-12 shadow-[0_0_30px_rgba(255,255,255,0.1)] rounded-full">
                <div class="coin-wrapper ${flipClass}">
-                  <div class="coin-face coin-front">紅</div>
-                  <div class="coin-face coin-back">白</div>
+                  <div class="coin-face coin-front"></div>
+                  <div class="coin-face coin-back"></div>
                </div>
             </div>
-            <div class="text-white font-bold tracking-[0.2em] text-[18px] lg:text-[22px] opacity-0 anim-fade-in-delayed">
+            <div class="text-white font-bold tracking-[0.2em] text-[18px] lg:text-[22px] opacity-0 anim-fade-in-delayed uppercase">
                ${tossMsg}
             </div>
          </div>
@@ -1097,7 +1099,30 @@
         </div>
       ` : `<div class="flex-none bg-black pb-6 lg:pb-0">${capturedAreaHTML}</div>`;
 
+      // 準備左上角嘅顯示字眼
+      let modeDisplay = '';
+      if (settings.mode === 'PvE') {
+          if (settings.firstMove === 'PLAYER') modeDisplay = '先攻';
+          else if (settings.firstMove === 'AI') modeDisplay = '後攻';
+          else modeDisplay = gameState.startingTurn === 'R' ? '隨機 - 先攻' : '隨機 - 後攻';
+      } else {
+          modeDisplay = '雙人對戰';
+      }
+
+      let roundDisplay = '';
+      const currentRound = Math.ceil(gameState.gameLog.length / 2) + 1;
+      if (settings.mode === 'PvE') {
+          let lvColorClass = 'text-white font-bold';
+          if (settings.aiDifficulty >= 14) lvColorClass = 'text-purple-500 font-black tracking-widest drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]';
+          else if (settings.aiDifficulty > 10) lvColorClass = 'text-red-500 font-black tracking-widest';
+          
+          roundDisplay = `<span class="${lvColorClass}">LV.${settings.aiDifficulty}</span> <span class="mx-2 opacity-50">|</span> 回合 ${currentRound}`;
+      } else {
+          roundDisplay = `PVP <span class="mx-2 opacity-50">|</span> 回合 ${currentRound}`;
+      }
+
       appDiv.innerHTML = `
+        ${menuHTML}
         ${recordHTML}
         ${tossHTML}
         
@@ -1114,9 +1139,9 @@
 
           <div class="absolute top-[60px] lg:top-[85px] left-5 lg:left-12 z-20 pointer-events-none">
             <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase">
-              CHINESE CHESS <span class="mx-1 opacity-50">|</span> ${settings.mode === 'PvE' ? `LV.${settings.aiDifficulty}` : 'PVP'}<br>
-              ${settings.mode === 'PvE' ? (settings.firstMove === 'PLAYER' ? 'PLAYER FIRST 先攻' : settings.firstMove === 'AI' ? 'AI FIRST 後攻' : 'RANDOM FIRST 隨機') : 'VERSUS'}<br>
-              ROUND ${Math.ceil(gameState.gameLog.length / 2) + 1}
+              中國象棋<br>
+              ${modeDisplay}<br>
+              ${roundDisplay}
             </div>
           </div>
 
