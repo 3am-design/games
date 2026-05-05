@@ -947,11 +947,11 @@
                 rightContent = `<span class="text-red-500 font-bold tracking-wider">YOUR TURN</span>`;
             } else {
                 if (gameState.isThinking) {
-                    // 電腦回合 (思考中): AI TURN (White) THINKING... (藍色，即使地獄模式也是藍色)
+                    // 電腦回合 (思考中): AI TURN (White) THINKING... (統一保持純藍色光效)
                     rightContent = `<div class="flex items-center gap-3"><span class="text-white font-bold tracking-wider">AI TURN</span><span class="text-[#22d3ee] font-bold animate-pulse tracking-widest">THINKING...</span></div>`;
-                    // 若是地獄模式，僅外框變紅，文字仍是藍色
-                    borderClass = settings.aiDifficulty > 10 ? 'border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.2)]' : 'border-[#22d3ee]/30 shadow-[0_0_15px_rgba(34,211,238,0.1)]';
+                    borderClass = 'border-[#22d3ee]/30 shadow-[0_0_15px_rgba(34,211,238,0.1)]';
                 } else {
+                    // 電腦回合 (未思考): AI TURN (White)
                     rightContent = `<span class="text-white font-bold tracking-wider">AI TURN</span>`;
                 }
             }
