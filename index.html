@@ -554,7 +554,24 @@
 
     // --- 互動與控制 ---
     window.setMode = (mode) => { settings.mode = mode; renderMenu(); };
-    window.setDifficulty = (e) => { settings.aiDifficulty = parseInt(e.target.value); renderMenu(); };
+    
+    // 更新：只局部更新難度文字，不重新 render 整個 Menu 避免閃爍
+    window.setDifficulty = (e) => { 
+      settings.aiDifficulty = parseInt(e.target.value); 
+      const diffLabelEl = document.getElementById('ai-diff-label');
+      if (diffLabelEl) {
+        let diffLabel = "普通 (LV.5)";
+        let diffVal = settings.aiDifficulty;
+        if (diffVal <= 3) diffLabel = `新手 (LV.${diffVal})`;
+        else if (diffVal <= 7) diffLabel = `進階 (LV.${diffVal})`;
+        else if (diffVal <= 10) diffLabel = `大師 (LV.${diffVal})`;
+        else diffLabel = `地獄 HELL (LV.${diffVal})`;
+        
+        diffLabelEl.className = diffVal > 10 ? 'text-red-500 font-black tracking-widest' : 'text-white font-bold';
+        diffLabelEl.innerText = diffLabel;
+      }
+    };
+    
     window.openMenu = () => { isMenuOpen = true; isRecordOpen = false; render(); };
     window.toggleRecord = () => { isRecordOpen = !isRecordOpen; selectedHistoryMatch = null; render(); };
     
@@ -813,7 +830,7 @@
             <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-4 animate-fade-in">
               <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase flex justify-between w-full">
                 <span>AI DIFFICULTY 電腦難度</span>
-                <span class="${diffColor}">${diffLabel}</span>
+                <span id="ai-diff-label" class="${diffColor}">${diffLabel}</span>
               </div>
               <div class="w-full px-2 py-4">
                 <input type="range" min="1" max="15" value="${settings.aiDifficulty}" oninput="window.setDifficulty(event)" class="w-full">
