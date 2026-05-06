@@ -1088,8 +1088,8 @@
       }
 
       const capturedAreaHTML = `
-        <div class="flex flex-col gap-3 px-4 lg:px-6 w-full">
-            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-3 relative overflow-hidden">
+        <div class="flex flex-col gap-2 lg:gap-3 px-3 lg:px-6 w-full">
+            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-2.5 lg:p-3 relative overflow-hidden">
               <div class="absolute left-0 top-0 bottom-0 w-1 ${gameState.turn === 'W' ? 'bg-white shadow-[0_0_8px_white]' : 'bg-transparent'} transition-colors"></div>
               <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-20 truncate ml-2">${gameState.whiteName}</div>
               <div class="flex items-center gap-3">
@@ -1097,7 +1097,7 @@
                  <div class="w-[20px] h-[20px] rounded-full bg-[#f8fafc] border-2 border-[#cbd5e1] shadow-sm"></div>
               </div>
             </div>
-            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-3 relative overflow-hidden">
+            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-2.5 lg:p-3 relative overflow-hidden">
               <div class="absolute left-0 top-0 bottom-0 w-1 ${gameState.turn === 'R' ? 'bg-red-500 shadow-[0_0_8px_#ef4444]' : 'bg-transparent'} transition-colors"></div>
               <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-20 truncate ml-2">${gameState.redName}</div>
               <div class="flex items-center gap-3">
@@ -1109,11 +1109,11 @@
       `;
 
       const controlPanelHTML = gameState.winner ? `
-        <div class="flex-1 flex flex-col items-center justify-start pt-4 gap-5 w-full animate-fade-in pb-10 lg:pb-0">
+        <div class="flex-1 flex flex-col items-center justify-start pt-4 gap-5 w-full animate-fade-in pb-8 lg:pb-0">
           <button onclick="window.toggleRecord()" class="w-[220px] lg:w-[260px] py-4 lg:py-5 rounded-lg border border-neutral-800 text-white font-medium text-xs lg:text-[14px] tracking-[0.15em] uppercase hover:bg-neutral-900 transition-colors key-base">MATCH RECORD</button>
           <button onclick="window.openMenu()" class="w-[220px] lg:w-[260px] py-4 lg:py-5 rounded-lg bg-white text-black font-medium text-xs lg:text-[14px] tracking-[0.15em] uppercase hover:bg-neutral-200 transition-colors key-base">MAIN MENU 主選單</button>
         </div>
-      ` : `<div class="flex-none bg-black pb-6 lg:pb-0">${capturedAreaHTML}</div>`;
+      ` : `<div class="flex-none bg-black pb-4 lg:pb-0">${capturedAreaHTML}</div>`;
 
       let modeDisplay = '';
       if (settings.mode === 'PvE') {
@@ -1143,7 +1143,7 @@
         
         <div class="w-full h-full bg-black relative flex flex-col overflow-hidden">
           
-          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+          <header class="flex-none pt-4 lg:pt-6 pb-2 px-4 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
             <div class="flex items-center"><img src="./assets/Logo.svg" alt="LOGO" class="h-[19px] lg:h-[25px] object-contain opacity-90 icon-white"></div>
             <div class="flex items-center gap-4 lg:gap-6">
               <button onclick="window.toggleHintMode()" ${gameState.isThinking || gameState.isAnimating || gameState.isTossing || gameState.validMoves.length === 0 ? 'disabled style="opacity:0.2"' : ''} class="flex items-center justify-center transition-all duration-300 key-base ${isHintMode ? 'opacity-100 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]' : 'opacity-70 hover:opacity-100'}">
@@ -1155,7 +1155,7 @@
             </div>
           </header>
 
-          <div class="px-5 lg:absolute lg:top-[85px] lg:left-12 z-20 pointer-events-none mt-2 lg:mt-0">
+          <div class="px-4 lg:px-5 lg:absolute lg:top-[85px] lg:left-12 z-20 pointer-events-none mt-1 lg:mt-0">
             <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase">
               黑白棋 ${gameState.boardSize}x${gameState.boardSize}<br>
               ${modeDisplay}<br>
@@ -1164,9 +1164,9 @@
           </div>
 
           <main class="flex-1 w-full max-w-md lg:max-w-[1200px] mx-auto flex flex-col lg:flex-row min-h-0 relative z-10">
-            <div class="flex-1 relative min-h-0 flex flex-col lg:justify-center lg:py-8 lg:pr-8">
-              <div class="flex-1 flex items-center justify-center pb-2 lg:pb-0 w-full h-full min-h-0 pt-2 lg:pt-0">
-                <div class="w-full px-3 max-w-[390px] sm:max-w-[420px] lg:max-w-[480px] mx-auto lg:px-0">
+            <div class="flex-1 relative min-h-0 flex flex-col justify-center lg:py-8 lg:pr-8">
+              <div class="flex-1 flex items-center justify-center w-full h-full min-h-0">
+                <div class="w-full px-1.5 sm:px-4 max-w-[440px] lg:max-w-[480px] mx-auto lg:px-0">
                   ${generateBoardHTML()}
                 </div>
               </div>
@@ -1174,7 +1174,7 @@
 
             <div class="flex-none lg:w-[480px] lg:h-full flex flex-col justify-end lg:justify-center bg-black z-10 relative">
               <div class="flex-none lg:mb-4">
-                <div class="mt-4 mb-4 px-4 lg:px-6 h-12">${statusBannerHTML}</div>
+                <div class="mt-2 mb-3 lg:mt-4 lg:mb-4 px-3 lg:px-6 h-12">${statusBannerHTML}</div>
               </div>
               <div class="flex-none">
                 ${controlPanelHTML}

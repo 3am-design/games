@@ -3,24 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <!-- 加入 dns-prefetch 提升字體載入速度 -->
+  <link rel="dns-prefetch" href="https://fonts.googleapis.com">
   <title>Board Games Hub - 遊戲大堂</title>
+  
   <!-- 引入 Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Noto+Sans+TC:wght@300;400;600;700;900&display=swap" rel="stylesheet">
-  <!-- 引入 Tailwind CSS -->
+  
+  <!-- 引入 Tailwind CSS (長遠建議喺 Production 轉用 compiled CSS) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       future: { hoverOnlyWhenSupported: true }
     }
   </script>
+  
   <style>
     .hide-scrollbar::-webkit-scrollbar { display: none; }
     .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-    .animate-fade-in { animation: fadeIn 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+    @keyframes fadeIn { 
+      0% { opacity: 0; transform: translateY(15px); } 
+      100% { opacity: 1; transform: translateY(0); } 
+    }
+    
+    /* Karina 修復：將 forwards 改為 both，咁樣即使有 delay，元素喺 0% 時都會保持 opacity: 0，無需喺 HTML 寫 opacity-0 */
+    .animate-fade-in { animation: fadeIn 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
     
     .stagger-1 { animation-delay: 0.1s; }
     .stagger-2 { animation-delay: 0.2s; }
@@ -34,6 +44,8 @@
       height: 100%;
       margin: 0;
       -webkit-font-smoothing: antialiased;
+      /* 提升手機端滾動體驗 */
+      -webkit-overflow-scrolling: touch; 
     }
 
     /* 卡片懸浮光效 */
@@ -53,15 +65,15 @@
 </head>
 <body class="bg-black selection:bg-white/30 flex flex-col items-center min-h-screen overflow-x-hidden">
 
-  <!-- 背景點綴光暈 -->
-  <div class="fixed top-[-20%] left-[-10%] w-[50%] h-[50%] bg-[#22d3ee] opacity-[0.03] blur-[120px] rounded-full pointer-events-none"></div>
-  <div class="fixed bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-[#ef4444] opacity-[0.03] blur-[120px] rounded-full pointer-events-none"></div>
+  <!-- Karina 修復：加入 transform-gpu (translateZ(0)) 強制開啟 GPU 硬件加速，大幅減輕 Safari 處理 blur 嘅壓力 -->
+  <div class="fixed top-[-20%] left-[-10%] w-[50%] h-[50%] bg-[#22d3ee] opacity-[0.03] blur-[120px] rounded-full pointer-events-none transform-gpu"></div>
+  <div class="fixed bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-[#ef4444] opacity-[0.03] blur-[120px] rounded-full pointer-events-none transform-gpu"></div>
 
   <!-- 主內容區 -->
   <main class="flex-1 w-full max-w-[1000px] mx-auto px-6 py-16 lg:py-24 flex flex-col items-center justify-center relative z-10">
     
-    <!-- 標題 -->
-    <div class="flex flex-col items-center mb-12 lg:mb-16 opacity-0 animate-fade-in">
+    <!-- 標題 (移除咗 opacity-0) -->
+    <div class="flex flex-col items-center mb-12 lg:mb-16 animate-fade-in">
         <img src="./assets/Logo.svg" alt="LOGO" class="h-[36px] lg:h-[50px] object-contain opacity-90 invert brightness-0 mb-4 drop-shadow-[0_0_15px_rgba(255,255,255,0.15)]" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIj48cGF0aCBkPSJNMTEgMjBBMCAwIDAgMCAxIDExIDIwSDEzQTkgOSAwIDAgMSAxMyAyMEExIDEgMCAwIDEgMTEgMjBaTTUgMTBBNyA3IDAgMCAxIDE5IDEwQTYgNiAwIDAgMSAxNyAxNUExIDEgMCAwIDAgMTcgMTZMMTcgMTdBMSAxIDAgMCAxIDE3IDE4SDE3QTEgMSAwIDAgMSAxNyAxOUgxN0ExIDEgMCAwIDEgMTcgMjBIMTdBMCAwIDAgMCAxIDE3IDIwWiIvPjwvc3ZnPg=='">
         <p class="text-[14px] lg:text-[16px] text-neutral-400 font-tc tracking-[0.4em] font-medium uppercase ml-[0.4em]">遊戲大堂</p>
     </div>
@@ -69,9 +81,8 @@
     <!-- 遊戲網格 -->
     <div class="grid grid-cols-2 md:grid-cols-3 gap-4 lg:gap-6 w-full">
         
-        <!-- Game 1: 中國象棋 -->
-        <!-- 注意：呢度假設你已經將原本嘅 index.html 改名做 chess.html -->
-        <a href="chess.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer opacity-0 animate-fade-in stagger-1 overflow-hidden">
+        <!-- Game 1: 中國象棋 (移除咗 opacity-0) -->
+        <a href="chess.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-1 overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] rounded-full border-[3px] border-red-500 flex items-center justify-center bg-[#111] group-hover:scale-110 transition-transform duration-500 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
@@ -84,8 +95,8 @@
             </div>
         </a>
 
-        <!-- Game 2: 黑白棋 (Reversi) -->
-        <a href="reversi.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer opacity-0 animate-fade-in stagger-2 overflow-hidden">
+        <!-- Game 2: 黑白棋 (Reversi) (移除咗 opacity-0) -->
+        <a href="reversi.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-2 overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500">
@@ -100,7 +111,7 @@
         </a>
 
         <!-- Game 3: ??? (Coming Soon) -->
-        <div class="game-card relative bg-[#080808] border border-neutral-900 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 opacity-0 animate-fade-in stagger-3 overflow-hidden cursor-not-allowed group">
+        <div class="game-card relative bg-[#080808] border border-neutral-900 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 animate-fade-in stagger-3 overflow-hidden cursor-not-allowed group">
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] rounded-2xl border-2 border-dashed border-neutral-800 flex items-center justify-center bg-[#0d0d0d] group-hover:border-neutral-700 transition-colors">
                 <span class="text-neutral-700 font-inter text-[28px] lg:text-[36px] font-light">?</span>
             </div>
@@ -111,7 +122,7 @@
         </div>
 
         <!-- Game 4: ??? (Coming Soon) -->
-        <div class="game-card relative bg-[#080808] border border-neutral-900 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 opacity-0 animate-fade-in stagger-4 overflow-hidden cursor-not-allowed group">
+        <div class="game-card relative bg-[#080808] border border-neutral-900 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 animate-fade-in stagger-4 overflow-hidden cursor-not-allowed group">
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] rounded-2xl border-2 border-dashed border-neutral-800 flex items-center justify-center bg-[#0d0d0d] group-hover:border-neutral-700 transition-colors">
                 <span class="text-neutral-700 font-inter text-[28px] lg:text-[36px] font-light">?</span>
             </div>
@@ -122,7 +133,7 @@
         </div>
 
         <!-- Game 5: ??? (Coming Soon) -->
-        <div class="game-card relative bg-[#080808] border border-neutral-900 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 opacity-0 animate-fade-in stagger-4 overflow-hidden cursor-not-allowed group">
+        <div class="game-card relative bg-[#080808] border border-neutral-900 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 animate-fade-in stagger-4 overflow-hidden cursor-not-allowed group">
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] rounded-2xl border-2 border-dashed border-neutral-800 flex items-center justify-center bg-[#0d0d0d] group-hover:border-neutral-700 transition-colors">
                 <span class="text-neutral-700 font-inter text-[28px] lg:text-[36px] font-light">?</span>
             </div>
@@ -133,7 +144,7 @@
         </div>
 
         <!-- Game 6: ??? (Coming Soon) -->
-        <div class="game-card relative bg-[#080808] border border-neutral-900 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 opacity-0 animate-fade-in stagger-4 overflow-hidden cursor-not-allowed group">
+        <div class="game-card relative bg-[#080808] border border-neutral-900 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 animate-fade-in stagger-4 overflow-hidden cursor-not-allowed group">
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] rounded-2xl border-2 border-dashed border-neutral-800 flex items-center justify-center bg-[#0d0d0d] group-hover:border-neutral-700 transition-colors">
                 <span class="text-neutral-700 font-inter text-[28px] lg:text-[36px] font-light">?</span>
             </div>
@@ -146,7 +157,7 @@
     </div>
   </main>
 
-  <footer class="flex-none w-full py-6 text-center text-neutral-600 text-[10px] tracking-[0.15em] uppercase z-10 opacity-0 animate-fade-in stagger-4">
+  <footer class="flex-none w-full py-6 text-center text-neutral-600 text-[10px] tracking-[0.15em] uppercase z-10 animate-fade-in stagger-4">
     © 2026 Board Games Hub. All rights reserved.
   </footer>
 
