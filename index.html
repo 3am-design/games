@@ -82,8 +82,18 @@
         <a href="chess.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-1 overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             
-            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] rounded-full border-[3px] border-red-500 flex items-center justify-center bg-[#111] group-hover:scale-110 transition-transform duration-500 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
-                <span class="text-red-500 font-tc text-[28px] lg:text-[36px] font-bold">帥</span>
+            <!-- Karina 優化：線框風格象棋 Icon -->
+            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-red-900/40 rounded-xl overflow-hidden">
+                <!-- 九宮格線 -->
+                <div class="absolute inset-0 flex flex-col justify-evenly py-1 lg:py-2"><div class="w-full h-[1px] bg-red-900/30"></div><div class="w-full h-[1px] bg-red-900/30"></div></div>
+                <div class="absolute inset-0 flex justify-evenly px-1 lg:px-2"><div class="h-full w-[1px] bg-red-900/30"></div><div class="h-full w-[1px] bg-red-900/30"></div></div>
+                <div class="absolute w-[150%] h-[1px] bg-red-900/30 rotate-45"></div>
+                <div class="absolute w-[150%] h-[1px] bg-red-900/30 -rotate-45"></div>
+                
+                <!-- 線框棋子 -->
+                <div class="absolute w-[36px] h-[36px] lg:w-[46px] lg:h-[46px] bg-[#111] rounded-full border-[2px] border-red-500 flex items-center justify-center shadow-[0_0_12px_rgba(239,68,68,0.4)] z-10">
+                    <span class="text-red-500 font-tc text-[18px] lg:text-[22px] font-bold drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] leading-none mt-[2px]">帥</span>
+                </div>
             </div>
             
             <div class="flex flex-col items-center mt-2">
@@ -96,9 +106,15 @@
         <a href="reversi.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-2 overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             
-            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500">
-                <div class="absolute w-[36px] h-[36px] lg:w-[46px] lg:h-[46px] bg-white rounded-full translate-x-[-10px] translate-y-[-10px] shadow-[0_4px_10px_rgba(255,255,255,0.3)] border-2 border-[#111]"></div>
-                <div class="absolute w-[36px] h-[36px] lg:w-[46px] lg:h-[46px] bg-[#111] rounded-full translate-x-[10px] translate-y-[10px] border-2 border-white shadow-[0_4px_10px_rgba(0,0,0,0.5)]"></div>
+            <!-- Karina 優化：線框風格黑白棋 Icon -->
+            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-neutral-700/50 rounded-xl overflow-hidden">
+                <!-- 棋盤格線 -->
+                <div class="absolute inset-0 flex flex-col justify-evenly py-1 lg:py-2"><div class="w-full h-[1px] bg-neutral-800"></div><div class="w-full h-[1px] bg-neutral-800"></div><div class="w-full h-[1px] bg-neutral-800"></div></div>
+                <div class="absolute inset-0 flex justify-evenly px-1 lg:px-2"><div class="h-full w-[1px] bg-neutral-800"></div><div class="h-full w-[1px] bg-neutral-800"></div><div class="h-full w-[1px] bg-neutral-800"></div></div>
+                
+                <!-- 線框棋子 (白棋與黑棋) -->
+                <div class="absolute w-[22px] h-[22px] lg:w-[28px] lg:h-[28px] bg-[#111] rounded-full border-[2px] border-white translate-x-[-8px] translate-y-[-8px] lg:translate-x-[-10px] lg:translate-y-[-10px] shadow-[0_0_10px_rgba(255,255,255,0.4)] z-10"></div>
+                <div class="absolute w-[22px] h-[22px] lg:w-[28px] lg:h-[28px] bg-[#111] rounded-full border-[2px] border-neutral-600 translate-x-[8px] translate-y-[8px] lg:translate-x-[10px] lg:translate-y-[10px] shadow-[0_0_10px_rgba(0,0,0,0.8)] z-20"></div>
             </div>
             
             <div class="flex flex-col items-center mt-2">
