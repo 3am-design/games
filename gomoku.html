@@ -250,9 +250,74 @@
     const doMove = (board, move, color) => { board[move.y][move.x] = color; };
     const undoMove = (board, move) => { board[move.y][move.x] = null; };
 
+    // --- AI 戰術層：即勝 / 必封 / 中心偏好 ---
+    // 呢一層唔受難度影響：就算低 LV，都唔應該見到對方四連而唔救。
+    const getCenterBias = (x, y, size) => {
+        const center = (size - 1) / 2;
+        const dist = Math.abs(x - center) + Math.abs(y - center);
+        return Math.max(0, size - dist);
+    };
+
+    const getImmediateWinningMoves = (board, color, size) => {
+        const moves = getValidMoves(board, size);
+        const winningMoves = [];
+
+        for (let move of moves) {
+            doMove(board, move, color);
+            const isWin = checkWin(board, move.x, move.y, color, size);
+            undoMove(board, move);
+
+            if (isWin) winningMoves.push({ x: move.x, y: move.y });
+        }
+
+        return winningMoves;
+    };
+
+    const pickBestByHeuristic = (moves, board, myColor, oppColor, size) => {
+        if (!moves || moves.length === 0) return null;
+
+        moves.forEach(m => {
+            m.score = evaluatePoint(board, m.x, m.y, myColor, size) +
+                      evaluatePoint(board, m.x, m.y, oppColor, size) * 1.25 +
+                      getCenterBias(m.x, m.y, size) * 2;
+        });
+
+        moves.sort((a, b) => b.score - a.score);
+        return moves[0];
+    };
+
+    const getTacticalMove = (board, myColor, oppColor, size) => {
+        // 1. 自己可以一手成五：即刻贏，唔好諗太多。
+        const myWinningMoves = getImmediateWinningMoves(board, myColor, size);
+        if (myWinningMoves.length > 0) {
+            return pickBestByHeuristic(myWinningMoves, board, myColor, oppColor, size);
+        }
+
+        // 2. 對手下一手可以成五：必須封。
+        const opponentWinningMoves = getImmediateWinningMoves(board, oppColor, size);
+        if (opponentWinningMoves.length > 0) {
+            return pickBestByHeuristic(opponentWinningMoves, board, myColor, oppColor, size);
+        }
+
+        return null;
+    };
+
+    const evaluateBoardState = (board, myColor, oppColor, size) => {
+        let score = 0;
+        const moves = getValidMoves(board, size);
+
+        for (let move of moves) {
+            score += evaluatePoint(board, move.x, move.y, myColor, size) * 1.0;
+            score -= evaluatePoint(board, move.x, move.y, oppColor, size) * 1.15;
+            score += getCenterBias(move.x, move.y, size) * 0.15;
+        }
+
+        return score;
+    };
+
     // Alpha-Beta Minimax
     const minimax = (board, depth, alpha, beta, isMaximizing, myColor, oppColor, size) => {
-        if (depth === 0) return 0; // 深層評分透過前置 Sort 已經過濾好，此處只做勝負截斷
+        if (depth === 0) return evaluateBoardState(board, myColor, oppColor, size);
 
         const turnColor = isMaximizing ? myColor : oppColor;
         let moves = getValidMoves(board, size);
@@ -260,8 +325,10 @@
 
         // 深入前再次進行啟發式排序 (Heuristic Sort)
         moves.forEach(m => {
+            const otherColor = turnColor === myColor ? oppColor : myColor;
             m.score = evaluatePoint(board, m.x, m.y, turnColor, size) + 
-                      evaluatePoint(board, m.x, m.y, turnColor === myColor ? oppColor : myColor, size);
+                      evaluatePoint(board, m.x, m.y, otherColor, size) * 1.15 +
+                      getCenterBias(m.x, m.y, size) * 2;
         });
         moves.sort((a, b) => b.score - a.score);
         // 限制寬度 (Branching factor)，保證效能
@@ -305,6 +372,10 @@
         const aiColor = gameState.turn;
         const oppColor = aiColor === 'R' ? 'W' : 'R';
         const size = gameState.boardSize;
+
+        // 生死棋先行：必勝 / 必封唔受 LV 或隨機性影響。
+        const tacticalMove = getTacticalMove(gameState.board, aiColor, oppColor, size);
+        if (tacticalMove) return tacticalMove;
         
         let moves = getValidMoves(gameState.board, size);
         if (moves.length === 0) return null;
@@ -312,18 +383,40 @@
         // 第一階段：啟發式全局掃描 (Attack + Defense)
         moves.forEach(m => {
             m.score = evaluatePoint(gameState.board, m.x, m.y, aiColor, size) + 
-                      evaluatePoint(gameState.board, m.x, m.y, oppColor, size) * 1.1; // 防守優先度稍高
+                      evaluatePoint(gameState.board, m.x, m.y, oppColor, size) * 1.2 + // 防守優先度稍高
+                      getCenterBias(m.x, m.y, size) * 2; // 減少無意義邊角落子
         });
         moves.sort((a, b) => b.score - a.score);
 
-        // 如果難度低，增加隨機性
-        if (diff <= 5 && Math.random() < 0.3) {
+        // 如果難度低，增加隨機性；但已經通過 tactical check，所以唔會錯過必封 / 必勝。
+        let randomness = 0;
+        if (diff <= 3) randomness = 0.25;
+        else if (diff <= 6) randomness = 0.12;
+        else if (diff <= 10) randomness = 0.04;
+
+        if (randomness > 0 && Math.random() < randomness) {
             return moves[Math.floor(Math.random() * Math.min(5, moves.length))];
         }
 
         // 第二階段：Top-N 深度運算
-        let searchDepth = diff <= 6 ? 1 : (diff <= 10 ? 2 : 3);
-        let topN = diff <= 6 ? 5 : (diff <= 10 ? 10 : 15);
+        let searchDepth = 1;
+        let topN = 6;
+        if (diff <= 3) {
+            searchDepth = 1;
+            topN = 5;
+        } else if (diff <= 6) {
+            searchDepth = 1;
+            topN = 8;
+        } else if (diff <= 10) {
+            searchDepth = 2;
+            topN = 12;
+        } else if (diff <= 13) {
+            searchDepth = 3;
+            topN = 16;
+        } else {
+            searchDepth = 3;
+            topN = 22;
+        }
         let candidates = moves.slice(0, topN);
 
         let bestMoves = [];
@@ -375,13 +468,21 @@
         const color = gameState.turn;
         const oppColor = color === 'R' ? 'W' : 'R';
         const size = gameState.boardSize;
+
+        // Hint 亦要跟生死棋：如果唔救就輸，只提示救棋嗰一步。
+        const tacticalMove = getTacticalMove(gameState.board, color, oppColor, size);
+        if (tacticalMove) {
+            currentHints = [tacticalMove];
+            return;
+        }
         
         let moves = getValidMoves(gameState.board, size);
         if (moves.length === 0) { currentHints = []; return; }
 
         moves.forEach(m => {
             m.score = evaluatePoint(gameState.board, m.x, m.y, color, size) + 
-                      evaluatePoint(gameState.board, m.x, m.y, oppColor, size) * 1.1;
+                      evaluatePoint(gameState.board, m.x, m.y, oppColor, size) * 1.2 +
+                      getCenterBias(m.x, m.y, size) * 2;
         });
 
         moves.sort((a, b) => b.score - a.score);
