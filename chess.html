@@ -180,6 +180,76 @@
     };
     let pendingSettings = cloneState(settings);
 
+    // --- 視角 / 顏色工具 ---
+    const getOpponentColor = (color) => color === 'R' ? 'B' : 'R';
+    const getAIColor = () => getOpponentColor(settings.playerColor);
+
+    // 玩家後攻時仍然使用正常中國象棋規則：紅方先行。
+    // 但畫面座標會翻轉，令玩家嗰邊永遠喺下方，方便閱讀同操作。
+    const shouldFlipBoard = () => settings.mode === 'PvE' && settings.playerColor === 'B';
+    const toScreenX = (x) => shouldFlipBoard() ? BOARD_WIDTH - x : x;
+    const toScreenY = (y) => shouldFlipBoard() ? BOARD_HEIGHT - y : y;
+    const toBoardX = (x) => shouldFlipBoard() ? BOARD_WIDTH - x : x;
+    const toBoardY = (y) => shouldFlipBoard() ? BOARD_HEIGHT - y : y;
+
+    const isAITurn = () => settings.mode === 'PvE' && gameState && gameState.turn !== settings.playerColor;
+
+    const isBlackMaximizingTurn = (color) => color === 'B';
+
+    const getAllStrictMoves = (board, color) => {
+      let moves = [];
+      for (let y = 0; y <= 9; y++) {
+        for (let x = 0; x <= 8; x++) {
+          const p = board[y][x];
+          if (p && p.color === color) {
+            let vMoves = getStrictValidMoves(board, x, y);
+            vMoves.forEach(m => moves.push({ from: {x, y}, to: {x: m.x, y: m.y} }));
+          }
+        }
+      }
+      return moves;
+    };
+
+    const moveOrderingScore = (board, move) => {
+      const target = board[move.to.y][move.to.x];
+      const moving = board[move.from.y][move.from.x];
+      let score = target ? PIECE_VALUES[target.type] * 10 - PIECE_VALUES[moving.type] : 0;
+      const centerBonus = 6 - Math.abs(move.to.x - 4);
+      return score + centerBonus;
+    };
+
+    const sortMovesForSearch = (board, moves) => {
+      return moves.sort((a, b) => moveOrderingScore(board, b) - moveOrderingScore(board, a));
+    };
+
+    const evaluateMoveForColor = (board, move, color, depth) => {
+      const captured = doMove(board, move);
+      let moveValue = 0;
+
+      if (captured && captured.type === 'g') {
+        moveValue = color === 'B' ? 100000 : -100000;
+      } else {
+        const nextColor = getOpponentColor(color);
+        moveValue = minimax(board, depth - 1, -Infinity, Infinity, isBlackMaximizingTurn(nextColor));
+      }
+
+      undoMove(board, move, captured);
+      return moveValue;
+    };
+
+    const isBetterForColor = (candidate, best, color) => {
+      return color === 'B' ? candidate > best : candidate < best;
+    };
+
+    const isTiedForColor = (candidate, best) => Math.abs(candidate - best) < 0.1;
+
+    const pickTopPoolRandom = (evaluatedMoves, color, poolRatio = 0.3) => {
+      const sorted = evaluatedMoves.slice().sort((a, b) => color === 'B' ? b.score - a.score : a.score - b.score);
+      const poolSize = Math.max(3, Math.ceil(sorted.length * poolRatio));
+      const pool = sorted.slice(0, Math.min(poolSize, sorted.length));
+      return pool[Math.floor(Math.random() * pool.length)].move;
+    };
+
     const loadHistory = () => {
       try {
         const saved = localStorage.getItem('chinese_chess_history');
@@ -447,14 +517,10 @@
       if (depth === 0) return evaluateBoard(board);
 
       const color = isMaximizing ? 'B' : 'R';
-      // Minimax 內部為求速度保留 Pseudo moves，透過擊殺 General 判定勝負
-      let moves = getAllMovesPseudo(board, color);
+      // 深層搜尋都使用嚴格合法步，避免 AI 用「自殺 / 不解將」嘅假世界線計分
+      let moves = getAllStrictMoves(board, color);
 
-      moves.sort((a, b) => {
-        let scoreA = board[a.to.y][a.to.x] ? PIECE_VALUES[board[a.to.y][a.to.x].type] : 0;
-        let scoreB = board[b.to.y][b.to.x] ? PIECE_VALUES[board[b.to.y][b.to.x].type] : 0;
-        return scoreB - scoreA; 
-      });
+      sortMovesForSearch(board, moves);
 
       if (moves.length === 0) return isMaximizing ? -100000 : 100000;
 
@@ -502,59 +568,41 @@
       else if (diff <= 13) { depth = 4; randomness = 0; } 
       else { depth = 5; randomness = 0; } 
 
-      const aiColor = 'B';
-      // 確保 AI 最終選擇嘅步法必須嚴格合法 (包括解將)
-      let moves = [];
-      for (let y = 0; y <= 9; y++) {
-        for (let x = 0; x <= 8; x++) {
-          const p = gameState.board[y][x];
-          if (p && p.color === aiColor) {
-            let vMoves = getStrictValidMoves(gameState.board, x, y);
-            vMoves.forEach(m => moves.push({ from: {x, y}, to: {x: m.x, y: m.y} }));
-          }
-        }
-      }
-      
+      const aiColor = getAIColor();
+      let moves = getAllStrictMoves(gameState.board, aiColor);
+
       if (moves.length === 0) return null; // 絕殺無解
 
-      if (Math.random() < randomness) {
-         return moves[Math.floor(Math.random() * moves.length)];
-      }
+      sortMovesForSearch(gameState.board, moves);
 
+      let evaluatedMoves = [];
       let bestMoves = [];
-      const isMaximizing = true; 
-      let bestValue = -Infinity;
-      
-      moves.sort((a, b) => {
-        let scoreA = gameState.board[a.to.y][a.to.x] ? PIECE_VALUES[gameState.board[a.to.y][a.to.x].type] : 0;
-        let scoreB = gameState.board[b.to.y][b.to.x] ? PIECE_VALUES[gameState.board[b.to.y][b.to.x].type] : 0;
-        return scoreB - scoreA; 
-      });
+      let bestValue = aiColor === 'B' ? -Infinity : Infinity;
 
       for (let i = 0; i < moves.length; i++) {
         let move = moves[i];
-        let captured = doMove(gameState.board, move);
-        let moveValue = 0;
-        
-        if (captured && captured.type === 'g') {
-           moveValue = 100000;
-        } else {
-           moveValue = minimax(gameState.board, depth - 1, -Infinity, Infinity, false);
-        }
+        let moveValue = evaluateMoveForColor(gameState.board, move, aiColor, depth);
 
-        undoMove(gameState.board, move, captured);
-
+        // 只有對手 AI 需要少量噪音，避免同分局面完全機械化；Hint 不會使用呢個噪音。
         if (moveValue > -50000 && moveValue < 50000) {
             moveValue += (Math.random() * 4 - 2); 
         }
 
-        if (moveValue > bestValue) { 
+        evaluatedMoves.push({ move, score: moveValue });
+
+        if (isBetterForColor(moveValue, bestValue, aiColor)) { 
             bestValue = moveValue; 
             bestMoves = [move]; 
-        } else if (Math.abs(moveValue - bestValue) < 0.1) { 
+        } else if (isTiedForColor(moveValue, bestValue)) { 
             bestMoves.push(move); 
         }
       }
+
+      // 低 LV 仍然會有飄忽，但只喺「評估過嘅較合理候選步」入面抽，唔再完全亂行。
+      if (Math.random() < randomness) {
+         return pickTopPoolRandom(evaluatedMoves, aiColor, 0.35);
+      }
+
       return bestMoves[Math.floor(Math.random() * bestMoves.length)];
     };
 
@@ -578,45 +626,25 @@
         }
 
         const color = gameState.turn;
-        let depth = 4;
-        
-        // 嚴格過濾合法步法，確保若被將軍，必定只顯示能解將嘅棋
-        let moves = [];
-        for (let y = 0; y <= 9; y++) {
-            for (let x = 0; x <= 8; x++) {
-                const p = gameState.board[y][x];
-                if (p && p.color === color) {
-                    let vMoves = getStrictValidMoves(gameState.board, x, y);
-                    vMoves.forEach(m => moves.push({ from: {x, y}, to: {x: m.x, y: m.y} }));
-                }
-            }
-        }
+        // Hint / Coach 不跟對手 LV：用較穩定深度，直接俾最好 1–2 步。
+        let depth = settings.aiDifficulty >= 14 ? 5 : 4;
 
+        let moves = getAllStrictMoves(gameState.board, color);
         if (moves.length === 0) { currentHints = []; return; }
+
+        sortMovesForSearch(gameState.board, moves);
 
         let evaluatedMoves = [];
         for (let i = 0; i < moves.length; i++) {
             let move = moves[i];
-            let captured = doMove(gameState.board, move);
-            let moveValue = 0;
-
-            if (captured && captured.type === 'g') {
-                moveValue = color === 'B' ? 100000 : -100000;
-            } else {
-                moveValue = minimax(gameState.board, depth - 1, -Infinity, Infinity, color === 'R');
-            }
-
-            undoMove(gameState.board, move, captured);
+            let moveValue = evaluateMoveForColor(gameState.board, move, color, depth);
             evaluatedMoves.push({ move, score: moveValue });
         }
 
-        if (color === 'B') {
-            evaluatedMoves.sort((a, b) => b.score - a.score);
-        } else {
-            evaluatedMoves.sort((a, b) => a.score - b.score);
-        }
+        evaluatedMoves.sort((a, b) => color === 'B' ? b.score - a.score : a.score - b.score);
 
-        currentHints = evaluatedMoves.slice(0, 3).map(e => e.move);
+        // 中國象棋提示太多會亂，保留最佳 1–2 步更似教練。
+        currentHints = evaluatedMoves.slice(0, 2).map(e => e.move);
     };
 
     window.toggleHintMode = () => {
@@ -710,7 +738,7 @@
         if (gameState.winner) {
             recordFinishedGame();
             render();
-        } else if (settings.mode === 'PvE' && gameState.turn === 'B') {
+        } else if (isAITurn()) {
             gameState.isThinking = true;
             render();
             setTimeout(triggerAI, 1000);
@@ -827,13 +855,26 @@
     window.initGame = () => {
       isMenuOpen = false;
       isRecordOpen = false;
-      
+
       if (pendingSettings) settings = cloneState(pendingSettings);
-      settings.playerColor = 'R'; 
 
       const p1Name = settings.player1Name.trim() || (settings.mode === 'PvE' ? 'YOU' : 'P1');
       const aiName = AI_NAMES[Math.floor(Math.random() * AI_NAMES.length)];
       const p2Name = settings.mode === 'PvE' ? aiName : (settings.player2Name.trim() || 'P2');
+
+      // 中國象棋規則：紅方永遠先行。
+      // PLAYER = user 執紅；AI = user 執黑；RANDOM = 隨機 user 執紅 / 黑。
+      if (settings.mode === 'PvE') {
+          if (settings.firstMove === 'RANDOM') {
+              settings.playerColor = Math.random() < 0.5 ? 'R' : 'B';
+          } else {
+              settings.playerColor = settings.firstMove === 'AI' ? 'B' : 'R';
+          }
+      } else {
+          settings.playerColor = 'R';
+      }
+
+      const aiColor = settings.mode === 'PvE' ? getAIColor() : 'B';
 
       gameState = {
         board: getInitialBoard(), turn: 'R', selectedPiece: null, validMoves: [], winner: null,
@@ -841,8 +882,8 @@
         animatingCapture: null, showCaptureEffect: null, lastMove: null, gameLog: [], isTossing: false,
         isCalculatingHints: false,
         inCheck: false,
-        redName: p1Name,
-        whiteName: p2Name,
+        redName: settings.mode === 'PvE' ? (settings.playerColor === 'R' ? p1Name : p2Name) : p1Name,
+        whiteName: settings.mode === 'PvE' ? (settings.playerColor === 'B' ? p1Name : p2Name) : p2Name,
         startingTurn: 'R' 
       };
       historyStack = [];
@@ -851,13 +892,11 @@
       if (settings.mode === 'PvE') {
           if (settings.firstMove === 'RANDOM') {
               gameState.isTossing = true;
-              gameState.turn = Math.random() < 0.5 ? 'R' : 'B';
-              gameState.startingTurn = gameState.turn;
               render(); 
               setTimeout(() => {
                   gameState.isTossing = false;
                   render();
-                  if (gameState.turn === 'B') { 
+                  if (isAITurn()) { 
                       gameState.isThinking = true;
                       render();
                       setTimeout(triggerAI, 1000);
@@ -868,9 +907,7 @@
               }, 3500); 
               return;
           } else {
-              gameState.turn = settings.firstMove === 'AI' ? 'B' : 'R';
-              gameState.startingTurn = gameState.turn;
-              if (gameState.turn === 'B') {
+              if (isAITurn()) {
                   gameState.isThinking = true;
                   setTimeout(() => { 
                       render(); 
@@ -894,13 +931,27 @@
     window.handleUndo = () => {
       if (historyStack.length === 0 || gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing) return;
       if (settings.mode === 'PvE') {
-         if (historyStack.length >= 2) { historyStack.pop(); gameState = historyStack.pop(); }
+         // 單人模式退到玩家上一次可行棋嘅狀態；支援 user 執紅或執黑。
+         let targetState = null;
+         while (historyStack.length > 0) {
+             let prev = historyStack.pop();
+             if (prev.turn === settings.playerColor) {
+                 targetState = prev;
+                 break;
+             }
+         }
+         if (targetState) {
+             gameState = targetState;
+         } else {
+             window.initGame();
+             return;
+         }
       } else {
          gameState = historyStack.pop();
       }
       gameState.lastMove = null; gameState.isAnimating = false; gameState.showCaptureEffect = null;
-      gameState.inCheck = isInCheck(gameState.board, gameState.turn); // Undo 都要更新將軍狀態
-      
+      gameState.inCheck = isInCheck(gameState.board, gameState.turn);
+
       if (isHintMode) {
           gameState.isCalculatingHints = true; render();
           setTimeout(() => { updateHintsLogic(); gameState.isCalculatingHints = false; render(); }, 10);
@@ -1056,7 +1107,9 @@
       let interactionSVG = `<g opacity="0">`;
       for (let y = 0; y <= BOARD_HEIGHT; y++) {
         for (let x = 0; x <= BOARD_WIDTH; x++) {
-          interactionSVG += `<rect x="${OFFSET_X + x * GRID_SIZE - 20}" y="${OFFSET_Y + y * GRID_SIZE - 20}" width="40" height="40" fill="transparent" onclick="window.handleSquareClick(${x}, ${y})" style="cursor:pointer;" />`;
+          const bx = toBoardX(x);
+          const by = toBoardY(y);
+          interactionSVG += `<rect x="${OFFSET_X + x * GRID_SIZE - 20}" y="${OFFSET_Y + y * GRID_SIZE - 20}" width="40" height="40" fill="transparent" onclick="window.handleSquareClick(${bx}, ${by})" style="cursor:pointer;" />`;
         }
       }
       interactionSVG += `</g>`;
@@ -1068,8 +1121,8 @@
               for(let x = 0; x <= 8; x++) {
                   const p = gameState.board[y][x];
                   if(p && p.type === 'g' && p.color === gameState.turn) {
-                      const cx = OFFSET_X + x * GRID_SIZE;
-                      const cy = OFFSET_Y + y * GRID_SIZE;
+                      const cx = OFFSET_X + toScreenX(x) * GRID_SIZE;
+                      const cy = OFFSET_Y + toScreenY(y) * GRID_SIZE;
                       checkGlowSVG += `<circle cx="${cx}" cy="${cy}" r="24" fill="none" stroke="#ef4444" stroke-width="2" opacity="0.8" class="animate-pulse" pointer-events="none" />`;
                       checkGlowSVG += `<circle cx="${cx}" cy="${cy}" r="16" fill="#ef4444" opacity="0.3" class="animate-pulse" pointer-events="none" />`;
                   }
@@ -1079,7 +1132,7 @@
 
       let validMovesSVG = ``;
       gameState.validMoves.forEach(m => {
-        const cx = OFFSET_X + m.x * GRID_SIZE; const cy = OFFSET_Y + m.y * GRID_SIZE;
+        const cx = OFFSET_X + toScreenX(m.x) * GRID_SIZE; const cy = OFFSET_Y + toScreenY(m.y) * GRID_SIZE;
         const isCapture = gameState.board[m.y][m.x] !== null;
         if (isCapture) {
           validMovesSVG += `<path d="M ${cx-15} ${cy-15} L ${cx-8} ${cy-15} M ${cx-15} ${cy-15} L ${cx-15} ${cy-8} M ${cx+15} ${cy-15} L ${cx+8} ${cy-15} M ${cx+15} ${cy-15} L ${cx+15} ${cy-8} M ${cx-15} ${cy+15} L ${cx-8} ${cy+15} M ${cx-15} ${cy+15} L ${cx-15} ${cy+8} M ${cx+15} ${cy+15} L ${cx+8} ${cy+15} M ${cx+15} ${cy+15} L ${cx+15} ${cy+8}" fill="none" stroke="#22d3ee" stroke-width="2" class="valid-move" onclick="window.handleSquareClick(${m.x}, ${m.y})" />`;
@@ -1090,7 +1143,7 @@
 
       let baseTargetPieceSVG = '';
       if (gameState.isAnimating && gameState.animatingCapture) {
-          const cx = OFFSET_X + gameState.lastMove.to.x * GRID_SIZE; const cy = OFFSET_Y + gameState.lastMove.to.y * GRID_SIZE;
+          const cx = OFFSET_X + toScreenX(gameState.lastMove.to.x) * GRID_SIZE; const cy = OFFSET_Y + toScreenY(gameState.lastMove.to.y) * GRID_SIZE;
           const p = gameState.animatingCapture;
           const strokeColor = p.color === 'R' ? '#ef4444' : '#f8fafc';
           const textColor = p.color === 'R' ? '#ef4444' : '#f8fafc';
@@ -1102,7 +1155,7 @@
         for (let x = 0; x <= BOARD_WIDTH; x++) {
           const piece = gameState.board[y][x];
           if (piece) {
-            const cx = OFFSET_X + x * GRID_SIZE; const cy = OFFSET_Y + y * GRID_SIZE;
+            const cx = OFFSET_X + toScreenX(x) * GRID_SIZE; const cy = OFFSET_Y + toScreenY(y) * GRID_SIZE;
             const isSelected = gameState.selectedPiece && gameState.selectedPiece.x === x && gameState.selectedPiece.y === y;
             const bgColor = '#111111'; const strokeColor = piece.color === 'R' ? '#ef4444' : '#f8fafc'; const textColor = piece.color === 'R' ? '#ef4444' : '#f8fafc';
             
@@ -1110,7 +1163,7 @@
             
             let animTag = '';
             if (gameState.isAnimating && gameState.lastMove && gameState.lastMove.to.x === x && gameState.lastMove.to.y === y) {
-                const oldCx = OFFSET_X + gameState.lastMove.from.x * GRID_SIZE; const oldCy = OFFSET_Y + gameState.lastMove.from.y * GRID_SIZE;
+                const oldCx = OFFSET_X + toScreenX(gameState.lastMove.from.x) * GRID_SIZE; const oldCy = OFFSET_Y + toScreenY(gameState.lastMove.from.y) * GRID_SIZE;
                 animTag = `<animateTransform attributeName="transform" type="translate" from="${oldCx - cx} ${oldCy - cy}" to="0 0" dur="0.4s" additive="sum" fill="freeze" />`;
             }
             piecesSVG += `<g class="chess-piece" transform="translate(${cx}, ${cy})" onclick="window.handleSquareClick(${x}, ${y})">${animTag}${glow}<circle cx="0" cy="0" r="16" fill="${bgColor}" stroke="${strokeColor}" stroke-width="1.5" /><circle cx="0" cy="0" r="13" fill="none" stroke="${strokeColor}" stroke-width="0.5" opacity="0.5" /><text x="0" y="0" fill="${textColor}" font-size="18" class="font-chess" text-anchor="middle" dominant-baseline="central">${piece.label}</text></g>`;
@@ -1120,7 +1173,7 @@
 
       let captureEffectsSVG = '';
       if (gameState.showCaptureEffect) {
-          const cx = OFFSET_X + gameState.showCaptureEffect.x * GRID_SIZE; const cy = OFFSET_Y + gameState.showCaptureEffect.y * GRID_SIZE;
+          const cx = OFFSET_X + toScreenX(gameState.showCaptureEffect.x) * GRID_SIZE; const cy = OFFSET_Y + toScreenY(gameState.showCaptureEffect.y) * GRID_SIZE;
           const p = gameState.showCaptureEffect.piece; const waveColor = gameState.showCaptureEffect.capturerColor === 'R' ? '#ef4444' : '#f8fafc';
           const strokeColor = p.color === 'R' ? '#ef4444' : '#f8fafc'; const textColor = p.color === 'R' ? '#ef4444' : '#f8fafc';
           captureEffectsSVG += `<g pointer-events="none"><circle cx="${cx}" cy="${cy}" r="16" fill="none" stroke="${waveColor}" stroke-width="6"><animate attributeName="r" from="16" to="240" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" /><animate attributeName="stroke-width" from="6" to="0" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" /><animate attributeName="opacity" from="0.8" to="0" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" /></circle><g transform="translate(${cx}, ${cy})"><g class="anim-capture-fly"><circle cx="0" cy="0" r="16" fill="#111111" stroke="${strokeColor}" stroke-width="1.5" /><circle cx="0" cy="0" r="13" fill="none" stroke="${strokeColor}" stroke-width="0.5" opacity="0.5" /><text x="0" y="0" fill="${textColor}" font-size="18" class="font-chess" text-anchor="middle" dominant-baseline="central">${p.label}</text></g></g></g>`;
@@ -1129,10 +1182,10 @@
       let hintsSVG = '';
       if (isHintMode && currentHints.length > 0 && !gameState.isCalculatingHints) {
           currentHints.forEach((hint, index) => {
-              const sx = OFFSET_X + hint.from.x * GRID_SIZE;
-              const sy = OFFSET_Y + hint.from.y * GRID_SIZE;
-              const tx = OFFSET_X + hint.to.x * GRID_SIZE;
-              const ty = OFFSET_Y + hint.to.y * GRID_SIZE;
+              const sx = OFFSET_X + toScreenX(hint.from.x) * GRID_SIZE;
+              const sy = OFFSET_Y + toScreenY(hint.from.y) * GRID_SIZE;
+              const tx = OFFSET_X + toScreenX(hint.to.x) * GRID_SIZE;
+              const ty = OFFSET_Y + toScreenY(hint.to.y) * GRID_SIZE;
 
               const color = '#3b82f6'; 
               const strokeWidth = index === 0 ? 3 : 2;
@@ -1249,6 +1302,9 @@
          `;
       }
 
+      const getNameByColor = (color) => color === 'R' ? gameState.redName : gameState.whiteName;
+      const getTurnTextClass = (color) => color === 'R' ? 'text-red-500' : 'text-white';
+
       let statusBannerHTML = '';
       if (gameState.winner) {
         const winnerDisplay = gameState.winner === 'R' ? gameState.redName : gameState.whiteName;
@@ -1258,23 +1314,22 @@
         let rightContent = '';
         let borderClass = 'border-neutral-800';
 
+        const currentTurnName = getNameByColor(gameState.turn);
+        const currentTurnClass = getTurnTextClass(gameState.turn);
+
         if (isPVE) {
             if (gameState.turn === settings.playerColor) {
-                rightContent = `<span class="text-red-500 font-bold tracking-wider uppercase">${gameState.redName} TURN</span>`;
+                rightContent = `<span class="${currentTurnClass} font-bold tracking-wider uppercase">${currentTurnName} TURN</span>`;
             } else {
                 if (gameState.isThinking) {
-                    rightContent = `<div class="flex items-center gap-3"><span class="text-white font-bold tracking-wider uppercase">${gameState.whiteName} TURN</span><span class="text-[#22d3ee] font-bold animate-pulse tracking-widest">THINKING...</span></div>`;
+                    rightContent = `<div class="flex items-center gap-3"><span class="${currentTurnClass} font-bold tracking-wider uppercase">${currentTurnName} TURN</span><span class="text-[#22d3ee] font-bold animate-pulse tracking-widest">THINKING...</span></div>`;
                     borderClass = 'border-[#22d3ee]/30 shadow-[0_0_15px_rgba(34,211,238,0.1)]';
                 } else {
-                    rightContent = `<span class="text-white font-bold tracking-wider uppercase">${gameState.whiteName} TURN</span>`;
+                    rightContent = `<span class="${currentTurnClass} font-bold tracking-wider uppercase">${currentTurnName} TURN</span>`;
                 }
             }
         } else {
-            if (gameState.turn === 'R') {
-                rightContent = `<span class="text-red-500 font-bold tracking-wider uppercase">${gameState.redName} TURN</span>`;
-            } else {
-                rightContent = `<span class="text-white font-bold tracking-wider uppercase">${gameState.whiteName} TURN</span>`;
-            }
+            rightContent = `<span class="${currentTurnClass} font-bold tracking-wider uppercase">${currentTurnName} TURN</span>`;
         }
 
         let checkWarningHTML = gameState.inCheck && !gameState.winner 
@@ -1293,15 +1348,17 @@
         return pieces.map(p => `<div class="w-6 h-6 rounded-full border border-neutral-700 bg-black flex items-center justify-center ${p.color === 'R' ? 'text-red-500' : 'text-slate-100'} text-[12px] font-chess">${p.label}</div>`).join('');
       };
 
+      const topPanelColor = shouldFlipBoard() ? 'R' : 'B';
+      const bottomPanelColor = shouldFlipBoard() ? 'B' : 'R';
       const capturedAreaHTML = `
         <div class="flex flex-col gap-3 px-4 lg:px-6 w-full">
             <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-3">
-              <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-20 truncate">${gameState.whiteName}</div>
-              <div class="flex-1 flex flex-wrap gap-1 justify-end">${renderCaptured('B')}</div>
+              <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-20 truncate">${getNameByColor(topPanelColor)}</div>
+              <div class="flex-1 flex flex-wrap gap-1 justify-end">${renderCaptured(topPanelColor)}</div>
             </div>
             <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-3">
-              <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-20 truncate">${gameState.redName}</div>
-              <div class="flex-1 flex flex-wrap gap-1 justify-end">${renderCaptured('R')}</div>
+              <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-20 truncate">${getNameByColor(bottomPanelColor)}</div>
+              <div class="flex-1 flex flex-wrap gap-1 justify-end">${renderCaptured(bottomPanelColor)}</div>
             </div>
         </div>
       `;
@@ -1317,7 +1374,7 @@
       if (settings.mode === 'PvE') {
           if (settings.firstMove === 'PLAYER') modeDisplay = '先攻';
           else if (settings.firstMove === 'AI') modeDisplay = '後攻';
-          else modeDisplay = gameState.startingTurn === 'R' ? '隨機 - 先攻' : '隨機 - 後攻';
+          else modeDisplay = settings.playerColor === 'R' ? '隨機 - 先攻' : '隨機 - 後攻';
       } else {
           modeDisplay = '雙人對戰';
       }

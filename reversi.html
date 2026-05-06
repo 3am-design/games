@@ -1148,7 +1148,9 @@
       let statusBannerHTML = '';
       if (gameState.winner) {
         const winnerDisplay = gameState.winner === 'R' ? gameState.redName : (gameState.winner === 'W' ? gameState.whiteName : '平手 DRAW');
-        statusBannerHTML = `<div class="w-full ${gameState.winner === 'DRAW' ? 'bg-[#333]' : (gameState.winner === 'R' ? 'bg-[#6a0404]' : 'bg-[#1a1a1a] border border-white')} rounded-lg py-3.5 flex items-center justify-center font-bold text-[14px] lg:text-[17px] tracking-[0.15em] text-white uppercase animate-pulse shadow-lg">${winnerDisplay} !!!</div>`;
+        const finalCounts = gameState.counts || countPieces(gameState.board, gameState.boardSize);
+        const finalScoreText = `紅 ${finalCounts.R} : ${finalCounts.W} 白`;
+        statusBannerHTML = `<div class="w-full ${gameState.winner === 'DRAW' ? 'bg-[#333]' : (gameState.winner === 'R' ? 'bg-[#6a0404]' : 'bg-[#1a1a1a] border border-white')} rounded-lg py-3.5 flex flex-col items-center justify-center gap-1 font-bold text-white uppercase animate-pulse shadow-lg"><div class="text-[14px] lg:text-[17px] tracking-[0.15em]">${winnerDisplay} !!!</div><div class="text-[10px] lg:text-[12px] tracking-[0.18em] text-white opacity-75">${finalScoreText}</div></div>`;
       } else {
         const isPVE = settings.mode === 'PvE';
         let rightContent = '';
