@@ -158,22 +158,24 @@
     let pendingSettings = cloneState(settings);
 
     const updateViewportMetrics = () => {
-      const vh = window.innerHeight || document.documentElement.clientHeight || 800;
-      const vw = window.innerWidth || document.documentElement.clientWidth || 390;
+      // Use visualViewport when available: mobile Safari / Chrome browser bars make
+      // window.innerHeight unreliable. The board should fill the remaining visible
+      // height, but never be clipped by the status/player panels.
+      const vv = window.visualViewport;
+      const vh = Math.floor((vv && vv.height) || window.innerHeight || document.documentElement.clientHeight || 800);
+      const vw = Math.floor((vv && vv.width) || window.innerWidth || document.documentElement.clientWidth || 390);
 
       document.documentElement.style.setProperty('--app-height', `${vh}px`);
 
-      // Mobile: fit the whole 7x9 board above the status/player panels.
-      // If the browser bars reduce the viewport, shrink the board instead of clipping it.
       if (vw < 1024) {
-        const headerH = 58;
-        const infoH = 58;
-        const controlH = 310;
-        const safetyGap = 26;
-        const availableBoardH = Math.max(300, vh - headerH - infoH - controlH - safetyGap);
-        const widthByHeight = availableBoardH * (COLS / ROWS);
-        const widthByScreen = vw - 64;
-        const boardW = Math.max(270, Math.min(widthByScreen, widthByHeight, 430));
+        const headerH = 54;
+        const infoH = 70;
+        const controlH = 218;
+        const verticalGap = 12;
+        const availableBoardH = Math.max(260, vh - headerH - infoH - controlH - verticalGap);
+        const widthByHeight = Math.floor(availableBoardH * (COLS / ROWS));
+        const widthByScreen = vw - 48;
+        const boardW = Math.max(260, Math.min(widthByScreen, widthByHeight, 430));
         document.documentElement.style.setProperty('--jungle-board-w', `${boardW}px`);
       } else {
         document.documentElement.style.setProperty('--jungle-board-w', `480px`);
@@ -181,6 +183,7 @@
     };
 
     window.addEventListener('resize', updateViewportMetrics);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', updateViewportMetrics);
     window.addEventListener('orientationchange', () => setTimeout(updateViewportMetrics, 120));
 
     const loadHistory = () => {
@@ -1029,12 +1032,12 @@
       // 將文字圖例抽出並顯示於下方
       const capturedAreaHTML = `
         <div class="flex flex-col gap-1.5 lg:gap-3 px-3 lg:px-6 w-full">
-            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-2.5 lg:p-3 relative overflow-hidden">
+            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-2 lg:p-3 relative overflow-hidden">
               <div class="absolute left-0 top-0 bottom-0 w-1 ${gameState.turn === 'W' ? 'bg-white shadow-[0_0_8px_#ffffff]' : 'bg-transparent'} transition-colors"></div>
               <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-full truncate ml-2">${gameState.whiteName}</div>
               <svg viewBox="0 0 42 42" class="w-[20px] h-[20px] lg:w-[24px] lg:h-[24px] flex-shrink-0"><circle cx="21" cy="21" r="19" fill="#111" stroke="#ffffff" stroke-width="1.5"/><circle cx="21" cy="21" r="15.5" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.7"/></svg>
             </div>
-            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-2.5 lg:p-3 relative overflow-hidden">
+            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-2 lg:p-3 relative overflow-hidden">
               <div class="absolute left-0 top-0 bottom-0 w-1 ${gameState.turn === 'R' ? 'bg-c4-red shadow-[0_0_8px_#ef4444]' : 'bg-transparent'} transition-colors"></div>
               <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-full truncate ml-2">${gameState.redName}</div>
               <svg viewBox="0 0 42 42" class="w-[20px] h-[20px] lg:w-[24px] lg:h-[24px] flex-shrink-0"><circle cx="21" cy="21" r="19" fill="#111" stroke="#ef4444" stroke-width="1.5"/><circle cx="21" cy="21" r="15.5" fill="none" stroke="#ef4444" stroke-width="1" opacity="0.7"/></svg>
@@ -1095,7 +1098,7 @@
               </div>
             </div>
             <div class="flex-none w-full lg:w-[480px] lg:h-full flex flex-col justify-start lg:justify-center bg-black z-10 relative pb-[max(12px,env(safe-area-inset-bottom))] lg:pb-0">
-              <div class="flex-none lg:mb-4"><div class="mt-2 mb-2 lg:mt-4 lg:mb-4 px-3 lg:px-6 min-h-12">${statusBannerHTML}</div></div>
+              <div class="flex-none lg:mb-4"><div class="mt-1 mb-1 lg:mt-4 lg:mb-4 px-3 lg:px-6 min-h-12">${statusBannerHTML}</div></div>
               <div class="flex-none">${controlPanelHTML}</div>
             </div>
           </main>
