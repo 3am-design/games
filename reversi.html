@@ -25,26 +25,29 @@
     @keyframes pulse-fast { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .animate-thinking { animation: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
 
-    /* --- 黑白棋 3D 翻轉動畫 --- */
-    .piece-container { perspective: 800px; pointer-events: none; }
-    /* 放慢翻轉動畫至 1.2s */
-    .piece-wrapper { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 1.2s cubic-bezier(0.4, 0, 0.2, 1); }
-    .piece-face { position: absolute; width: 100%; height: 100%; border-radius: 50%; backface-visibility: hidden; top: 0; left: 0; }
-    .piece-red { background: #ef4444; border: 2px solid #b91c1c; transform: rotateY(0deg); }
-    .piece-white { background: #f8fafc; border: 2px solid #cbd5e1; transform: rotateY(180deg); }
+    /* --- 純 SVG 翻轉與落子動畫 --- */
+    @keyframes dropPieceSVG { 
+      0% { transform: scale(1.5); opacity: 0; } 
+      100% { transform: scale(1); opacity: 1; } 
+    }
+    .anim-drop-svg { animation: dropPieceSVG 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+
+    @keyframes flipToRedSVG {
+        0% { transform: scaleX(1); fill: #f8fafc; stroke: #cbd5e1; }
+        49.999% { transform: scaleX(0); fill: #f8fafc; stroke: #cbd5e1; }
+        50% { transform: scaleX(0); fill: #ef4444; stroke: #b91c1c; }
+        100% { transform: scaleX(1); fill: #ef4444; stroke: #b91c1c; }
+    }
+    @keyframes flipToWhiteSVG {
+        0% { transform: scaleX(1); fill: #ef4444; stroke: #b91c1c; }
+        49.999% { transform: scaleX(0); fill: #ef4444; stroke: #b91c1c; }
+        50% { transform: scaleX(0); fill: #f8fafc; stroke: #cbd5e1; }
+        100% { transform: scaleX(1); fill: #f8fafc; stroke: #cbd5e1; }
+    }
     
-    .rot-red { transform: rotateY(0deg); }
-    .rot-white { transform: rotateY(180deg); }
-
-    /* --- 新落子放大動畫 --- */
-    @keyframes dropPiece { 0% { transform: scale(1.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-    .anim-drop { animation: dropPiece 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
-
-    /* --- 翻轉動畫 --- */
-    @keyframes flipToRedFromWhite { 0% { transform: rotateY(180deg); } 100% { transform: rotateY(0deg); } }
-    @keyframes flipToWhiteFromRed { 0% { transform: rotateY(0deg); } 100% { transform: rotateY(180deg); } }
-    .anim-flip-to-red { animation: flipToRedFromWhite 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
-    .anim-flip-to-white { animation: flipToWhiteFromRed 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+    /* 動畫時間調慢至 0.8s */
+    .anim-flip-to-red-svg circle { animation: flipToRedSVG 0.8s ease-in-out forwards; }
+    .anim-flip-to-white-svg circle { animation: flipToWhiteSVG 0.8s ease-in-out forwards; }
 
     /* --- 擲先後 3D 硬幣動畫 --- */
     .coin-scene { perspective: 800px; width: 100px; height: 100px; }
@@ -89,13 +92,13 @@
     .app-container { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
     button { -webkit-tap-highlight-color: transparent; outline: none; touch-action: manipulation; }
 
-    svg, .reversi-piece, .valid-move { -webkit-tap-highlight-color: transparent; }
+    svg, .valid-move { -webkit-tap-highlight-color: transparent; }
 
     .key-base { transition: background-color 0.2s ease-out, color 0.2s ease-out, border-color 0.2s, opacity 0.2s; }
     .key-base:active { opacity: 0.5; transition: none; }
 
     .valid-move { cursor: pointer; transition: opacity 0.2s ease, r 0.2s ease; }
-    @media (hover: hover) { .valid-move:hover { opacity: 0.5; r: 16; } }
+    @media (hover: hover) { .valid-move:hover { opacity: 0.5; r: 8; } }
     
     input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; background: transparent; outline: none; touch-action: none; }
     input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; height: 24px; width: 24px; border-radius: 50%; background: #ffffff; cursor: pointer; margin-top: -10px; box-shadow: 0 0 10px rgba(255,255,255,0.5); position: relative; z-index: 50; }
@@ -115,7 +118,7 @@
     // --- 系統常數與初始設定 ---
     const AI_NAMES = ['呂布', '趙雲', '關羽', '張飛', '諸葛亮', '曹操', '司馬懿', '周瑜', '孫權', '馬超', '黃忠', '典韋', '夏侯惇', '張遼', '甘寧', '太史慈', '董卓', '陸遜'];
 
-    // 黑白棋權重表 (角落極高，星位極低，邊緣中等)
+    // 黑白棋權重表
     const EVAL_MAP_6 = [
         [100, -20, 10, 10, -20, 100],
         [-20, -50, -2, -2, -50, -20],
@@ -486,7 +489,7 @@
         setTimeout(() => {
             gameState.isAnimating = false;
             completeMoveLogic();
-        }, 1200); // 配合 CSS 1.2s 動畫
+        }, 800); // 配合 CSS 0.8s 動畫
     };
 
     const completeMoveLogic = () => {
@@ -870,20 +873,21 @@
                 newlyDropped = gameState.lastMove && gameState.lastMove.x === x && gameState.lastMove.y === y;
             }
 
-            let wrapperClass = piece === 'R' ? 'rot-red' : 'rot-white';
+            const radius = (GRID_SIZE / 2) - 4;
+            let circleClass = '';
+            let fill = piece === 'R' ? '#ef4444' : '#f8fafc';
+            let stroke = piece === 'R' ? '#b91c1c' : '#cbd5e1';
+
             if (isFlipped) {
-                wrapperClass = piece === 'R' ? 'anim-flip-to-red' : 'anim-flip-to-white';
+                circleClass = piece === 'R' ? 'anim-flip-to-red-svg' : 'anim-flip-to-white-svg';
+            } else if (newlyDropped) {
+                circleClass = 'anim-drop-svg';
             }
 
             piecesHTML += `
-              <foreignObject x="${OFFSET_X + x * GRID_SIZE + 2}" y="${OFFSET_Y + y * GRID_SIZE + 2}" width="${GRID_SIZE - 4}" height="${GRID_SIZE - 4}" pointer-events="none">
-                <div xmlns="http://www.w3.org/1999/xhtml" class="piece-container w-full h-full p-[2px] ${newlyDropped ? 'anim-drop' : ''}">
-                    <div class="piece-wrapper ${wrapperClass}">
-                        <div class="piece-face piece-red shadow-lg"></div>
-                        <div class="piece-face piece-white shadow-lg"></div>
-                    </div>
-                </div>
-              </foreignObject>
+              <g style="transform-origin: ${cx}px ${cy}px;">
+                <circle cx="${cx}" cy="${cy}" r="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="2" class="${circleClass}" pointer-events="none" />
+              </g>
             `;
           }
         }
@@ -895,7 +899,7 @@
           gameState.validMoves.forEach(m => {
             const cx = OFFSET_X + m.x * GRID_SIZE + GRID_SIZE/2; 
             const cy = OFFSET_Y + m.y * GRID_SIZE + GRID_SIZE/2;
-            validMovesSVG += `<circle cx="${cx}" cy="${cy}" r="${size >= 10 ? 4 : 6}" fill="#22d3ee" opacity="0.2" class="valid-move" onclick="window.handleSquareClick(${m.x}, ${m.y})" />`;
+            validMovesSVG += `<circle cx="${cx}" cy="${cy}" r="${size >= 10 ? 3 : 5}" fill="#22d3ee" opacity="0.2" class="valid-move" onclick="window.handleSquareClick(${m.x}, ${m.y})" />`;
           });
       }
 
@@ -1083,7 +1087,9 @@
 
       let modeDisplay = '';
       if (settings.mode === 'PvE') {
-          modeDisplay = settings.playerColor === 'R' ? '先攻' : '後攻';
+          if (settings.firstMove === 'PLAYER') modeDisplay = '先攻';
+          else if (settings.firstMove === 'AI') modeDisplay = '後攻';
+          else modeDisplay = settings.playerColor === 'R' ? '隨機 - 先攻' : '隨機 - 後攻';
       } else {
           modeDisplay = '雙人對戰';
       }
@@ -1129,8 +1135,8 @@
 
           <main class="flex-1 w-full max-w-md lg:max-w-[1200px] mx-auto flex flex-col lg:flex-row min-h-0 relative z-10">
             <div class="flex-1 relative min-h-0 flex flex-col lg:justify-center lg:py-8 lg:pr-8">
-              <div class="flex-1 flex items-center justify-center pb-2 lg:pb-0 w-full h-full min-h-0 overflow-visible pt-10 lg:pt-0">
-                <svg viewBox="0 0 360 400" overflow="visible" class="w-full max-w-[400px] lg:max-w-[500px] h-auto max-h-[75vh] lg:h-full lg:max-h-[85vh] transition-transform origin-center">
+              <div class="flex-1 flex items-center justify-center pb-2 lg:pb-0 w-full h-full min-h-0 overflow-visible pt-4 lg:pt-0">
+                <svg viewBox="0 0 360 400" preserveAspectRatio="xMidYMid meet" class="w-full max-w-[400px] lg:max-w-[500px] h-auto max-h-[65vh] lg:h-full lg:max-h-[85vh] transition-transform origin-center">
                   ${generateBoardHTML()}
                 </svg>
               </div>
