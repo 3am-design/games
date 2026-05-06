@@ -51,6 +51,7 @@
     .key-base:active { opacity: 0.5; transition: none; }
     
     .icon-white { filter: brightness(0) invert(1); }
+    .icon-hint-active { filter: brightness(0) saturate(100%) invert(48%) sepia(90%) saturate(3362%) hue-rotate(206deg) brightness(102%) contrast(94%); }
 
     /* 數獨九宮格邊框樣式 */
     .sudoku-cell { border-right: 1px solid #334155; border-bottom: 1px solid #334155; }
@@ -71,13 +72,20 @@
     let historyStack = [];
     let isMenuOpen = true;
     let isRuleOpen = false;
+    let timerInterval = null;
     
     // 遊戲設定
     let settings = { difficulty: 'NORMAL' };
     let pendingSettings = cloneState(settings);
 
     // --- 數獨生成演算法 ---
-    const BLANK_COUNTS = { 'EASY': 30, 'NORMAL': 45, 'HARD': 55 };
+    // 難度以「空格數」控制，再配合唯一解檢查，避免出現多解題。
+    const DIFFICULTY_CONFIG = {
+        'EASY':   { blanks: 38, label: '新手 Easy' },
+        'NORMAL': { blanks: 47, label: '普通 Normal' },
+        'HARD':   { blanks: 55, label: '大師 Hard' },
+        'EXPERT': { blanks: 60, label: '專家 Expert' }
+    };
 
     // 洗牌 Function
     const shuffleArray = (array) => {
@@ -91,9 +99,8 @@
     // 檢查某個數字放喺 (r,c) 合唔合法
     const isValid = (board, r, c, num) => {
         for (let i = 0; i < 9; i++) {
-            if (board[r][i] === num) return false; // Row
-            if (board[i][c] === num) return false; // Col
-            // 3x3 Block
+            if (board[r][i] === num) return false;
+            if (board[i][c] === num) return false;
             const br = 3 * Math.floor(r / 3) + Math.floor(i / 3);
             const bc = 3 * Math.floor(c / 3) + i % 3;
             if (board[br][bc] === num) return false;
@@ -101,42 +108,89 @@
         return true;
     };
 
-    // 使用回溯法 (Backtracking) 生成完整有效底盤
-    const fillBoard = (board) => {
+    const getCandidates = (board, r, c) => {
+        const candidates = [];
+        for (let n = 1; n <= 9; n++) {
+            if (isValid(board, r, c, n)) candidates.push(n);
+        }
+        return candidates;
+    };
+
+    // 使用 MRV heuristic 搵最少候選嘅空格，加快 solver / 唯一解檢查。
+    const findBestEmptyCell = (board) => {
+        let best = null;
+        let bestCandidates = null;
         for (let r = 0; r < 9; r++) {
             for (let c = 0; c < 9; c++) {
-                if (board[r][c] === 0) {
-                    const nums = shuffleArray([1, 2, 3, 4, 5, 6, 7, 8, 9]);
-                    for (let num of nums) {
-                        if (isValid(board, r, c, num)) {
-                            board[r][c] = num;
-                            if (fillBoard(board)) return true;
-                            board[r][c] = 0;
-                        }
-                    }
-                    return false; // 冇數字啱，需要退回
+                if (board[r][c] !== 0) continue;
+                const candidates = getCandidates(board, r, c);
+                if (candidates.length === 0) return { r, c, candidates };
+                if (!best || candidates.length < bestCandidates.length) {
+                    best = { r, c };
+                    bestCandidates = candidates;
+                    if (candidates.length === 1) return { r, c, candidates };
                 }
             }
         }
-        return true;
+        return best ? { ...best, candidates: bestCandidates } : null;
+    };
+
+    // 使用回溯法生成完整有效底盤
+    const fillBoard = (board) => {
+        const cell = findBestEmptyCell(board);
+        if (!cell) return true;
+        if (cell.candidates.length === 0) return false;
+
+        const nums = shuffleArray(cell.candidates.slice());
+        for (let num of nums) {
+            board[cell.r][cell.c] = num;
+            if (fillBoard(board)) return true;
+            board[cell.r][cell.c] = 0;
+        }
+        return false;
+    };
+
+    // 計算解法數量；limit=2 已足夠判斷「唯一 / 多解」。
+    const countSolutions = (board, limit = 2) => {
+        const cell = findBestEmptyCell(board);
+        if (!cell) return 1;
+        if (cell.candidates.length === 0) return 0;
+
+        let count = 0;
+        for (let num of cell.candidates) {
+            board[cell.r][cell.c] = num;
+            count += countSolutions(board, limit);
+            board[cell.r][cell.c] = 0;
+            if (count >= limit) return count;
+        }
+        return count;
     };
 
     const generateSudoku = (difficulty) => {
         let board = Array(9).fill().map(() => Array(9).fill(0));
-        fillBoard(board); // 生成完整答案
-        
+        fillBoard(board);
         const solution = cloneState(board);
-        const blanks = BLANK_COUNTS[difficulty];
+
+        const targetBlanks = DIFFICULTY_CONFIG[difficulty]?.blanks || DIFFICULTY_CONFIG.NORMAL.blanks;
         let cells = [];
         for(let r=0; r<9; r++) for(let c=0; c<9; c++) cells.push({r,c});
         cells = shuffleArray(cells);
 
-        // 挖洞
-        for (let i = 0; i < blanks; i++) {
-            board[cells[i].r][cells[i].c] = 0;
+        let blanksMade = 0;
+        for (let cell of cells) {
+            if (blanksMade >= targetBlanks) break;
+            const backup = board[cell.r][cell.c];
+            board[cell.r][cell.c] = 0;
+
+            const testBoard = cloneState(board);
+            const solutionCount = countSolutions(testBoard, 2);
+            if (solutionCount === 1) {
+                blanksMade++;
+            } else {
+                board[cell.r][cell.c] = backup;
+            }
         }
 
-        // 轉換為遊戲用嘅 Object 結構
         let gameBoard = Array(9).fill().map(() => Array(9).fill(null));
         for (let r = 0; r < 9; r++) {
             for (let c = 0; c < 9; c++) {
@@ -144,11 +198,12 @@
                 gameBoard[r][c] = {
                     value: val === 0 ? null : val,
                     isFixed: val !== 0,
-                    notes: [] // 1-9
+                    notes: [],
+                    isHintNote: false
                 };
             }
         }
-        return { initialBoard: gameBoard, solution };
+        return { initialBoard: gameBoard, solution, blanksMade };
     };
 
     // --- 遊戲邏輯 ---
@@ -156,7 +211,8 @@
       isMenuOpen = false;
       if (pendingSettings) settings = cloneState(pendingSettings);
       
-      const { initialBoard, solution } = generateSudoku(settings.difficulty);
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+      const { initialBoard, solution, blanksMade } = generateSudoku(settings.difficulty);
 
       gameState = {
         board: initialBoard,
@@ -166,21 +222,22 @@
         isNotesMode: false,
         startTime: Date.now(),
         elapsedStr: '00:00',
-        timerInterval: null,
-        isWon: false
+        isWon: false,
+        blanksMade: blanksMade,
+        hintCount: 0,
+        revealCount: 0
       };
       
       historyStack = [];
       
-      if (gameState.timerInterval) clearInterval(gameState.timerInterval);
-      gameState.timerInterval = setInterval(() => {
-          if(!gameState.isWon) {
-              const totalSecs = Math.floor((Date.now() - gameState.startTime) / 1000);
-              const m = String(Math.floor(totalSecs / 60)).padStart(2, '0');
-              const s = String(totalSecs % 60).padStart(2, '0');
-              gameState.elapsedStr = `${m}:${s}`;
-              document.getElementById('timer-display').innerText = gameState.elapsedStr;
-          }
+      timerInterval = setInterval(() => {
+          if(!gameState || gameState.isWon) return;
+          const totalSecs = Math.floor((Date.now() - gameState.startTime) / 1000);
+          const m = String(Math.floor(totalSecs / 60)).padStart(2, '0');
+          const s = String(totalSecs % 60).padStart(2, '0');
+          gameState.elapsedStr = `${m}:${s}`;
+          const timerEl = document.getElementById('timer-display');
+          if (timerEl) timerEl.innerText = gameState.elapsedStr;
       }, 1000);
 
       render();
@@ -225,6 +282,48 @@
         return true;
     };
 
+
+    const removeRelatedNotes = (r, c, num) => {
+        const touched = new Set();
+        for (let i = 0; i < 9; i++) {
+            touched.add(`${r},${i}`);
+            touched.add(`${i},${c}`);
+        }
+        const br = 3 * Math.floor(r / 3);
+        const bc = 3 * Math.floor(c / 3);
+        for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 3; j++) touched.add(`${br+i},${bc+j}`);
+        }
+        touched.delete(`${r},${c}`);
+        touched.forEach(key => {
+            const [rr, cc] = key.split(',').map(Number);
+            const notes = gameState.board[rr][cc].notes;
+            const idx = notes.indexOf(num);
+            if (idx > -1) notes.splice(idx, 1);
+        });
+    };
+
+    const getCellCandidatesFromCurrentBoard = (r, c) => {
+        const cell = gameState.board[r][c];
+        if (cell.isFixed || cell.value) return [];
+        const simpleBoard = gameState.board.map(row => row.map(cell => cell.value || 0));
+        return getCandidates(simpleBoard, r, c);
+    };
+
+    const findBestHintCell = () => {
+        let best = null;
+        for (let r = 0; r < 9; r++) {
+            for (let c = 0; c < 9; c++) {
+                const cell = gameState.board[r][c];
+                if (cell.isFixed || cell.value === gameState.solution[r][c]) continue;
+                const candidates = getCellCandidatesFromCurrentBoard(r, c);
+                const weight = candidates.length || 10;
+                if (!best || weight < best.weight) best = { r, c, candidates, weight };
+            }
+        }
+        return best;
+    };
+
     const fillCell = (r, c, num) => {
         const cell = gameState.board[r][c];
         if (cell.isFixed) return;
@@ -234,6 +333,7 @@
         if (gameState.isNotesMode) {
             // 切換草稿數字
             if (cell.value !== null) cell.value = null; // 如果本身有大字，清空
+            cell.isHintNote = false;
             const noteIdx = cell.notes.indexOf(num);
             if (noteIdx > -1) cell.notes.splice(noteIdx, 1);
             else { cell.notes.push(num); cell.notes.sort(); }
@@ -243,12 +343,14 @@
             else {
                 cell.value = num;
                 cell.notes = []; // 輸入大字就清空草稿
+                cell.isHintNote = false;
+                removeRelatedNotes(r, c, num); // 自動清走同 row / col / box 嘅相關草稿
             }
         }
 
         if (checkWinCondition()) {
             gameState.isWon = true;
-            clearInterval(gameState.timerInterval);
+            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
         }
     };
 
@@ -302,6 +404,7 @@
         historyStack.push(cloneState(gameState.board));
         gameState.board[r][c].value = null;
         gameState.board[r][c].notes = [];
+        gameState.board[r][c].isHintNote = false;
         gameState.selectedCell = null; // 填完/清除完取消 Select
         render();
     };
@@ -311,20 +414,49 @@
         render();
     };
 
+    // Hint：唔直接爆答案，優先幫選中格填候選 notes；未選格就自動揀一格最有教學價值嘅空格。
     window.useHint = () => {
-        if (gameState.isWon || !gameState.selectedCell) return;
-        const {r, c} = gameState.selectedCell;
+        if (gameState.isWon) return;
+        let target = gameState.selectedCell;
+        if (!target) target = findBestHintCell();
+        if (!target) return;
+
+        const {r, c} = target;
+        const cell = gameState.board[r][c];
+        if (cell.isFixed || cell.value === gameState.solution[r][c]) return;
+
+        const candidates = getCellCandidatesFromCurrentBoard(r, c);
+        historyStack.push(cloneState(gameState.board));
+        cell.notes = candidates.length ? candidates : [gameState.solution[r][c]];
+        cell.isHintNote = true;
+        gameState.selectedCell = {r, c};
+        gameState.selectedNumber = null;
+        gameState.hintCount++;
+        render();
+    };
+
+    // Reveal：直接填入答案，等於原本「提示」嘅行為，但命名更準確。
+    window.revealCell = () => {
+        if (gameState.isWon) return;
+        let target = gameState.selectedCell;
+        if (!target) target = findBestHintCell();
+        if (!target) return;
+
+        const {r, c} = target;
         const cell = gameState.board[r][c];
         if (cell.isFixed || cell.value === gameState.solution[r][c]) return;
 
         historyStack.push(cloneState(gameState.board));
         cell.value = gameState.solution[r][c];
         cell.notes = [];
-        gameState.selectedCell = null; // 填完取消 Select
-        
+        cell.isHintNote = false;
+        removeRelatedNotes(r, c, cell.value);
+        gameState.selectedCell = null;
+        gameState.selectedNumber = null;
+        gameState.revealCount++;
         if (checkWinCondition()) {
             gameState.isWon = true;
-            clearInterval(gameState.timerInterval);
+            if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
         }
         render();
     };
@@ -343,7 +475,7 @@
     window.toggleRule = () => { isRuleOpen = !isRuleOpen; render(); };
 
     const updateMenuDOM = () => {
-        const diffs = ['EASY', 'NORMAL', 'HARD'];
+        const diffs = ['EASY', 'NORMAL', 'HARD', 'EXPERT'];
         diffs.forEach(d => {
             const btn = document.getElementById(`btn-diff-${d}`);
             if (btn) {
@@ -375,10 +507,11 @@
 
             <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-4">
               <div class="text-neutral-500 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase">DIFFICULTY 難度選擇</div>
-              <div class="flex w-full gap-2 lg:gap-3">
-                <button id="btn-diff-EASY" onclick="window.setDifficulty('EASY')" class="flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.1em] uppercase key-base ${pendingSettings.difficulty === 'EASY' ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900'}">新手 Easy</button>
-                <button id="btn-diff-NORMAL" onclick="window.setDifficulty('NORMAL')" class="flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.1em] uppercase key-base ${pendingSettings.difficulty === 'NORMAL' ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900'}">普通 Normal</button>
-                <button id="btn-diff-HARD" onclick="window.setDifficulty('HARD')" class="flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.1em] uppercase key-base ${pendingSettings.difficulty === 'HARD' ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900'}">大師 Hard</button>
+              <div class="grid grid-cols-2 lg:grid-cols-4 w-full gap-2 lg:gap-3">
+                <button id="btn-diff-EASY" onclick="window.setDifficulty('EASY')" class="py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[13px] tracking-[0.1em] uppercase key-base ${pendingSettings.difficulty === 'EASY' ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900'}">新手 Easy</button>
+                <button id="btn-diff-NORMAL" onclick="window.setDifficulty('NORMAL')" class="py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[13px] tracking-[0.1em] uppercase key-base ${pendingSettings.difficulty === 'NORMAL' ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900'}">普通 Normal</button>
+                <button id="btn-diff-HARD" onclick="window.setDifficulty('HARD')" class="py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[13px] tracking-[0.1em] uppercase key-base ${pendingSettings.difficulty === 'HARD' ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900'}">大師 Hard</button>
+                <button id="btn-diff-EXPERT" onclick="window.setDifficulty('EXPERT')" class="py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[13px] tracking-[0.1em] uppercase key-base ${pendingSettings.difficulty === 'EXPERT' ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900'}">專家 Expert</button>
               </div>
             </div>
             
@@ -407,7 +540,7 @@
                     <div>
                         <div class="text-white font-bold mb-1.5 flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-blue-500"></div>【工具運用】</div>
                         <div class="pl-3.5 space-y-1">
-                            <div>• <span class="text-blue-400 font-bold">草稿 (Notes)</span>：按「📝」切換，可以喺同一格記低多個可能嘅數字。</div>
+                            <div>• <span class="text-blue-400 font-bold">草稿 (Notes)</span>：按 <img src="./assets/edit.svg" alt="Notes" class="inline-block h-[14px] mx-1 align-[-2px] icon-white" onerror="this.outerHTML='📝'"> 切換，可以喺同一格記低多個可能嘅數字。</div>
                             <div>• <span class="text-red-400 font-bold">錯誤提示</span>：當輸入發生衝突，格仔會變成紅色。</div>
                         </div>
                     </div>
@@ -471,8 +604,15 @@
               if (cell.value) {
                   cellContent = `<span class="${cell.isFixed ? '' : 'anim-pop'}">${cell.value}</span>`;
               } else if (cell.notes.length > 0) {
-                  // 草稿數字：淡色、斜體、稍微加粗(font-normal)、防截斷(加 padding px-1)
-                  cellContent = `<span class="text-[#64748b]/60 italic font-normal tracking-tighter whitespace-nowrap overflow-hidden text-ellipsis w-full text-center px-1">${cell.notes.join('')}</span>`;
+                  const noteSet = new Set(cell.notes);
+                  let noteHTML = '';
+                  for (let n = 1; n <= 9; n++) {
+                      noteHTML += `<span class="flex items-center justify-center">${noteSet.has(n) ? n : ''}</span>`;
+                  }
+                  const noteClass = cell.isHintNote
+                      ? 'text-white font-semibold text-[12px] sm:text-[13px] lg:text-[14px]'
+                      : 'text-[#38bdf8] font-normal text-[11px] sm:text-[12px] lg:text-[13px]';
+                  cellContent = `<div class="grid grid-cols-3 grid-rows-3 w-full h-full p-0.5 lg:p-1 leading-none ${noteClass}">${noteHTML}</div>`;
               }
 
               boardHTML += `
@@ -490,7 +630,8 @@
       if (gameState.isWon) {
           winBanner = `<div class="absolute inset-0 z-40 bg-black/80 flex flex-col items-center justify-center animate-fade-in backdrop-blur-sm">
              <div class="text-3xl lg:text-4xl font-bold text-white tracking-[0.2em] mb-4">PUZZLE SOLVED</div>
-             <div class="text-blue-400 tracking-widest uppercase mb-8">用時 TIME: ${gameState.elapsedStr}</div>
+             <div class="text-blue-400 tracking-widest uppercase mb-2">用時 TIME: ${gameState.elapsedStr}</div>
+             <div class="text-neutral-500 tracking-widest uppercase mb-8 text-xs">HINT ${gameState.hintCount} | REVEAL ${gameState.revealCount}</div>
              <button onclick="window.openMenu()" class="px-8 py-3 bg-white text-black font-bold tracking-[0.1em] rounded-lg hover:bg-neutral-200 transition-colors">再玩一局 PLAY AGAIN</button>
           </div>`;
       }
@@ -509,15 +650,18 @@
          <button onclick="window.clearCell()" class="aspect-square flex items-center justify-center rounded-lg bg-[#111] border border-neutral-800 hover:bg-[#1a1a1a] hover:border-neutral-600 active:bg-neutral-800 transition-colors text-neutral-400"><span class="text-2xl lg:text-3xl leading-none">⌫</span></button>
       </div>`;
 
-      const modeStr = gameState.isNotesMode ? "bg-blue-600/20 border-blue-500/50 text-blue-400" : "bg-[#111] border-neutral-800 hover:bg-[#1a1a1a] hover:border-neutral-600 text-neutral-400";
+      const modeStr = gameState.isNotesMode ? "bg-blue-600/20 border-blue-500/50 text-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.18)]" : "bg-[#111] border-neutral-800 hover:bg-[#1a1a1a] hover:border-neutral-600 text-neutral-400";
       
       const toolsHTML = `
-      <div class="flex items-center justify-between w-full max-w-[400px] mb-4">
-          <button onclick="window.useHint()" class="flex-1 py-3 flex items-center justify-center rounded-lg bg-[#111] border border-neutral-800 hover:bg-[#1a1a1a] hover:border-neutral-600 transition-colors text-neutral-400 gap-2 text-xs tracking-widest uppercase mx-1">
-             <img src="./assets/ai.svg" alt="HINT" class="h-[14px] lg:h-[16px] object-contain opacity-70 icon-white" onerror="this.outerHTML='💡'"> 提示
+      <div class="grid grid-cols-3 gap-2 lg:gap-3 w-full max-w-[400px] mb-3 lg:mb-4">
+          <button onclick="window.useHint()" class="min-h-[48px] lg:min-h-[52px] py-3.5 lg:py-4 flex items-center justify-center rounded-lg bg-[#111] border border-neutral-800 hover:bg-[#1a1a1a] hover:border-neutral-600 transition-colors text-neutral-300 gap-1.5 lg:gap-2 text-[12px] lg:text-[13px] font-medium tracking-[0.12em] uppercase">
+             <img src="./assets/ai.svg" alt="HINT" class="h-[16px] lg:h-[18px] object-contain opacity-80 icon-white" onerror="this.outerHTML='💡'"> Hint
           </button>
-          <button onclick="window.toggleNotes()" class="flex-1 py-3 flex items-center justify-center rounded-lg border transition-colors gap-2 text-xs tracking-widest uppercase mx-1 ${modeStr}">
-             <img src="./assets/edit.svg" alt="EDIT" class="h-[14px] lg:h-[16px] object-contain ${gameState.isNotesMode ? 'icon-hint-active' : 'icon-white opacity-70'}" onerror="this.outerHTML='📝'"> 草稿 ${gameState.isNotesMode ? 'ON' : 'OFF'}
+          <button onclick="window.toggleNotes()" class="min-h-[48px] lg:min-h-[52px] py-3.5 lg:py-4 flex items-center justify-center rounded-lg border transition-colors gap-1.5 lg:gap-2 text-[12px] lg:text-[13px] font-medium tracking-[0.12em] uppercase ${modeStr}">
+             <img src="./assets/edit.svg" alt="EDIT" class="h-[16px] lg:h-[18px] object-contain ${gameState.isNotesMode ? 'icon-hint-active' : 'icon-white opacity-80'}" onerror="this.outerHTML='📝'"> Notes
+          </button>
+          <button onclick="window.revealCell()" class="min-h-[48px] lg:min-h-[52px] py-3.5 lg:py-4 flex items-center justify-center rounded-lg bg-[#111] border border-red-900/40 hover:bg-red-950/30 hover:border-red-700/60 transition-colors text-red-400 gap-1.5 lg:gap-2 text-[12px] lg:text-[13px] font-medium tracking-[0.12em] uppercase">
+             <span>答案</span>
           </button>
       </div>
       `;
@@ -539,7 +683,7 @@
           <div class="px-4 lg:px-5 lg:absolute lg:top-[85px] lg:left-12 z-20 pointer-events-none mt-1 lg:mt-0 flex flex-row lg:flex-col justify-between items-end lg:items-start">
             <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase">
               數獨<br>
-              難度 <span class="text-white">${settings.difficulty}</span>
+              難度 <span class="text-white">${DIFFICULTY_CONFIG[settings.difficulty]?.label || settings.difficulty}</span><br>空格 <span class="text-white">${gameState.blanksMade}</span>
             </div>
             <div id="timer-display" class="text-white font-mono text-[14px] lg:text-[20px] lg:mt-2 tracking-widest">${gameState.elapsedStr}</div>
           </div>
