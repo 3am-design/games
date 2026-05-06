@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Games - 四子棋</title>
+  <!-- 引入 Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Noto+Sans+TC:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+  <!-- 引入 Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      future: { hoverOnlyWhenSupported: true },
+      theme: {
+        extend: {
+          colors: {
+            'c4-red': '#ef4444',
+            'c4-red-border': '#b91c1c',
+            'c4-yellow': '#facc15',
+            'c4-yellow-border': '#ca8a04',
+            'c4-board': '#1e293b',
+            'c4-board-border': '#0f172a'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+    
+    @keyframes pulse-fast { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .animate-thinking { animation: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+    /* --- 落子「重力下墜」動畫 --- */
+    @keyframes dropInAnim { 
+        0% { transform: translateY(-300px); opacity: 0; } 
+        60% { transform: translateY(15px); opacity: 1; } 
+        80% { transform: translateY(-5px); opacity: 1; } 
+        100% { transform: translateY(0); opacity: 1; } 
+    }
+    .anim-drop-in { animation: dropInAnim 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+
+    /* --- 擲先後 3D 硬幣動畫 --- */
+    .coin-scene { perspective: 800px; width: 100px; height: 100px; }
+    @media (min-width: 1024px) { .coin-scene { width: 120px; height: 120px; } }
+    .coin-wrapper { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; }
+    .coin-face { position: absolute; width: 100%; height: 100%; border-radius: 50%; backface-visibility: hidden; display: flex; align-items: center; justify-content: center; font-weight: bold; font-family: 'Noto Sans TC', sans-serif; font-size: 2.25rem; border: 4px solid; }
+    @media (min-width: 1024px) { .coin-face { font-size: 3rem; } }
+    .coin-front { background: #ef4444; color: #fff; border-color: #b91c1c; transform: rotateY(0deg); }
+    .coin-back { background: #facc15; color: #111; border-color: #ca8a04; transform: rotateY(180deg); }
+
+    .coin-face::before { content: ''; position: absolute; inset: 10%; border: 3px solid; border-radius: 50%; opacity: 0.4; pointer-events: none; }
+    .coin-face::after { content: ''; position: absolute; inset: 32%; border: 1px solid; border-radius: 50%; opacity: 0.3; pointer-events: none; }
+    .coin-front::before, .coin-front::after { border-color: #b91c1c; }
+    .coin-back::before, .coin-back::after { border-color: #ca8a04; }
+
+    @keyframes flipToRed {
+      0% { transform: rotateY(0deg) scale(1); }
+      50% { transform: rotateY(1800deg) scale(1.4); }
+      100% { transform: rotateY(3600deg) scale(1); }
+    }
+    @keyframes flipToYellow {
+      0% { transform: rotateY(0deg) scale(1); }
+      50% { transform: rotateY(1890deg) scale(1.4); }
+      100% { transform: rotateY(3780deg) scale(1); }
+    }
+    .anim-flip-red { animation: flipToRed 2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+    .anim-flip-yellow { animation: flipToYellow 2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+
+    @keyframes fadeInDelayed {
+      0%, 75% { opacity: 0; transform: translateY(10px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    .anim-fade-in-delayed { animation: fadeInDelayed 2.2s ease-out forwards; }
+
+    html, body { 
+      overscroll-behavior-y: none; 
+      background-color: #000000; 
+      font-family: 'Inter', sans-serif;
+      color: #ffffff;
+      height: 100%;
+      height: -webkit-fill-available;
+      overflow: hidden;
+      margin: 0;
+      touch-action: manipulation;
+    }
+    
+    .app-container { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    button { -webkit-tap-highlight-color: transparent; outline: none; touch-action: manipulation; }
+
+    svg { -webkit-tap-highlight-color: transparent; }
+
+    .key-base { transition: background-color 0.2s ease-out, color 0.2s ease-out, border-color 0.2s, opacity 0.2s; }
+    .key-base:active { opacity: 0.5; transition: none; }
+    
+    .icon-white { filter: brightness(0) invert(1); }
+    .icon-hint-active { filter: brightness(0) saturate(100%) invert(48%) sepia(90%) saturate(3362%) hue-rotate(206deg) brightness(102%) contrast(94%); }
+  </style>
+</head>
+<body class="bg-black selection:bg-white/30">
+
+  <div id="app" class="app-container"></div>
+
+  <script>
+    const AI_NAMES = ['呂布', '趙雲', '關羽', '張飛', '諸葛亮', '曹操', '司馬懿', '周瑜', '孫權', '馬超', '黃忠', '典韋', '夏侯惇', '張遼', '甘寧', '太史慈', '董卓', '陸遜'];
+
+    const cloneState = (state) => JSON.parse(JSON.stringify(state));
+
+    let gameState = null;
+    let historyStack = [];
+    let isMenuOpen = true;
+    let menuJustOpened = true;
+    let isRecordOpen = false;
+    let matchHistory = []; 
+    let selectedHistoryMatch = null;
+    
+    let isHintMode = false;
+    let currentHints = [];
+
+    // 四子棋設定：7x6 標準
+    const COLS = 7;
+    const ROWS = 6;
+
+    let settings = {
+      mode: 'PvE', 
+      aiDifficulty: 5, 
+      firstMove: 'PLAYER', 
+      playerColor: 'R', // R: Red, Y: Yellow
+      player1Name: '',
+      player2Name: ''
+    };
+    let pendingSettings = cloneState(settings);
+
+    const loadHistory = () => {
+      try {
+        const saved = localStorage.getItem('connect4_history');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) matchHistory = parsed;
+        }
+      } catch (e) {
+        matchHistory = [];
+      }
+    };
+
+    const saveHistory = () => {
+      try { localStorage.setItem('connect4_history', JSON.stringify(matchHistory)); } catch (e) {}
+    };
+
+    const recordFinishedGame = () => {
+      if (!gameState || !gameState.winner) return;
+      const newMatchRecord = {
+        id: Date.now(),
+        timestamp: new Date().toLocaleString(),
+        settings: cloneState(settings),
+        gameLog: cloneState(gameState.gameLog),
+        winner: gameState.winner
+      };
+      matchHistory.unshift(newMatchRecord); 
+      if (matchHistory.length > 50) matchHistory.pop(); 
+      saveHistory();
+    };
+
+    // 初始化 7x6 棋盤 (y=0 係頂部, y=5 係底部)
+    const getInitialBoard = () => {
+      return Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
+    };
+
+    // --- 核心邏輯：四子棋規則 ---
+    const checkWin = (board, color) => {
+        // 水平檢查
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS - 3; c++) {
+                if (board[r][c] === color && board[r][c+1] === color && 
+                    board[r][c+2] === color && board[r][c+3] === color) {
+                    return true;
+                }
+            }
+        }
+        // 垂直檢查
+        for (let r = 0; r < ROWS - 3; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (board[r][c] === color && board[r+1][c] === color && 
+                    board[r+2][c] === color && board[r+3][c] === color) {
+                    return true;
+                }
+            }
+        }
+        // 正對角線檢查
+        for (let r = 0; r < ROWS - 3; r++) {
+            for (let c = 0; c < COLS - 3; c++) {
+                if (board[r][c] === color && board[r+1][c+1] === color && 
+                    board[r+2][c+2] === color && board[r+3][c+3] === color) {
+                    return true;
+                }
+            }
+        }
+        // 反對角線檢查
+        for (let r = 3; r < ROWS; r++) {
+            for (let c = 0; c < COLS - 3; c++) {
+                if (board[r][c] === color && board[r-1][c+1] === color && 
+                    board[r-2][c+2] === color && board[r-3][c+3] === color) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+
+    // 取得可以落子嘅列 (Column)
+    const getValidMoves = (board) => {
+        let validMoves = [];
+        for (let c = 0; c < COLS; c++) {
+            if (board[0][c] === null) {
+                validMoves.push(c);
+            }
+        }
+        return validMoves;
+    };
+
+    // 取得某一列最底層可以落子嘅 Row Index
+    const getRowForColumn = (board, col) => {
+        for (let r = ROWS - 1; r >= 0; r--) {
+            if (board[r][col] === null) return r;
+        }
+        return -1;
+    };
+
+    const doMove = (board, col, color) => {
+        const row = getRowForColumn(board, col);
+        if (row !== -1) {
+            board[row][col] = color;
+            return row;
+        }
+        return -1;
+    };
+
+    const undoMove = (board, col) => {
+        for (let r = 0; r < ROWS; r++) {
+            if (board[r][col] !== null) {
+                board[r][col] = null;
+                break;
+            }
+        }
+    };
+
+
+    // --- 戰術層：四子棋嘅基本理性（所有 LV / Hint 都應該識） ---
+    const CENTER_FIRST_COLS = [3, 4, 2, 5, 1, 6, 0];
+
+    const getCenterFirstMoves = (board) => {
+        const validMoves = getValidMoves(board);
+        return CENTER_FIRST_COLS.filter(c => validMoves.includes(c));
+    };
+
+    const getWinningColumns = (board, color) => {
+        const wins = [];
+        const validMoves = getValidMoves(board);
+        for (let col of validMoves) {
+            doMove(board, col, color);
+            const isWin = checkWin(board, color);
+            undoMove(board, col);
+            if (isWin) wins.push(col);
+        }
+        return wins;
+    };
+
+    const givesOpponentImmediateWin = (board, col, color) => {
+        const oppColor = color === 'R' ? 'Y' : 'R';
+        doMove(board, col, color);
+        const oppWins = getWinningColumns(board, oppColor);
+        undoMove(board, col);
+        return oppWins.length > 0;
+    };
+
+    const getSafeMoves = (board, validMoves, color) => {
+        const safeMoves = validMoves.filter(col => !givesOpponentImmediateWin(board, col, color));
+        return safeMoves.length > 0 ? safeMoves : validMoves;
+    };
+
+    const getTacticalColumns = (board, color) => {
+        const oppColor = color === 'R' ? 'Y' : 'R';
+        const myWins = getWinningColumns(board, color);
+        if (myWins.length > 0) return { type: 'win', cols: myWins };
+
+        const oppWins = getWinningColumns(board, oppColor);
+        if (oppWins.length > 0) return { type: 'block', cols: oppWins };
+
+        return null;
+    };
+
+    // --- 陣型評估器 (四子棋 AI 靈魂) ---
+    const evaluateWindow = (window, myColor) => {
+        let score = 0;
+        const oppColor = myColor === 'R' ? 'Y' : 'R';
+        let myCount = 0;
+        let oppCount = 0;
+        let emptyCount = 0;
+
+        for (let i = 0; i < 4; i++) {
+            if (window[i] === myColor) myCount++;
+            else if (window[i] === oppColor) oppCount++;
+            else emptyCount++;
+        }
+
+        // 四子棋核心：即勝 > 必封 > 建立威脅。防守三連要比普通進攻更重。
+        if (myCount === 4) score += 100000;
+        else if (myCount === 3 && emptyCount === 1) score += 1200;
+        else if (myCount === 2 && emptyCount === 2) score += 80;
+        else if (myCount === 1 && emptyCount === 3) score += 3;
+
+        if (oppCount === 4) score -= 100000;
+        else if (oppCount === 3 && emptyCount === 1) score -= 1500;
+        else if (oppCount === 2 && emptyCount === 2) score -= 90;
+        else if (oppCount === 1 && emptyCount === 3) score -= 3;
+
+        return score;
+    };
+
+    const evaluateBoardState = (board, myColor) => {
+        let score = 0;
+
+        // 偏好中間列
+        let centerArray = [];
+        for (let r = 0; r < ROWS; r++) centerArray.push(board[r][3]);
+        let centerCount = centerArray.filter(c => c === myColor).length;
+        score += centerCount * 30;
+
+        // 水平評估
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS - 3; c++) {
+                let window = [board[r][c], board[r][c+1], board[r][c+2], board[r][c+3]];
+                score += evaluateWindow(window, myColor);
+            }
+        }
+        // 垂直評估
+        for (let r = 0; r < ROWS - 3; r++) {
+            for (let c = 0; c < COLS; c++) {
+                let window = [board[r][c], board[r+1][c], board[r+2][c], board[r+3][c]];
+                score += evaluateWindow(window, myColor);
+            }
+        }
+        // 對角線評估
+        for (let r = 0; r < ROWS - 3; r++) {
+            for (let c = 0; c < COLS - 3; c++) {
+                let window = [board[r][c], board[r+1][c+1], board[r+2][c+2], board[r+3][c+3]];
+                score += evaluateWindow(window, myColor);
+            }
+        }
+        // 反對角線評估
+        for (let r = 3; r < ROWS; r++) {
+            for (let c = 0; c < COLS - 3; c++) {
+                let window = [board[r][c], board[r-1][c+1], board[r-2][c+2], board[r-3][c+3]];
+                score += evaluateWindow(window, myColor);
+            }
+        }
+
+        return score;
+    };
+
+    // Alpha-Beta Minimax
+    const minimax = (board, depth, alpha, beta, isMaximizing, myColor, oppColor) => {
+        const isWin = checkWin(board, myColor);
+        const isOppWin = checkWin(board, oppColor);
+        const validMoves = getValidMoves(board);
+
+        if (depth === 0 || validMoves.length === 0 || isWin || isOppWin) {
+            if (isWin) return 10000000 + depth; // 越快贏越好
+            if (isOppWin) return -10000000 - depth;
+            if (validMoves.length === 0) return 0;
+            return evaluateBoardState(board, myColor);
+        }
+
+        // 為了提升效率，先搜尋中間的列
+        const centerFirstMoves = [3, 4, 2, 5, 1, 6, 0].filter(c => validMoves.includes(c));
+
+        if (isMaximizing) {
+            let maxEval = -Infinity;
+            for (let col of centerFirstMoves) {
+                doMove(board, col, myColor);
+                let evalScore = minimax(board, depth - 1, alpha, beta, false, myColor, oppColor);
+                undoMove(board, col);
+                maxEval = Math.max(maxEval, evalScore);
+                alpha = Math.max(alpha, evalScore);
+                if (beta <= alpha) break;
+            }
+            return maxEval;
+        } else {
+            let minEval = Infinity;
+            for (let col of centerFirstMoves) {
+                doMove(board, col, oppColor);
+                let evalScore = minimax(board, depth - 1, alpha, beta, true, myColor, oppColor);
+                undoMove(board, col);
+                minEval = Math.min(minEval, evalScore);
+                beta = Math.min(beta, evalScore);
+                if (beta <= alpha) break;
+            }
+            return minEval;
+        }
+    };
+
+    const calculateAIMove = () => {
+        const diff = settings.aiDifficulty;
+        const aiColor = gameState.turn;
+        const oppColor = aiColor === 'R' ? 'Y' : 'R';
+        let validMoves = getValidMoves(gameState.board);
+        
+        if (validMoves.length === 0) return null;
+
+        // 戰術層必須放喺難度 / random 之前：有得贏即贏，對手會贏即封。
+        const tactical = getTacticalColumns(gameState.board, aiColor);
+        if (tactical) {
+            const ordered = CENTER_FIRST_COLS.filter(c => tactical.cols.includes(c));
+            return ordered.length > 0 ? ordered[0] : tactical.cols[0];
+        }
+
+        // 難度對應搜尋深度
+        let searchDepth = 1;
+        let randomness = 0;
+        if (diff <= 3) { searchDepth = 2; randomness = 0.4; }
+        else if (diff <= 6) { searchDepth = 4; randomness = 0.15; }
+        else if (diff <= 10) { searchDepth = 6; randomness = 0.02; }
+        else if (diff <= 13) { searchDepth = 8; }
+        else { searchDepth = 9; }
+
+        // 低 LV 可以短視，但唔應該一手送對方即勝。
+        if (randomness > 0 && Math.random() < randomness) {
+            const safeMoves = getSafeMoves(gameState.board, validMoves, aiColor);
+            const orderedSafeMoves = CENTER_FIRST_COLS.filter(c => safeMoves.includes(c));
+            const pool = orderedSafeMoves.length > 0 ? orderedSafeMoves : safeMoves;
+            return pool[Math.floor(Math.random() * pool.length)];
+        }
+
+        let bestScore = -Infinity;
+        let bestCols = [];
+        const centerFirstMoves = getCenterFirstMoves(gameState.board);
+
+        for (let col of centerFirstMoves) {
+            // 避免一手送對方即勝；如果無其他選擇，minimax 仍會處理。
+            const unsafePenalty = givesOpponentImmediateWin(gameState.board, col, aiColor) ? 999999 : 0;
+
+            doMove(gameState.board, col, aiColor);
+            let score = minimax(gameState.board, searchDepth, -Infinity, Infinity, false, aiColor, oppColor);
+            undoMove(gameState.board, col);
+
+            score -= unsafePenalty;
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestCols = [col];
+            } else if (score === bestScore) {
+                bestCols.push(col);
+            }
+        }
+        
+        return bestCols[Math.floor(Math.random() * bestCols.length)];
+    };
+
+    const triggerAI = () => {
+       const bestCol = calculateAIMove();
+       if (bestCol !== null) {
+          gameState.isThinking = false;
+          performMove(bestCol);
+       }
+    };
+
+    // --- 計算 AI 提示 (Hint Mode) ---
+    const updateHintsLogic = () => {
+        if (!isHintMode || !gameState || gameState.winner || gameState.isThinking || gameState.isTossing) {
+            currentHints = [];
+            return;
+        }
+        if (settings.mode === 'PvE' && gameState.turn !== settings.playerColor) {
+            currentHints = [];
+            return;
+        }
+
+        const color = gameState.turn;
+        const oppColor = color === 'R' ? 'Y' : 'R';
+        const validMoves = getValidMoves(gameState.board);
+        if (validMoves.length === 0) { currentHints = []; return; }
+
+        // Coach AI：危急局面只顯示唯一正解類型；普通局面顯示最佳 1–3 步。
+        const tactical = getTacticalColumns(gameState.board, color);
+        if (tactical) {
+            const ordered = CENTER_FIRST_COLS.filter(c => tactical.cols.includes(c));
+            currentHints = (ordered.length > 0 ? ordered : tactical.cols).slice(0, 3);
+            return;
+        }
+
+        let evaluatedMoves = [];
+        const centerFirstMoves = getCenterFirstMoves(gameState.board);
+
+        for (let col of centerFirstMoves) {
+            doMove(gameState.board, col, color);
+            let score = minimax(gameState.board, 6, -Infinity, Infinity, false, color, oppColor);
+            undoMove(gameState.board, col);
+
+            // Hint 不推薦會即刻送輸嘅假好棋。
+            if (givesOpponentImmediateWin(gameState.board, col, color)) {
+                score -= 999999;
+            }
+
+            evaluatedMoves.push({ col, score });
+        }
+
+        evaluatedMoves.sort((a, b) => b.score - a.score);
+        currentHints = evaluatedMoves.slice(0, 3).map(item => item.col);
+    };
+
+    window.toggleHintMode = () => {
+        isHintMode = !isHintMode;
+        if (isHintMode && gameState && !gameState.winner && !gameState.isThinking && !gameState.isTossing && getValidMoves(gameState.board).length > 0) {
+            gameState.isCalculatingHints = true;
+            render();
+            setTimeout(() => {
+                updateHintsLogic();
+                gameState.isCalculatingHints = false;
+                render();
+            }, 10);
+        } else {
+            currentHints = [];
+            render();
+        }
+    };
+
+    // --- 動畫與核心流程 ---
+    const performMove = (col) => {
+        const row = getRowForColumn(gameState.board, col);
+        if (row === -1) return;
+
+        historyStack.push(cloneState(gameState));
+        
+        const turnColor = gameState.turn;
+        const logEntry = { turn: turnColor, desc: `落子 第 ${col + 1} 列` };
+        gameState.gameLog.push(logEntry);
+
+        gameState.board[row][col] = turnColor;
+        gameState.lastMove = { x: col, y: row };
+        
+        gameState.isAnimating = true; 
+        currentHints = []; 
+        
+        render(); 
+
+        setTimeout(() => {
+            gameState.isAnimating = false;
+            completeMoveLogic(turnColor);
+        }, 400); // 下墜動畫時間
+    };
+
+    const completeMoveLogic = (turnColor) => {
+        if (checkWin(gameState.board, turnColor)) {
+            gameState.winner = turnColor;
+        } else {
+            // Check Draw
+            if (getValidMoves(gameState.board).length === 0) {
+                gameState.winner = 'DRAW';
+            } else {
+                gameState.turn = gameState.turn === 'R' ? 'Y' : 'R';
+                if (gameState.turn === 'R') gameState.turnCount++;
+            }
+        }
+
+        if (gameState.winner) {
+            recordFinishedGame();
+            render();
+        } else if (settings.mode === 'PvE' && gameState.turn !== settings.playerColor) {
+            gameState.isThinking = true;
+            render();
+            setTimeout(triggerAI, 600);
+        } else {
+            if (isHintMode) {
+                gameState.isCalculatingHints = true;
+                render();
+                setTimeout(() => {
+                    updateHintsLogic();
+                    gameState.isCalculatingHints = false;
+                    render();
+                }, 10);
+            } else {
+                render();
+            }
+        }
+    };
+
+    // --- 互動與控制 ---
+    window.openMenu = () => { 
+        pendingSettings = cloneState(settings);
+        isMenuOpen = true; 
+        isRecordOpen = false;
+        render(); 
+    };
+
+    window.cancelMenu = () => { 
+        isMenuOpen = false; 
+        render(); 
+    };
+
+    const updateMenuDOM = () => {
+        const isPvE = pendingSettings.mode === 'PvE';
+        
+        const btnPve = document.getElementById('btn-mode-pve');
+        const btnPvp = document.getElementById('btn-mode-pvp');
+        if(btnPve) btnPve.className = `flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${isPvE ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}`;
+        if(btnPvp) btnPvp.className = `flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${!isPvE ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}`;
+        
+        const pveSettings = document.getElementById('pve-settings');
+        const emptySpace = document.getElementById('empty-space');
+        if(pveSettings) pveSettings.style.display = isPvE ? 'flex' : 'none';
+        if(emptySpace) emptySpace.style.display = isPvE ? 'none' : 'block';
+
+        const p2Input = document.getElementById('input-p2');
+        if(p2Input) p2Input.style.display = isPvE ? 'none' : 'block';
+        const p1Input = document.getElementById('input-p1');
+        if(p1Input) p1Input.placeholder = isPvE ? "你的名字" : "玩家 1 (紅)";
+
+        const btnFmPlayer = document.getElementById('btn-fm-player');
+        const btnFmAi = document.getElementById('btn-fm-ai');
+        const btnFmRandom = document.getElementById('btn-fm-random');
+        if(btnFmPlayer) btnFmPlayer.className = `flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === 'PLAYER' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}`;
+        if(btnFmAi) btnFmAi.className = `flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === 'AI' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}`;
+        if(btnFmRandom) btnFmRandom.className = `flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === 'RANDOM' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}`;
+
+        for (let i = 1; i <= 15; i++) {
+            const btn = document.getElementById(`btn-diff-${i}`);
+            if (btn) {
+                const isActive = i === pendingSettings.aiDifficulty;
+                let baseClass = "flex items-center justify-center py-2 lg:py-2.5 rounded text-[12px] lg:text-[14px] transition-colors key-base ";
+                if (i <= 10) {
+                    btn.className = baseClass + (isActive ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900 hover:text-white');
+                } else if (i <= 13) {
+                    btn.className = baseClass + (isActive ? 'bg-red-600 text-white font-bold border border-red-600 shadow-[0_0_10px_rgba(220,38,38,0.4)]' : 'bg-[#111] text-red-500/70 font-medium border border-red-900/50 hover:bg-red-950/30 hover:text-red-500');
+                } else {
+                    btn.className = baseClass + (isActive ? 'bg-purple-600 text-white font-bold border border-purple-600 shadow-[0_0_10px_rgba(147,51,234,0.5)]' : 'bg-[#111] text-purple-500/70 font-medium border border-purple-900/50 hover:bg-purple-900/30 hover:text-purple-400');
+                }
+            }
+        }
+
+        let diffLabel = "普通 (LV.5)";
+        if (pendingSettings.aiDifficulty <= 3) diffLabel = `新手 (LV.${pendingSettings.aiDifficulty})`;
+        else if (pendingSettings.aiDifficulty <= 7) diffLabel = `進階 (LV.${pendingSettings.aiDifficulty})`;
+        else if (pendingSettings.aiDifficulty <= 10) diffLabel = `大師 (LV.${pendingSettings.aiDifficulty})`;
+        else if (pendingSettings.aiDifficulty <= 13) diffLabel = `地獄 HELL (LV.${pendingSettings.aiDifficulty})`;
+        else diffLabel = `煉獄 PURGATORY (LV.${pendingSettings.aiDifficulty})`;
+        
+        const diffLabelEl = document.getElementById('ai-diff-label');
+        if (diffLabelEl) {
+            if (pendingSettings.aiDifficulty >= 14) diffLabelEl.className = 'text-purple-500 font-black tracking-widest drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]';
+            else if (pendingSettings.aiDifficulty > 10) diffLabelEl.className = 'text-red-500 font-black tracking-widest';
+            else diffLabelEl.className = 'text-white font-bold';
+            diffLabelEl.innerText = diffLabel;
+        }
+    };
+
+    window.setSetting = (key, value) => {
+        if (pendingSettings) {
+            pendingSettings[key] = value;
+            updateMenuDOM();
+        }
+    };
+
+    window.setPlayerName = (key, value) => {
+        if (pendingSettings) pendingSettings[key] = value;
+    };
+
+    window.setDifficulty = (val) => { 
+        if (pendingSettings) {
+            pendingSettings.aiDifficulty = val; 
+            updateMenuDOM();
+        }
+    };
+    
+    window.toggleRecord = () => { isRecordOpen = !isRecordOpen; selectedHistoryMatch = null; render(); };
+    
+    window.viewMatchDetail = (matchId) => {
+      if (matchId === 'current') selectedHistoryMatch = 'current';
+      else selectedHistoryMatch = matchHistory.find(m => m.id === matchId);
+      render();
+    };
+
+    window.initGame = () => {
+      isMenuOpen = false;
+      isRecordOpen = false;
+      
+      if (pendingSettings) settings = cloneState(pendingSettings);
+      
+      const p1Name = settings.player1Name.trim() || (settings.mode === 'PvE' ? 'YOU' : 'P1');
+      const aiName = AI_NAMES[Math.floor(Math.random() * AI_NAMES.length)];
+      const p2Name = settings.mode === 'PvE' ? aiName : (settings.player2Name.trim() || 'P2');
+
+      const initialBoard = getInitialBoard();
+
+      gameState = {
+        board: initialBoard, turn: 'R', winner: null,
+        turnCount: 1, isThinking: false, isAnimating: false,
+        lastMove: null, gameLog: [], isTossing: false,
+        isCalculatingHints: false,
+        redName: p1Name,
+        yellowName: p2Name,
+        startingTurn: 'R' 
+      };
+      historyStack = [];
+      currentHints = [];
+
+      // 四子棋 先攻必定為紅方
+      if (settings.mode === 'PvE') {
+          if (settings.firstMove === 'RANDOM') {
+              gameState.isTossing = true;
+              settings.playerColor = Math.random() < 0.5 ? 'R' : 'Y';
+          } else {
+              settings.playerColor = settings.firstMove === 'AI' ? 'Y' : 'R';
+          }
+
+          if (settings.playerColor === 'Y') {
+              gameState.redName = p2Name; // 電腦係紅 (先攻)
+              gameState.yellowName = p1Name; // 玩家係黃
+          } else {
+              gameState.redName = p1Name; // 玩家係紅 (先攻)
+              gameState.yellowName = p2Name; // 電腦係黃
+          }
+
+          if (gameState.isTossing) {
+              render(); 
+              setTimeout(() => {
+                  gameState.isTossing = false;
+                  render();
+                  if (gameState.turn !== settings.playerColor) { 
+                      gameState.isThinking = true;
+                      render();
+                      setTimeout(triggerAI, 800);
+                  } else {
+                      if (isHintMode) {
+                          gameState.isCalculatingHints = true; render();
+                          setTimeout(() => { updateHintsLogic(); gameState.isCalculatingHints = false; render(); }, 10);
+                      }
+                      render();
+                  }
+              }, 3500); 
+              return;
+          } else {
+              if (gameState.turn !== settings.playerColor) {
+                  gameState.isThinking = true;
+                  setTimeout(() => { 
+                      render(); 
+                      setTimeout(triggerAI, 800); 
+                  }, 0);
+              } else {
+                  if (isHintMode) {
+                      gameState.isCalculatingHints = true; render();
+                      setTimeout(() => { updateHintsLogic(); gameState.isCalculatingHints = false; render(); }, 10);
+                  }
+              }
+          }
+      } else {
+          if (isHintMode) {
+              gameState.isCalculatingHints = true; render();
+              setTimeout(() => { updateHintsLogic(); gameState.isCalculatingHints = false; render(); }, 10);
+          }
+      }
+      render();
+    };
+
+    window.handleUndo = () => {
+      if (historyStack.length === 0 || gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.isTossing) return;
+      
+      if (settings.mode === 'PvE') {
+         let targetState = null;
+         while (historyStack.length > 0) {
+             let prev = historyStack.pop();
+             if (prev.turn === settings.playerColor) {
+                 targetState = prev;
+                 break;
+             }
+         }
+         if (targetState) {
+             gameState = targetState;
+         } else {
+             window.initGame();
+             return;
+         }
+      } else {
+         gameState = historyStack.pop();
+      }
+      
+      gameState.lastMove = null; gameState.isAnimating = false; 
+      
+      if (isHintMode) {
+          gameState.isCalculatingHints = true; render();
+          setTimeout(() => { updateHintsLogic(); gameState.isCalculatingHints = false; render(); }, 10);
+      } else {
+          render();
+      }
+    };
+
+    window.handleColumnClick = (col) => {
+      if (gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.isTossing) return;
+      if (settings.mode === 'PvE' && gameState.turn !== settings.playerColor) return;
+
+      if (gameState.board[0][col] === null) {
+          performMove(col);
+      }
+    };
+
+    // --- 獨立 Menu 渲染 ---
+    const getMenuHTML = () => {
+      if (!isMenuOpen) return '';
+      const isPvE = pendingSettings.mode === 'PvE';
+      let diffLabel = "普通 (LV.5)";
+      if (pendingSettings.aiDifficulty <= 3) diffLabel = `新手 (LV.${pendingSettings.aiDifficulty})`;
+      else if (pendingSettings.aiDifficulty <= 7) diffLabel = `進階 (LV.${pendingSettings.aiDifficulty})`;
+      else if (pendingSettings.aiDifficulty <= 10) diffLabel = `大師 (LV.${pendingSettings.aiDifficulty})`;
+      else if (pendingSettings.aiDifficulty <= 13) diffLabel = `地獄 HELL (LV.${pendingSettings.aiDifficulty})`;
+      else diffLabel = `煉獄 PURGATORY (LV.${pendingSettings.aiDifficulty})`;
+      
+      let diffColor = 'text-white font-bold';
+      if (pendingSettings.aiDifficulty >= 14) diffColor = 'text-purple-500 font-black tracking-widest drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]';
+      else if (pendingSettings.aiDifficulty > 10) diffColor = 'text-red-500 font-black tracking-widest';
+
+      const backToLobbyHTML = `<a href="index.html" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] hover:text-white transition-colors pt-1 lg:pt-1.5 flex items-center gap-1.5 key-base" style="text-decoration: none;"><img src="./assets/gamehub.svg" alt="Hub" class="h-[12px] opacity-70 icon-white"> 返回遊戲大堂</a>`;
+
+      const closeBtnHTML = gameState 
+        ? `<button onclick="window.cancelMenu()" class="text-white text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-neutral-300 transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white"></button>`
+        : `<div class="h-[12px] lg:h-[15px] pt-1 lg:pt-1.5"></div>`;
+
+      let diffGridHTML = '<div class="grid grid-cols-5 gap-1.5 lg:gap-2 w-full mt-1">';
+      for (let i = 1; i <= 15; i++) {
+          const isActive = pendingSettings.aiDifficulty === i;
+          let btnClass = "diff-btn flex items-center justify-center py-2 lg:py-2.5 rounded text-[12px] lg:text-[14px] transition-colors key-base ";
+          if (i <= 10) {
+              btnClass += isActive ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900 hover:text-white';
+          } else if (i <= 13) {
+              btnClass += isActive ? 'bg-red-600 text-white font-bold border border-red-600 shadow-[0_0_10px_rgba(220,38,38,0.4)]' : 'bg-[#111] text-red-500/70 font-medium border border-red-900/50 hover:bg-red-950/30 hover:text-red-500';
+          } else {
+              btnClass += isActive ? 'bg-purple-600 text-white font-bold border border-purple-600 shadow-[0_0_10px_rgba(147,51,234,0.5)]' : 'bg-[#111] text-purple-500/70 font-medium border border-purple-900/50 hover:bg-purple-900/30 hover:text-purple-400';
+          }
+          diffGridHTML += `<button id="btn-diff-${i}" data-val="${i}" onclick="window.setDifficulty(${i})" class="${btnClass}">${i}</button>`;
+      }
+      diffGridHTML += '</div>';
+
+      return `
+        <div id="menu-layer" class="fixed inset-0 z-50 bg-black flex flex-col overflow-y-auto ${menuJustOpened ? 'animate-fade-in' : ''}">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+            ${backToLobbyHTML}
+            ${closeBtnHTML}
+          </header>
+          <div class="flex-1 flex flex-col items-center justify-center gap-6 pb-10 px-6 w-full mt-4 lg:mt-0">
+            <div class="flex flex-col items-center justify-center gap-3 mb-2">
+               <img src="./assets/Logo.svg" alt="LOGO" class="h-[22px] lg:h-[28px] object-contain opacity-90 icon-white">
+               <div class="text-white font-chess tracking-[0.4em] text-[13px] lg:text-[15px] font-light opacity-60">四子棋</div>
+            </div>
+
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase">GAME MODE</div>
+              <div class="flex w-full gap-2">
+                <button id="btn-mode-pve" data-val="PvE" onclick="window.setSetting('mode', 'PvE')" class="mode-btn flex-1 py-3 lg:py-3.5 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.mode === 'PvE' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">單人 (對電腦)</button>
+                <button id="btn-mode-pvp" data-val="PvP" onclick="window.setSetting('mode', 'PvP')" class="mode-btn flex-1 py-3 lg:py-3.5 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.mode === 'PvP' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">雙人 (對戰)</button>
+              </div>
+            </div>
+
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase w-full text-center">PLAYER NAME</div>
+              <div class="flex w-full gap-2">
+                <input type="text" id="input-p1" value="${pendingSettings.player1Name}" oninput="window.setPlayerName('player1Name', this.value)" placeholder="${isPvE ? '你的名字' : '玩家 1 (紅)'}" class="flex-1 min-w-0 bg-[#111] border border-neutral-800 rounded-lg py-3 lg:py-3.5 px-4 text-[12px] lg:text-[14px] text-white text-center focus:outline-none focus:border-neutral-500 transition-colors placeholder-neutral-600 font-medium tracking-widest">
+                <input type="text" id="input-p2" value="${pendingSettings.player2Name}" oninput="window.setPlayerName('player2Name', this.value)" placeholder="玩家 2 (黃)" class="flex-1 min-w-0 bg-[#111] border border-neutral-800 rounded-lg py-3 lg:py-3.5 px-4 text-[12px] lg:text-[14px] text-white text-center focus:outline-none focus:border-neutral-500 transition-colors placeholder-neutral-600 font-medium tracking-widest" style="display: ${isPvE ? 'none' : 'block'}">
+              </div>
+            </div>
+
+            <div id="pve-settings" class="w-full flex-col items-center gap-3 animate-fade-in" style="display: ${isPvE ? 'flex' : 'none'}">
+              <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3 mt-1">
+                <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase flex justify-between w-full">
+                  <span>AI DIFFICULTY</span>
+                  <span id="ai-diff-label" class="${diffColor}">${diffLabel}</span>
+                </div>
+                ${diffGridHTML}
+              </div>
+              <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3 mt-2">
+                <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase">FIRST MOVE</div>
+                <div class="flex w-full gap-2">
+                  <button id="btn-fm-player" data-val="PLAYER" onclick="window.setSetting('firstMove', 'PLAYER')" class="fm-btn flex-1 py-3 lg:py-3.5 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === 'PLAYER' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">先攻 (紅)</button>
+                  <button id="btn-fm-ai" data-val="AI" onclick="window.setSetting('firstMove', 'AI')" class="fm-btn flex-1 py-3 lg:py-3.5 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === 'AI' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">後攻 (黃)</button>
+                  <button id="btn-fm-random" data-val="RANDOM" onclick="window.setSetting('firstMove', 'RANDOM')" class="fm-btn flex-1 py-3 lg:py-3.5 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === 'RANDOM' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">隨機</button>
+                </div>
+              </div>
+            </div>
+            
+            <div id="empty-space" class="h-[100px] w-full max-w-[340px] lg:max-w-[440px]" style="display: ${!isPvE ? 'block' : 'none'}"></div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] mt-2">
+              <button onclick="window.initGame()" class="w-full bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black py-4 lg:py-5 rounded-lg font-bold tracking-[0.15em] text-[12px] lg:text-[16px] uppercase key-base">${gameState ? "RESTART 重新開始" : "開始新棋局"}</button>
+            </div>
+          </div>
+        </div>
+      `;
+    };
+
+    // --- 渲染四子棋純 SVG ---
+    const generateBoardHTML = () => {
+      const GRID_SIZE = 50; 
+      const coinRadius = 21;
+      
+      // 計算圓與圓之間嘅間隙：格仔大小 (50) 減去 圓直徑 (42) = 8
+      // 設定外框留白為間隙嘅 1.5 倍： 8 * 1.5 = 12
+      // 由於每個格仔本身預留咗 (50-42)/2 = 4 嘅內部留白，所以外加嘅 Padding 應該係 12 - 4 = 8
+      const PADDING = 8; 
+
+      const BOARD_WIDTH = COLS * GRID_SIZE + PADDING * 2;
+      const BOARD_HEIGHT = ROWS * GRID_SIZE + PADDING * 2;
+
+      let piecesHTML = '';
+      let ghostSVG = '';
+      let clickAreasSVG = '';
+      let hintsSVG = '';
+
+      // Draw pieces first (behind the board grid)
+      for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) {
+          const piece = gameState.board[y][x];
+          // 加上 PADDING 進行偏移
+          const cx = PADDING + x * GRID_SIZE + GRID_SIZE / 2;
+          const cy = PADDING + y * GRID_SIZE + GRID_SIZE / 2;
+          
+          if (piece) {
+            let newlyDropped = gameState.lastMove && gameState.lastMove.x === x && gameState.lastMove.y === y;
+            let fill = piece === 'R' ? '#ef4444' : '#facc15';
+            let stroke = piece === 'R' ? '#b91c1c' : '#ca8a04';
+            let innerRim = piece === 'R' ? '#b91c1c' : '#ca8a04';
+            let animClass = (newlyDropped && gameState.isAnimating) ? 'anim-drop-in' : '';
+
+            piecesHTML += `
+              <g class="${animClass}" style="transform-origin: ${cx}px ${cy}px;">
+                <circle cx="${cx}" cy="${cy}" r="${coinRadius}" fill="${fill}" stroke="${stroke}" stroke-width="2" />
+                <circle cx="${cx}" cy="${cy}" r="${coinRadius * 0.65}" fill="none" stroke="${innerRim}" stroke-width="1.5" opacity="0.5" />
+                <circle cx="${cx}" cy="${cy}" r="${coinRadius * 0.35}" fill="none" stroke="${innerRim}" stroke-width="1" opacity="0.4" />
+              </g>
+            `;
+            
+            // Last drop indicator
+            if (newlyDropped && !gameState.isAnimating) {
+                piecesHTML += `<circle cx="${cx}" cy="${cy}" r="4" fill="${piece === 'R' ? '#991b1b' : '#a16207'}" pointer-events="none" />`;
+            }
+          }
+
+          // Generate hints
+          const isHint = isHintMode && currentHints.includes(x);
+          if (isHint && !gameState.isThinking && y === getRowForColumn(gameState.board, x)) {
+              hintsSVG += `<circle cx="${cx}" cy="${cy}" r="${coinRadius}" fill="none" stroke="#3b82f6" stroke-width="2" opacity="0.8" class="animate-pulse" pointer-events="none" />`;
+          }
+        }
+      }
+
+      // Wireframe Board Grid + Circular Holes
+      let boardPath = `M0,0 L${BOARD_WIDTH},0 L${BOARD_WIDTH},${BOARD_HEIGHT} L0,${BOARD_HEIGHT} Z `;
+      let boardStrokes = '';
+      
+      for (let y = 0; y < ROWS; y++) {
+          for (let x = 0; x < COLS; x++) {
+              const cx = PADDING + x * GRID_SIZE + GRID_SIZE / 2;
+              const cy = PADDING + y * GRID_SIZE + GRID_SIZE / 2;
+              // Add circular hole to mask path
+              boardPath += `M${cx + coinRadius},${cy} A${coinRadius},${coinRadius} 0 1,0 ${cx - coinRadius},${cy} A${coinRadius},${coinRadius} 0 1,0 ${cx + coinRadius},${cy} Z `;
+              // Add stroke for the wireframe look
+              boardStrokes += `<circle cx="${cx}" cy="${cy}" r="${coinRadius}" fill="none" stroke="#334155" stroke-width="1.5" />`;
+          }
+      }
+
+      let boardSVG = `
+        <path d="${boardPath}" fill="#000000" fill-rule="evenodd" />
+        ${boardStrokes}
+        <rect x="0" y="0" width="${BOARD_WIDTH}" height="${BOARD_HEIGHT}" fill="none" stroke="#334155" stroke-width="1.5" rx="4" />
+      `;
+
+      // Invisible columns for hover and click interaction
+      const isPlayerTurn = settings.mode !== 'PvE' || gameState.turn === settings.playerColor;
+      
+      for (let x = 0; x < COLS; x++) {
+          const hoverRow = getRowForColumn(gameState.board, x);
+          const cx = PADDING + x * GRID_SIZE + GRID_SIZE / 2;
+          
+          clickAreasSVG += `<g class="group cursor-pointer" onclick="window.handleColumnClick(${x})">`;
+          
+          // 稍微擴展最左右兩邊的點擊區域，覆蓋 Padding 部分
+          const rectX = x === 0 ? 0 : PADDING + x * GRID_SIZE;
+          const rectW = (x === 0 || x === COLS - 1) ? GRID_SIZE + PADDING : GRID_SIZE;
+          clickAreasSVG += `<rect x="${rectX}" y="0" width="${rectW}" height="${BOARD_HEIGHT}" fill="transparent" />`;
+          
+          if (hoverRow !== -1 && isPlayerTurn && !gameState.isThinking && !gameState.isAnimating && !gameState.winner && !gameState.isTossing) {
+              const cy = PADDING + hoverRow * GRID_SIZE + GRID_SIZE / 2;
+              const ghostFill = gameState.turn === 'R' ? '#ef4444' : '#facc15';
+              const ghostRim = gameState.turn === 'R' ? '#b91c1c' : '#ca8a04';
+              
+              ghostSVG += `
+              <g class="opacity-0 group-hover:opacity-40 transition-opacity duration-200" pointer-events="none">
+                 <circle cx="${cx}" cy="${cy}" r="${coinRadius}" fill="${ghostFill}" />
+                 <circle cx="${cx}" cy="${cy}" r="${coinRadius * 0.65}" fill="none" stroke="${ghostRim}" stroke-width="1.5" />
+                 <circle cx="${cx}" cy="${cy}" r="${coinRadius * 0.35}" fill="none" stroke="${ghostRim}" stroke-width="1" />
+              </g>`;
+          }
+          clickAreasSVG += `</g>`;
+      }
+
+      return `
+        <svg viewBox="-10 -10 ${BOARD_WIDTH + 20} ${BOARD_HEIGHT + 20}" preserveAspectRatio="xMidYMid meet" class="w-full h-auto max-h-[65vh] lg:h-full lg:max-h-[85vh] transition-transform origin-center">
+          ${piecesHTML}
+          ${ghostSVG}
+          ${boardSVG}
+          ${hintsSVG}
+          ${clickAreasSVG}
+        </svg>
+      `;
+    };
+
+    function render() {
+      const appDiv = document.getElementById('app');
+      
+      const menuHTML = getMenuHTML();
+
+      if (!gameState) {
+          appDiv.innerHTML = menuHTML;
+          return;
+      }
+
+      let recordHTML = '';
+      if (isRecordOpen) {
+        if (!selectedHistoryMatch) {
+          let historyListHTML = matchHistory.map(m => `
+            <div onclick="window.viewMatchDetail(${m.id})" class="bg-[#111] rounded-lg p-5 border border-neutral-800 hover:border-neutral-600 transition-colors cursor-pointer group flex items-center justify-between">
+               <div class="flex flex-col gap-1">
+                  <div class="text-[12px] lg:text-[15px] font-bold ${m.winner === 'R' ? 'text-c4-red' : m.winner === 'Y' ? 'text-c4-yellow' : 'text-neutral-500'} tracking-wider">${m.winner === 'R' ? '紅方獲勝' : m.winner === 'Y' ? '黃方獲勝' : '平局'}</div>
+                  <div class="text-[9px] lg:text-[11px] text-neutral-500 uppercase tracking-widest">${m.settings.mode} | ${m.settings.mode === 'PvE' ? `LV.${m.settings.aiDifficulty}` : 'PVP'} | 回合: ${Math.ceil(m.gameLog.length / 2)}</div>
+                  <div class="text-[8px] lg:text-[10px] text-neutral-600 font-medium">${m.timestamp}</div>
+               </div>
+               <img src="./assets/arrow.svg" alt="Detail" class="h-[10px] lg:h-[12px] opacity-20 group-hover:opacity-100 transition-opacity -rotate-90 icon-white">
+            </div>
+          `).join('');
+
+          const currentEntry = gameState.gameLog.length > 0 ? `
+            <div onclick="window.viewMatchDetail('current')" class="bg-[#1a1a1a] rounded-lg p-5 border-2 border-dashed border-neutral-700 hover:border-white transition-colors cursor-pointer mb-4 flex items-center justify-between">
+               <div class="flex flex-col gap-1">
+                  <div class="text-[14px] lg:text-[17px] font-bold text-white tracking-wide">當前賽局 (Current Match)</div>
+                  <div class="text-[9px] lg:text-[11px] text-neutral-400 uppercase tracking-widest">In Progress...</div>
+               </div>
+               <div class="w-2 h-2 bg-neutral-400 rounded-full animate-pulse"></div>
+            </div>
+          ` : '';
+
+          recordHTML = `
+          <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-hidden animate-fade-in">
+            <header class="flex-none pt-6 pb-4 px-5 lg:px-12 flex items-center justify-center z-30 w-full border-b border-neutral-800 shrink-0 relative">
+               <div class="text-white font-bold tracking-[0.15em] text-[12px] lg:text-[16px] uppercase pt-0.5">MATCH RECORD</div>
+               <button onclick="window.toggleRecord()" class="absolute right-5 lg:right-12 text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white active:text-white transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white"></button>
+            </header>
+            <div class="flex-1 overflow-y-auto hide-scrollbar flex flex-col pt-6 pb-10 px-5 max-w-[800px] w-full mx-auto">
+              ${currentEntry}
+              <div class="flex flex-col gap-3">${historyListHTML || '<div class="text-center py-20 text-neutral-700 tracking-widest text-[11px] uppercase">No History Found</div>'}</div>
+            </div>
+          </div>
+          `;
+        } else {
+          let matchData = selectedHistoryMatch === 'current' ? { settings, gameLog: cloneState(gameState.gameLog), isLive: true } : selectedHistoryMatch;
+          let logContent = matchData.gameLog.slice().reverse().map((log, idx) => {
+              const actualIdx = matchData.gameLog.length - idx;
+              const colorClass = log.turn === 'R' ? 'text-c4-red' : 'text-c4-yellow';
+              const teamName = log.turn === 'R' ? '紅' : '黃';
+              return `
+              <div class="flex items-center justify-between py-3 lg:py-4 border-b border-neutral-800/50 last:border-0">
+                  <div class="flex items-center gap-3">
+                      <div class="text-[10px] text-neutral-600 font-bold w-6">#${actualIdx}</div>
+                      <div class="w-6 h-6 rounded border border-neutral-700 bg-neutral-800 flex items-center justify-center ${colorClass} text-[12px] font-tc">${teamName}</div>
+                      <div class="text-[12px] lg:text-[14px] font-medium text-neutral-300 tracking-wide">${log.desc}</div>
+                  </div>
+              </div>`;
+          }).join('');
+
+          recordHTML = `
+          <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-hidden animate-fade-in">
+            <header class="flex-none pt-6 pb-4 px-5 lg:px-12 flex items-center justify-between z-30 w-full border-b border-neutral-800 shrink-0">
+               <button onclick="window.viewMatchDetail(null)" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white transition-colors pt-1 lg:pt-1.5 flex items-center gap-1.5 key-base"><img src="./assets/arrow.svg" alt="<" class="h-[8px] rotate-90 opacity-60 icon-white"> BACK</button>
+               <div class="flex flex-col items-center">
+                 <span class="text-white font-black tracking-[0.2em] text-[12px] lg:text-[16px] uppercase pt-0.5">LOG DETAIL</span>
+                 <span class="text-[8px] text-neutral-600 tracking-widest uppercase">${matchData.isLive ? 'LIVE' : 'PAST MATCH'}</span>
+               </div>
+               <button onclick="window.toggleRecord()" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white active:text-white transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white"></button>
+            </header>
+            <div class="flex-1 overflow-y-auto hide-scrollbar flex flex-col pt-4 pb-10 px-5 max-w-[800px] w-full mx-auto">
+              <div class="bg-[#111] rounded-lg p-4 lg:p-6 border border-neutral-800 shadow-sm flex flex-col">${logContent || '<div class="text-neutral-600 text-center py-10 text-xs">暫無步數</div>'}</div>
+            </div>
+          </div>
+          `;
+        }
+      }
+
+      let tossHTML = '';
+      if (gameState.isTossing) {
+         const tossMsg = settings.playerColor === 'R' ? '先攻' : '後攻';
+         const flipClass = settings.playerColor === 'R' ? "anim-flip-red" : "anim-flip-yellow";
+         
+         tossHTML = `
+         <div class="fixed inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center">
+            <div class="coin-scene mb-12 shadow-[0_0_30px_rgba(255,255,255,0.1)] rounded-full">
+               <div class="coin-wrapper ${flipClass}">
+                  <div class="coin-face coin-front"></div>
+                  <div class="coin-face coin-back"></div>
+               </div>
+            </div>
+            <div class="text-white font-bold tracking-[0.2em] text-[18px] lg:text-[22px] opacity-0 anim-fade-in-delayed uppercase">
+               ${tossMsg}
+            </div>
+         </div>
+         `;
+      }
+
+      let statusBannerHTML = '';
+      if (gameState.winner) {
+        const winnerDisplay = gameState.winner === 'R' ? gameState.redName : (gameState.winner === 'Y' ? gameState.yellowName : '平手 DRAW');
+        statusBannerHTML = `<div class="w-full ${gameState.winner === 'DRAW' ? 'bg-[#333]' : (gameState.winner === 'R' ? 'bg-c4-red/20 border border-c4-red/50 text-c4-red' : 'bg-c4-yellow/20 border border-c4-yellow/50 text-c4-yellow')} rounded-lg py-3.5 flex items-center justify-center font-bold text-[14px] lg:text-[17px] tracking-[0.15em] uppercase animate-pulse shadow-lg">${winnerDisplay} !!!</div>`;
+      } else {
+        const isPVE = settings.mode === 'PvE';
+        let rightContent = '';
+        let borderClass = 'border-neutral-800';
+
+        if (isPVE) {
+            if (gameState.turn === settings.playerColor) {
+                const pName = settings.playerColor === 'R' ? gameState.redName : gameState.yellowName;
+                const pColor = settings.playerColor === 'R' ? 'text-c4-red' : 'text-c4-yellow';
+                rightContent = `<span class="${pColor} font-bold tracking-wider uppercase">${pName} TURN</span>`;
+            } else {
+                const aiName = settings.playerColor === 'R' ? gameState.yellowName : gameState.redName;
+                if (gameState.isThinking) {
+                    rightContent = `<div class="flex items-center gap-3"><span class="text-white font-bold tracking-wider uppercase">${aiName} TURN</span><span class="text-[#22d3ee] font-bold animate-pulse tracking-widest">THINKING...</span></div>`;
+                    borderClass = 'border-[#22d3ee]/30 shadow-[0_0_15px_rgba(34,211,238,0.1)]';
+                } else {
+                    rightContent = `<span class="text-white font-bold tracking-wider uppercase">${aiName} TURN</span>`;
+                }
+            }
+        } else {
+            if (gameState.turn === 'R') {
+                rightContent = `<span class="text-c4-red font-bold tracking-wider uppercase">${gameState.redName} TURN</span>`;
+            } else {
+                rightContent = `<span class="text-c4-yellow font-bold tracking-wider uppercase">${gameState.yellowName} TURN</span>`;
+            }
+        }
+
+        statusBannerHTML = `<div class="w-full bg-[#111111] rounded-lg py-3.5 lg:py-4 flex items-center justify-between px-6 font-medium text-[12px] lg:text-[16px] tracking-[0.15em] text-neutral-300 uppercase border ${borderClass} transition-colors duration-300">
+            <div class="flex items-center"><span>TURN ${Math.ceil(gameState.gameLog.length / 2) + 1}</span></div>
+            ${rightContent}
+        </div>`;
+      }
+
+      const capturedAreaHTML = `
+        <div class="flex flex-col gap-2 lg:gap-3 px-3 lg:px-6 w-full">
+            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-2.5 lg:p-3 relative overflow-hidden">
+              <div class="absolute left-0 top-0 bottom-0 w-1 ${gameState.turn === 'Y' ? 'bg-c4-yellow shadow-[0_0_8px_#facc15]' : 'bg-transparent'} transition-colors"></div>
+              <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-full truncate ml-2">${gameState.yellowName}</div>
+              <svg viewBox="0 0 42 42" class="w-[20px] h-[20px] lg:w-[24px] lg:h-[24px] flex-shrink-0">
+                 <circle cx="21" cy="21" r="19" fill="#facc15" stroke="#ca8a04" stroke-width="2"/>
+                 <circle cx="21" cy="21" r="12" fill="none" stroke="#ca8a04" stroke-width="1.5" opacity="0.5"/>
+                 <circle cx="21" cy="21" r="6" fill="none" stroke="#ca8a04" stroke-width="1" opacity="0.4"/>
+              </svg>
+            </div>
+            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-2.5 lg:p-3 relative overflow-hidden">
+              <div class="absolute left-0 top-0 bottom-0 w-1 ${gameState.turn === 'R' ? 'bg-c4-red shadow-[0_0_8px_#ef4444]' : 'bg-transparent'} transition-colors"></div>
+              <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-full truncate ml-2">${gameState.redName}</div>
+              <svg viewBox="0 0 42 42" class="w-[20px] h-[20px] lg:w-[24px] lg:h-[24px] flex-shrink-0">
+                 <circle cx="21" cy="21" r="19" fill="#ef4444" stroke="#b91c1c" stroke-width="2"/>
+                 <circle cx="21" cy="21" r="12" fill="none" stroke="#b91c1c" stroke-width="1.5" opacity="0.5"/>
+                 <circle cx="21" cy="21" r="6" fill="none" stroke="#b91c1c" stroke-width="1" opacity="0.4"/>
+              </svg>
+            </div>
+        </div>
+      `;
+
+      const controlPanelHTML = gameState.winner ? `
+        <div class="flex-1 flex flex-col items-center justify-start pt-4 gap-5 w-full animate-fade-in pb-8 lg:pb-0">
+          <button onclick="window.toggleRecord()" class="w-[220px] lg:w-[260px] py-4 lg:py-5 rounded-lg border border-neutral-800 text-white font-medium text-xs lg:text-[14px] tracking-[0.15em] uppercase hover:bg-neutral-900 transition-colors key-base">MATCH RECORD</button>
+          <button onclick="window.openMenu()" class="w-[220px] lg:w-[260px] py-4 lg:py-5 rounded-lg bg-white text-black font-medium text-xs lg:text-[14px] tracking-[0.15em] uppercase hover:bg-neutral-200 transition-colors key-base">MAIN MENU 主選單</button>
+        </div>
+      ` : `<div class="flex-none bg-black pb-4 lg:pb-0">${capturedAreaHTML}</div>`;
+
+      let modeDisplay = '';
+      if (settings.mode === 'PvE') {
+          if (settings.firstMove === 'PLAYER') modeDisplay = '先攻';
+          else if (settings.firstMove === 'AI') modeDisplay = '後攻';
+          else modeDisplay = settings.playerColor === 'R' ? '隨機 - 先攻' : '隨機 - 後攻';
+      } else {
+          modeDisplay = '雙人對戰';
+      }
+
+      let roundDisplay = '';
+      const currentRound = Math.ceil(gameState.gameLog.length / 2) + 1;
+      if (settings.mode === 'PvE') {
+          let lvColorClass = 'text-white font-bold';
+          if (settings.aiDifficulty >= 14) lvColorClass = 'text-purple-500 font-black tracking-widest drop-shadow-[0_0_8px_rgba(168,85,247,0.5)]';
+          else if (settings.aiDifficulty > 10) lvColorClass = 'text-red-500 font-black tracking-widest';
+          
+          roundDisplay = `<span class="${lvColorClass}">LV.${settings.aiDifficulty}</span> <span class="mx-2 opacity-50">|</span> 回合 ${currentRound}`;
+      } else {
+          roundDisplay = `PVP <span class="mx-2 opacity-50">|</span> 回合 ${currentRound}`;
+      }
+
+      appDiv.innerHTML = `
+        ${menuHTML}
+        ${recordHTML}
+        ${tossHTML}
+        
+        <div class="w-full h-full bg-black relative flex flex-col overflow-hidden">
+          
+          <header class="flex-none pt-4 lg:pt-6 pb-2 px-4 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+            <div class="flex items-center"><img src="./assets/Logo.svg" alt="LOGO" class="h-[19px] lg:h-[25px] object-contain opacity-90 icon-white"></div>
+            <div class="flex items-center gap-4 lg:gap-6">
+              <button onclick="window.toggleHintMode()" ${gameState.isThinking || gameState.isAnimating || gameState.isTossing || getValidMoves(gameState.board).length === 0 ? 'disabled style="opacity:0.2"' : ''} class="flex items-center justify-center transition-all duration-300 key-base ${isHintMode ? 'opacity-100 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]' : 'opacity-70 hover:opacity-100'}">
+                <img src="./assets/ai.svg" alt="AI" class="h-[19px] lg:h-[24px] object-contain ${isHintMode ? 'icon-hint-active' : 'icon-white'}">
+              </button>
+              <button onclick="window.handleUndo()" ${historyStack.length === 0 || gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base">
+                <img src="./assets/back.svg" alt="UNDO" class="h-[14px] lg:h-[18px] object-contain icon-white">
+              </button>
+              <button onclick="window.toggleRecord()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base">
+                <img src="./assets/record.svg" alt="REC" class="h-[16px] lg:h-[22px] object-contain icon-white">
+              </button>
+              <button onclick="window.openMenu()" ${gameState.isThinking || gameState.isAnimating || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base">
+                <img src="./assets/setting.svg" alt="SET" class="h-[14px] lg:h-[18px] object-contain icon-white">
+              </button>
+            </div>
+          </header>
+
+          <div class="px-4 lg:px-5 lg:absolute lg:top-[85px] lg:left-12 z-20 pointer-events-none mt-1 lg:mt-0">
+            <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase">
+              四子棋<br>
+              ${modeDisplay}<br>
+              ${roundDisplay}
+            </div>
+          </div>
+
+          <main class="flex-1 w-full max-w-md lg:max-w-[1200px] mx-auto flex flex-col lg:flex-row min-h-0 relative z-10">
+            <div class="flex-1 relative min-h-0 flex flex-col justify-center lg:py-8 lg:pr-8">
+              <div class="flex-1 flex items-center justify-center w-full h-full min-h-0">
+                <div class="w-full px-4 max-w-[440px] lg:max-w-[480px] mx-auto lg:px-0 flex justify-center">
+                  ${generateBoardHTML()}
+                </div>
+              </div>
+            </div>
+
+            <div class="flex-none lg:w-[480px] lg:h-full flex flex-col justify-end lg:justify-center bg-black z-10 relative pb-6 lg:pb-0">
+              <div class="flex-none lg:mb-4">
+                <div class="mt-2 mb-3 lg:mt-4 lg:mb-4 px-3 lg:px-6 h-12">${statusBannerHTML}</div>
+              </div>
+              <div class="flex-none">
+                ${controlPanelHTML}
+              </div>
+            </div>
+          </main>
+        </div>
+      `;
+    }
+
+    window.onload = () => { 
+      loadHistory();
+      if (!pendingSettings) pendingSettings = cloneState(settings);
+      render(); 
+    };
+  </script>
+</body>
+</html>

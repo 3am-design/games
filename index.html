@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   
   <link rel="dns-prefetch" href="https://fonts.googleapis.com">
-  <title>Games</title>
+  <title>Board Games Hub - 遊戲大堂</title>
   
   <!-- 引入 Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -62,21 +62,9 @@
     }
     .game-card:hover::before { opacity: 1; }
     .font-tc { font-family: 'Noto Sans TC', sans-serif; }
-    
-    /* Karina 優化：利用原生 CSS 漸變取代高耗能的 blur 濾鏡 */
-    .bg-glow-cyan {
-      background: radial-gradient(circle, rgba(34,211,238,0.08) 0%, rgba(34,211,238,0) 70%);
-    }
-    .bg-glow-red {
-      background: radial-gradient(circle, rgba(239,68,68,0.08) 0%, rgba(239,68,68,0) 70%);
-    }
   </style>
 </head>
 <body class="bg-black selection:bg-white/30 flex flex-col items-center min-h-screen overflow-x-hidden relative">
-
-  <!-- Karina 修復：移除 opacity-[0.03] 同 blur-[120px]，改用原生漸變 (Radial Gradient)。大幅度解決 Safari 卡死問題 -->
-  <div class="fixed top-[-20%] left-[-20%] w-[100vw] h-[100vw] max-w-[800px] max-h-[800px] rounded-full pointer-events-none bg-glow-cyan z-0"></div>
-  <div class="fixed bottom-[-20%] right-[-20%] w-[100vw] h-[100vw] max-w-[800px] max-h-[800px] rounded-full pointer-events-none bg-glow-red z-0"></div>
 
   <!-- 主內容區 -->
   <main class="flex-1 w-full max-w-[1000px] mx-auto px-6 py-16 lg:py-24 flex flex-col items-center justify-center relative z-10">
@@ -124,11 +112,11 @@
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-neutral-800 rounded-2xl overflow-hidden">
-                <!-- 棋盤格線 (極簡線條) -->
+                <!-- 棋盤格線 -->
                 <div class="absolute inset-0 flex flex-col justify-evenly py-2 lg:py-3"><div class="w-full h-[1px] bg-neutral-800"></div><div class="w-full h-[1px] bg-neutral-800"></div><div class="w-full h-[1px] bg-neutral-800"></div></div>
                 <div class="absolute inset-0 flex justify-evenly px-2 lg:px-3"><div class="h-full w-[1px] bg-neutral-800"></div><div class="h-full w-[1px] bg-neutral-800"></div><div class="h-full w-[1px] bg-neutral-800"></div></div>
                 
-                <!-- 棋子 (鏤空線圈風格) -->
+                <!-- 棋子 (線圈風格) -->
                 <div class="absolute w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] bg-[#111] rounded-full border-2 border-amber-500 translate-x-[-24px] translate-y-[-24px] lg:translate-x-[-30px] lg:translate-y-[-30px] z-10"></div>
                 <div class="absolute w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] bg-[#111] rounded-full border-2 border-neutral-400 translate-x-[-12px] translate-y-[-12px] lg:translate-x-[-15px] lg:translate-y-[-15px] z-10"></div>
                 <div class="absolute w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] bg-[#111] rounded-full border-2 border-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.6)] z-10"></div>
@@ -142,16 +130,29 @@
             </div>
         </a>
 
-        <!-- Game 4: ??? (Coming Soon) -->
-        <div class="game-card relative bg-[#080808] border border-neutral-900 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 animate-fade-in stagger-4 overflow-hidden cursor-not-allowed group">
-            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] rounded-2xl border-2 border-dashed border-neutral-800 flex items-center justify-center bg-[#0d0d0d] group-hover:border-neutral-700 transition-colors">
-                <span class="text-neutral-700 font-inter text-[28px] lg:text-[36px] font-light">?</span>
+        <!-- Game 4: 四子棋 (Connect Four) -->
+        <a href="four.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-4 overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            
+            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-blue-900/50 rounded-xl overflow-hidden">
+                <!-- 四子棋支架線條 -->
+                <div class="absolute inset-0 flex justify-evenly px-1"><div class="h-full w-[1px] bg-blue-600/30"></div><div class="h-full w-[1px] bg-blue-600/30"></div><div class="h-full w-[1px] bg-blue-600/30"></div></div>
+                <!-- 棋子 (雙色線圈連線) -->
+                <div class="absolute w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] bg-transparent rounded-full border-2 border-red-500 translate-x-[-15px] translate-y-[15px]"></div>
+                <div class="absolute w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] bg-transparent rounded-full border-2 border-yellow-400 translate-x-[0px] translate-y-[15px]"></div>
+                <div class="absolute w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] bg-transparent rounded-full border-2 border-red-500 translate-x-[15px] translate-y-[15px] shadow-[0_0_8px_rgba(239,68,68,0.4)]"></div>
+                
+                <div class="absolute w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] bg-transparent rounded-full border-2 border-yellow-400 translate-x-[-15px] translate-y-[0px]"></div>
+                <div class="absolute w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] bg-transparent rounded-full border-2 border-red-500 translate-x-[0px] translate-y-[0px]"></div>
+                
+                <div class="absolute w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] bg-transparent rounded-full border-2 border-yellow-400 translate-x-[-15px] translate-y-[-15px]"></div>
             </div>
+            
             <div class="flex flex-col items-center mt-2">
-                <span class="text-neutral-600 font-tc font-bold text-[16px] lg:text-[18px] tracking-widest">敬請期待</span>
-                <span class="text-neutral-700 text-[9px] lg:text-[11px] tracking-[0.2em] uppercase mt-1">Coming Soon</span>
+                <span class="text-white font-tc font-bold text-[16px] lg:text-[18px] tracking-wider">四子棋</span>
+                <span class="text-neutral-500 text-[9px] lg:text-[11px] tracking-[0.2em] uppercase mt-1">Connect Four</span>
             </div>
-        </div>
+        </a>
 
         <!-- Game 5: ??? (Coming Soon) -->
         <div class="game-card relative bg-[#080808] border border-neutral-900 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 animate-fade-in stagger-4 overflow-hidden cursor-not-allowed group">
