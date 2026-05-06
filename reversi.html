@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Games - 中國象棋</title>
+  <title>Games - 黑白棋</title>
   <!-- 引入 Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -25,25 +25,34 @@
     @keyframes pulse-fast { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .animate-thinking { animation: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
 
-    /* --- 被食棋子擊飛動畫 --- */
-    @keyframes captureFlyAway {
-      0% { transform: scale(1) rotate(0deg); opacity: 1; }
-      100% { transform: translate(0, -60px) scale(0.2) rotate(180deg); opacity: 0; }
-    }
-    .anim-capture-fly {
-      animation: captureFlyAway 0.8s cubic-bezier(0.6, 0, 1, 1) forwards;
-      transform-origin: center;
-      pointer-events: none;
-    }
+    /* --- 黑白棋 3D 翻轉動畫 --- */
+    .piece-container { perspective: 800px; pointer-events: none; }
+    .piece-wrapper { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
+    .piece-face { position: absolute; width: 100%; height: 100%; border-radius: 50%; backface-visibility: hidden; top: 0; left: 0; }
+    .piece-red { background: #ef4444; border: 2px solid #b91c1c; transform: rotateY(0deg); }
+    .piece-white { background: #f8fafc; border: 2px solid #cbd5e1; transform: rotateY(180deg); }
+    
+    .rot-red { transform: rotateY(0deg); }
+    .rot-white { transform: rotateY(180deg); }
+
+    /* --- 新落子放大動畫 --- */
+    @keyframes dropPiece { 0% { transform: scale(1.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    .anim-drop { animation: dropPiece 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+
+    /* --- 翻轉動畫 --- */
+    @keyframes flipToRedFromWhite { 0% { transform: rotateY(180deg); } 100% { transform: rotateY(0deg); } }
+    @keyframes flipToWhiteFromRed { 0% { transform: rotateY(0deg); } 100% { transform: rotateY(180deg); } }
+    .anim-flip-to-red { animation: flipToRedFromWhite 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+    .anim-flip-to-white { animation: flipToWhiteFromRed 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
 
     /* --- 擲先後 3D 硬幣動畫 --- */
     .coin-scene { perspective: 800px; width: 100px; height: 100px; }
     @media (min-width: 1024px) { .coin-scene { width: 120px; height: 120px; } }
     .coin-wrapper { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; }
-    .coin-face { position: absolute; width: 100%; height: 100%; border-radius: 50%; backface-visibility: hidden; display: flex; align-items: center; justify-content: center; font-weight: bold; font-family: 'Noto Sans TC', sans-serif; font-size: 2.25rem; border: 4px solid; background: #111; }
+    .coin-face { position: absolute; width: 100%; height: 100%; border-radius: 50%; backface-visibility: hidden; display: flex; align-items: center; justify-content: center; font-weight: bold; font-family: 'Noto Sans TC', sans-serif; font-size: 2.25rem; border: 4px solid; }
     @media (min-width: 1024px) { .coin-face { font-size: 3rem; } }
-    .coin-front { background: #ef4444; border-color: #ef4444; transform: rotateY(0deg); }
-    .coin-back { background: #ffffff; border-color: #ffffff; transform: rotateY(180deg); }
+    .coin-front { background: #ef4444; color: #fff; border-color: #b91c1c; transform: rotateY(0deg); }
+    .coin-back { background: #fff; color: #111; border-color: #ccc; transform: rotateY(180deg); }
 
     @keyframes flipToRed {
       0% { transform: rotateY(0deg) scale(1); }
@@ -62,9 +71,7 @@
       0%, 75% { opacity: 0; transform: translateY(10px); }
       100% { opacity: 1; transform: translateY(0); }
     }
-    .anim-fade-in-delayed {
-      animation: fadeInDelayed 2.2s ease-out forwards;
-    }
+    .anim-fade-in-delayed { animation: fadeInDelayed 2.2s ease-out forwards; }
 
     html, body { 
       overscroll-behavior-y: none; 
@@ -78,61 +85,22 @@
       touch-action: manipulation;
     }
     
-    .app-container {
-      height: 100vh;
-      height: 100dvh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    
-    button { 
-      -webkit-tap-highlight-color: transparent; 
-      outline: none;
-      touch-action: manipulation;
-    }
+    .app-container { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    button { -webkit-tap-highlight-color: transparent; outline: none; touch-action: manipulation; }
 
-    /* 移除 iOS 點擊 SVG 元素時自帶的灰色高亮背景 */
-    svg, .chess-piece, .valid-move {
-      -webkit-tap-highlight-color: transparent;
-    }
+    svg, .reversi-piece, .valid-move { -webkit-tap-highlight-color: transparent; }
 
     .key-base { transition: background-color 0.2s ease-out, color 0.2s ease-out, border-color 0.2s, opacity 0.2s; }
     .key-base:active { opacity: 0.5; transition: none; }
 
-    .chess-piece { cursor: pointer; transition: filter 0.2s ease; }
-    @media (hover: hover) {
-      .chess-piece:hover { filter: brightness(1.2); }
-      .valid-move:hover { fill: rgba(255, 255, 255, 0.4); }
-    }
-    .valid-move { cursor: pointer; transition: fill 0.2s ease; }
-    .font-chess { font-family: 'Noto Sans TC', 'Inter', sans-serif; }
+    .valid-move { cursor: pointer; transition: opacity 0.2s ease, r 0.2s ease; }
+    @media (hover: hover) { .valid-move:hover { opacity: 0.5; r: 16; } }
     
-    input[type=range] { 
-      -webkit-appearance: none; 
-      appearance: none;
-      width: 100%; 
-      background: transparent; 
-      outline: none;
-      touch-action: none;
-    }
-    input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none; 
-      appearance: none;
-      height: 24px; width: 24px; border-radius: 50%;
-      background: #ffffff; cursor: pointer; margin-top: -10px; box-shadow: 0 0 10px rgba(255,255,255,0.5);
-      position: relative; z-index: 50;
-    }
-    input[type=range]::-webkit-slider-runnable-track { 
-      width: 100%; height: 4px; cursor: pointer; background: #333333; border-radius: 2px; 
-    }
-    input[type=range]::-moz-range-thumb {
-      height: 24px; width: 24px; border-radius: 50%; border: none;
-      background: #ffffff; cursor: pointer; box-shadow: 0 0 10px rgba(255,255,255,0.5);
-    }
-    input[type=range]::-moz-range-track { 
-      width: 100%; height: 4px; cursor: pointer; background: #333333; border-radius: 2px; 
-    }
+    input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; background: transparent; outline: none; touch-action: none; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; height: 24px; width: 24px; border-radius: 50%; background: #ffffff; cursor: pointer; margin-top: -10px; box-shadow: 0 0 10px rgba(255,255,255,0.5); position: relative; z-index: 50; }
+    input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; cursor: pointer; background: #333333; border-radius: 2px; }
+    input[type=range]::-moz-range-thumb { height: 24px; width: 24px; border-radius: 50%; border: none; background: #ffffff; cursor: pointer; box-shadow: 0 0 10px rgba(255,255,255,0.5); }
+    input[type=range]::-moz-range-track { width: 100%; height: 4px; cursor: pointer; background: #333333; border-radius: 2px; }
     
     .icon-white { filter: brightness(0) invert(1); }
     .icon-hint-active { filter: brightness(0) saturate(100%) invert(48%) sepia(90%) saturate(3362%) hue-rotate(206deg) brightness(102%) contrast(94%); }
@@ -144,17 +112,47 @@
 
   <script>
     // --- 系統常數與初始設定 ---
-    const GRID_SIZE = 40;
-    const BOARD_WIDTH = 8; 
-    const BOARD_HEIGHT = 9; 
-    
-    const PIECE_TEXT = {
-      'R': { r: '車', h: '馬', e: '相', a: '仕', g: '帥', c: '炮', s: '兵' },
-      'B': { r: '車', h: '馬', e: '象', a: '士', g: '將', c: '砲', s: '卒' }
-    };
-    const PIECE_VALUES = { 'g': 10000, 'r': 900, 'c': 450, 'h': 400, 'e': 200, 'a': 200, 's': 100 };
-
     const AI_NAMES = ['呂布', '趙雲', '關羽', '張飛', '諸葛亮', '曹操', '司馬懿', '周瑜', '孫權', '馬超', '黃忠', '典韋', '夏侯惇', '張遼', '甘寧', '太史慈', '董卓', '陸遜'];
+
+    // 黑白棋權重表 (角落極高，星位極低，邊緣中等)
+    const EVAL_MAP_6 = [
+        [100, -20, 10, 10, -20, 100],
+        [-20, -50, -2, -2, -50, -20],
+        [ 10,  -2,  1,  1,  -2,  10],
+        [ 10,  -2,  1,  1,  -2,  10],
+        [-20, -50, -2, -2, -50, -20],
+        [100, -20, 10, 10, -20, 100]
+    ];
+    
+    const EVAL_MAP_8 = [
+        [1000, -200, 20, 10, 10, 20, -200, 1000],
+        [-200, -400, -5, -5, -5, -5, -400, -200],
+        [  20,   -5, 15,  3,  3, 15,   -5,   20],
+        [  10,   -5,  3,  0,  0,  3,   -5,   10],
+        [  10,   -5,  3,  0,  0,  3,   -5,   10],
+        [  20,   -5, 15,  3,  3, 15,   -5,   20],
+        [-200, -400, -5, -5, -5, -5, -400, -200],
+        [1000, -200, 20, 10, 10, 20, -200, 1000]
+    ];
+
+    const EVAL_MAP_10 = [
+        [1000, -200, 20, 10, 10, 10, 10, 20, -200, 1000],
+        [-200, -400, -5, -5, -5, -5, -5, -5, -400, -200],
+        [  20,   -5, 15,  3,  3,  3,  3, 15,   -5,   20],
+        [  10,   -5,  3,  0,  0,  0,  0,  3,   -5,   10],
+        [  10,   -5,  3,  0,  0,  0,  0,  3,   -5,   10],
+        [  10,   -5,  3,  0,  0,  0,  0,  3,   -5,   10],
+        [  10,   -5,  3,  0,  0,  0,  0,  3,   -5,   10],
+        [  20,   -5, 15,  3,  3,  3,  3, 15,   -5,   20],
+        [-200, -400, -5, -5, -5, -5, -5, -5, -400, -200],
+        [1000, -200, 20, 10, 10, 10, 10, 20, -200, 1000]
+    ];
+
+    const getEvalMap = (size) => {
+        if (size === 6) return EVAL_MAP_6;
+        if (size === 10) return EVAL_MAP_10;
+        return EVAL_MAP_8;
+    };
 
     const cloneState = (state) => JSON.parse(JSON.stringify(state));
 
@@ -170,11 +168,13 @@
     let isHintMode = false;
     let currentHints = [];
 
+    // 'R' (Red - 先攻) vs 'W' (White - 後攻)
     let settings = {
       mode: 'PvE', 
       aiDifficulty: 5, 
       firstMove: 'PLAYER', 
-      playerColor: 'R',
+      playerColor: 'R', 
+      boardSize: 8,
       player1Name: '',
       player2Name: ''
     };
@@ -182,7 +182,7 @@
 
     const loadHistory = () => {
       try {
-        const saved = localStorage.getItem('chinese_chess_history');
+        const saved = localStorage.getItem('reversi_history');
         if (saved) {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed)) matchHistory = parsed;
@@ -193,9 +193,7 @@
     };
 
     const saveHistory = () => {
-      try {
-        localStorage.setItem('chinese_chess_history', JSON.stringify(matchHistory));
-      } catch (e) {}
+      try { localStorage.setItem('reversi_history', JSON.stringify(matchHistory)); } catch (e) {}
     };
 
     const recordFinishedGame = () => {
@@ -205,364 +203,206 @@
         timestamp: new Date().toLocaleString(),
         settings: cloneState(settings),
         gameLog: cloneState(gameState.gameLog),
-        winner: gameState.winner
+        winner: gameState.winner,
+        score: { R: gameState.counts.R, W: gameState.counts.W }
       };
       matchHistory.unshift(newMatchRecord); 
       if (matchHistory.length > 50) matchHistory.pop(); 
       saveHistory();
     };
 
-    const getInitialBoard = () => {
-      const board = Array(10).fill(null).map(() => Array(9).fill(null));
-      const layout = [
-        ['r', 'h', 'e', 'a', 'g', 'a', 'e', 'h', 'r'],
-        ['.', '.', '.', '.', '.', '.', '.', '.', '.'],
-        ['.', 'c', '.', '.', '.', '.', '.', 'c', '.'],
-        ['s', '.', 's', '.', 's', '.', 's', '.', 's'],
-        ['.', '.', '.', '.', '.', '.', '.', '.', '.'],
-        ['.', '.', '.', '.', '.', '.', '.', '.', '.'],
-        ['S', '.', 'S', '.', 'S', '.', 'S', '.', 'S'],
-        ['.', 'C', '.', '.', '.', '.', '.', 'C', '.'],
-        ['.', '.', '.', '.', '.', '.', '.', '.', '.'],
-        ['R', 'H', 'E', 'A', 'G', 'A', 'E', 'H', 'R']
-      ];
-
-      for (let y = 0; y < 10; y++) {
-        for (let x = 0; x < 9; x++) {
-          const char = layout[y][x];
-          if (char !== '.') {
-            const color = char === char.toUpperCase() ? 'R' : 'B';
-            const type = char.toLowerCase();
-            board[y][x] = { color, type, label: PIECE_TEXT[color][type] };
-          }
-        }
-      }
+    const getInitialBoard = (size) => {
+      const board = Array(size).fill(null).map(() => Array(size).fill(null));
+      const mid = size / 2;
+      board[mid - 1][mid - 1] = 'W';
+      board[mid][mid] = 'W';
+      board[mid - 1][mid] = 'R';
+      board[mid][mid - 1] = 'R';
       return board;
     };
 
-    // --- 核心邏輯：規則引擎 (基礎物理步法) ---
-    const isInsidePalace = (x, y, color) => {
-      if (x < 3 || x > 5) return false;
-      if (color === 'B' && y > 2) return false;
-      if (color === 'R' && y < 7) return false;
-      return true;
+    // --- 核心邏輯：黑白棋規則 ---
+    const getFlips = (board, x, y, color, size) => {
+      if (board[y][x] !== null) return []; 
+      const opp = color === 'R' ? 'W' : 'R';
+      let flips = [];
+      const dirs = [[-1,-1], [0,-1], [1,-1], [-1,0], [1,0], [-1,1], [0,1], [1,1]];
+      
+      for (let [dx, dy] of dirs) {
+          let r = 1;
+          let tempFlips = [];
+          while (true) {
+              let nx = x + dx * r;
+              let ny = y + dy * r;
+              if (nx < 0 || nx >= size || ny < 0 || ny >= size) break;
+              if (board[ny][nx] === opp) {
+                  tempFlips.push({x: nx, y: ny});
+              } else if (board[ny][nx] === color) {
+                  flips.push(...tempFlips);
+                  break;
+              } else {
+                  break;
+              }
+              r++;
+          }
+      }
+      return flips;
     };
 
-    const getValidMoves = (board, sx, sy) => {
-      const piece = board[sy][sx];
-      if (!piece) return [];
+    const getValidMoves = (board, color, size) => {
       const moves = [];
-      const { color, type } = piece;
-
-      const addMoveIfValid = (nx, ny) => {
-        if (nx < 0 || nx > 8 || ny < 0 || ny > 9) return false;
-        const target = board[ny][nx];
-        if (!target || target.color !== color) moves.push({ x: nx, y: ny });
-        return !target; 
-      };
-
-      if (type === 'r') {
-        for (let x = sx + 1; x <= 8; x++) if (!addMoveIfValid(x, sy)) break;
-        for (let x = sx - 1; x >= 0; x--) if (!addMoveIfValid(x, sy)) break;
-        for (let y = sy + 1; y <= 9; y++) if (!addMoveIfValid(sx, y)) break;
-        for (let y = sy - 1; y >= 0; y--) if (!addMoveIfValid(sx, y)) break;
-      } 
-      else if (type === 'h') {
-        const dirs = [
-          { dx: 1, dy: 2, bx: 0, by: 1 }, { dx: 2, dy: 1, bx: 1, by: 0 },
-          { dx: 2, dy: -1, bx: 1, by: 0 }, { dx: 1, dy: -2, bx: 0, by: -1 },
-          { dx: -1, dy: -2, bx: 0, by: -1 }, { dx: -2, dy: -1, bx: -1, by: 0 },
-          { dx: -2, dy: 1, bx: -1, by: 0 }, { dx: -1, dy: 2, bx: 0, by: 1 }
-        ];
-        dirs.forEach(d => {
-          if (sx + d.bx >= 0 && sx + d.bx <= 8 && sy + d.by >= 0 && sy + d.by <= 9 && !board[sy + d.by][sx + d.bx]) addMoveIfValid(sx + d.dx, sy + d.dy);
-        });
-      }
-      else if (type === 'e') {
-        const dirs = [{ dx: 2, dy: 2, bx: 1, by: 1 }, { dx: 2, dy: -2, bx: 1, by: -1 }, { dx: -2, dy: -2, bx: -1, by: -1 }, { dx: -2, dy: 2, bx: -1, by: 1 }];
-        dirs.forEach(d => {
-          const ny = sy + d.dy;
-          if ((color === 'R' && ny < 5) || (color === 'B' && ny > 4)) return;
-          if (sx + d.bx >= 0 && sx + d.bx <= 8 && sy + d.by >= 0 && sy + d.by <= 9 && !board[sy + d.by][sx + d.bx]) addMoveIfValid(sx + d.dx, ny);
-        });
-      }
-      else if (type === 'a') {
-        const dirs = [{ dx: 1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: 1 }, { dx: -1, dy: -1 }];
-        dirs.forEach(d => {
-          const nx = sx + d.dx, ny = sy + d.dy;
-          if (isInsidePalace(nx, ny, color)) addMoveIfValid(nx, ny);
-        });
-      }
-      else if (type === 'g') {
-        const dirs = [{ dx: 0, dy: 1 }, { dx: 0, dy: -1 }, { dx: 1, dy: 0 }, { dx: -1, dy: 0 }];
-        dirs.forEach(d => {
-          const nx = sx + d.dx, ny = sy + d.dy;
-          if (isInsidePalace(nx, ny, color)) addMoveIfValid(nx, ny);
-        });
-        let searchDir = color === 'R' ? -1 : 1;
-        for (let y = sy + searchDir; y >= 0 && y <= 9; y += searchDir) {
-          if (board[y][sx]) {
-            if (board[y][sx].type === 'g') moves.push({ x: sx, y });
-            break;
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          if (board[y][x] === null) {
+            const flips = getFlips(board, x, y, color, size);
+            if (flips.length > 0) moves.push({ x, y, flips });
           }
-        }
-      }
-      else if (type === 'c') {
-        const checkCannonDir = (dx, dy) => {
-          let jumped = false;
-          for (let i = 1; i < 10; i++) {
-            const nx = sx + dx * i, ny = sy + dy * i;
-            if (nx < 0 || nx > 8 || ny < 0 || ny > 9) break;
-            const target = board[ny][nx];
-            if (!jumped) {
-              if (!target) moves.push({ x: nx, y: ny });
-              else jumped = true;
-            } else {
-              if (target) {
-                if (target.color !== color) moves.push({ x: nx, y: ny });
-                break;
-              }
-            }
-          }
-        };
-        checkCannonDir(1, 0); checkCannonDir(-1, 0); checkCannonDir(0, 1); checkCannonDir(0, -1);
-      }
-      else if (type === 's') {
-        const dy = color === 'R' ? -1 : 1;
-        addMoveIfValid(sx, sy + dy);
-        if ((color === 'R' && sy < 5) || (color === 'B' && sy > 4)) {
-          addMoveIfValid(sx - 1, sy); addMoveIfValid(sx + 1, sy);
         }
       }
       return moves;
     };
 
-    // --- 將軍檢測 (Check Detection) ---
-    const doMove = (board, move) => {
-      const captured = board[move.to.y][move.to.x];
-      board[move.to.y][move.to.x] = board[move.from.y][move.from.x];
-      board[move.from.y][move.from.x] = null;
-      return captured;
-    };
-
-    const undoMove = (board, move, captured) => {
-      board[move.from.y][move.from.x] = board[move.to.y][move.to.x];
-      board[move.to.y][move.to.x] = captured;
-    };
-
-    const isInCheck = (board, color) => {
-      let gx = -1, gy = -1;
-      for (let y = 0; y <= 9; y++) {
-        for (let x = 0; x <= 8; x++) {
-          const p = board[y][x];
-          if (p && p.type === 'g' && p.color === color) { gx = x; gy = y; break; }
-        }
-        if (gx !== -1) break;
-      }
-      if (gx === -1) return false; 
-
-      const oppColor = color === 'R' ? 'B' : 'R';
-      for (let y = 0; y <= 9; y++) {
-        for (let x = 0; x <= 8; x++) {
-          const p = board[y][x];
-          if (p && p.color === oppColor) {
-            const moves = getValidMoves(board, x, y);
-            for (let i = 0; i < moves.length; i++) {
-              if (moves[i].x === gx && moves[i].y === gy) return true;
+    const countPieces = (board, size) => {
+        let counts = { R: 0, W: 0 };
+        for (let y=0; y < size; y++) {
+            for (let x=0; x < size; x++) {
+                if(board[y][x] === 'R') counts.R++;
+                else if(board[y][x] === 'W') counts.W++;
             }
-          }
         }
-      }
-      return false;
+        return counts;
     };
 
-    // 嚴格嘅步法過濾：不能留下自己被將軍嘅狀態 (解將 / 防自殺)
-    const getStrictValidMoves = (board, sx, sy) => {
-      const moves = getValidMoves(board, sx, sy);
-      const p = board[sy][sx];
-      if (!p) return [];
-      return moves.filter(m => {
-        const captured = doMove(board, { from: { x: sx, y: sy }, to: m });
-        const check = isInCheck(board, p.color);
-        undoMove(board, { from: { x: sx, y: sy }, to: m }, captured);
-        return !check;
-      });
+    const doMove = (board, move, color) => {
+        board[move.y][move.x] = color;
+        move.flips.forEach(f => {
+            board[f.y][f.x] = color;
+        });
+    };
+
+    const undoMove = (board, move, color) => {
+        board[move.y][move.x] = null;
+        const opp = color === 'R' ? 'W' : 'R';
+        move.flips.forEach(f => {
+            board[f.y][f.x] = opp;
+        });
     };
 
     // --- 電腦 AI 邏輯 ---
-    const getAllMovesPseudo = (board, color) => {
-      let moves = [];
-      for (let y = 0; y <= 9; y++) {
-        for (let x = 0; x <= 8; x++) {
-          const p = board[y][x];
-          if (p && p.color === color) {
-            let vMoves = getValidMoves(board, x, y);
-            vMoves.forEach(m => moves.push({ from: {x, y}, to: {x: m.x, y: m.y} }));
-          }
-        }
-      }
-      return moves;
-    };
-
-    const evaluateBoard = (board) => {
-      let score = 0;
-      const isPurgatory = settings.aiDifficulty >= 14;
-      
-      for (let y = 0; y <= 9; y++) {
-        for (let x = 0; x <= 8; x++) {
-          const p = board[y][x];
-          if (p) {
-            let val = PIECE_VALUES[p.type];
-            let isBlack = p.color === 'B';
-            let rank = isBlack ? y : 9 - y; 
-            
-            if (p.type === 's') {
-              if (rank > 4) {
-                val += 30 + (rank - 4) * 20; 
-                if (x >= 2 && x <= 6) val += 20; 
-                if (rank === 9) val -= 40; 
-              }
-            } else if (p.type === 'h') { 
-              if (x > 0 && x < 8 && y > 0 && y < 9) val += 30; 
-              if (rank > 4 && x > 1 && x < 7) val += 30; 
-              if (isPurgatory && x >= 3 && x <= 5 && rank >= 5) val += 20; 
-            } else if (p.type === 'r') { 
-              if (x === 4 || x === 3 || x === 5) val += 25; 
-              if (rank > 4) val += 20; 
-            } else if (p.type === 'c') { 
-              if (x === 4) val += 20; 
-              if (rank === 2 || rank === 0) val += 10; 
-              if (isPurgatory && x === 4 && rank >= 5) val += 30; 
-            } else if (p.type === 'g') { 
-              if (x === 4) val += 20; 
+    const evaluateBoard = (board, color, size) => {
+        let score = 0;
+        let myColor = color;
+        let oppColor = color === 'R' ? 'W' : 'R';
+        const evalMap = getEvalMap(size);
+        
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                if (board[y][x] === myColor) score += evalMap[y][x];
+                else if (board[y][x] === oppColor) score -= evalMap[y][x];
             }
-            score += isBlack ? val : -val; 
-          }
         }
-      }
-      return score;
+        // Mobility
+        const myMoves = getValidMoves(board, myColor, size).length;
+        const oppMoves = getValidMoves(board, oppColor, size).length;
+        score += (myMoves - oppMoves) * 10;
+        
+        return score;
     };
 
-    const minimax = (board, depth, alpha, beta, isMaximizing) => {
-      if (depth === 0) return evaluateBoard(board);
+    const minimax = (board, depth, alpha, beta, isMaximizing, myColor, oppColor, size) => {
+        if (depth === 0) return evaluateBoard(board, myColor, size);
+        
+        const turnColor = isMaximizing ? myColor : oppColor;
+        let moves = getValidMoves(board, turnColor, size);
 
-      const color = isMaximizing ? 'B' : 'R';
-      // Minimax 內部為求速度保留 Pseudo moves，透過擊殺 General 判定勝負
-      let moves = getAllMovesPseudo(board, color);
-
-      moves.sort((a, b) => {
-        let scoreA = board[a.to.y][a.to.x] ? PIECE_VALUES[board[a.to.y][a.to.x].type] : 0;
-        let scoreB = board[b.to.y][b.to.x] ? PIECE_VALUES[board[b.to.y][b.to.x].type] : 0;
-        return scoreB - scoreA; 
-      });
-
-      if (moves.length === 0) return isMaximizing ? -100000 : 100000;
-
-      if (isMaximizing) {
-        let maxEval = -Infinity;
-        for (let i = 0; i < moves.length; i++) {
-          let move = moves[i];
-          let captured = doMove(board, move);
-          let currentEval = 0;
-          if (captured && captured.type === 'g') currentEval = 100000;
-          else currentEval = minimax(board, depth - 1, alpha, beta, false);
-          
-          undoMove(board, move, captured);
-          maxEval = Math.max(maxEval, currentEval);
-          alpha = Math.max(alpha, currentEval);
-          if (beta <= alpha) break; 
+        if (moves.length === 0) {
+            const oppMoves = getValidMoves(board, turnColor === myColor ? oppColor : myColor, size);
+            if (oppMoves.length === 0) {
+                const counts = countPieces(board, size);
+                if (counts[myColor] > counts[oppColor]) return 100000;
+                else if (counts[myColor] < counts[oppColor]) return -100000;
+                return 0;
+            }
+            return minimax(board, depth - 1, alpha, beta, !isMaximizing, myColor, oppColor, size);
         }
-        return maxEval;
-      } else {
-        let minEval = Infinity;
-        for (let i = 0; i < moves.length; i++) {
-          let move = moves[i];
-          let captured = doMove(board, move);
-          let currentEval = 0;
-          if (captured && captured.type === 'g') currentEval = -100000;
-          else currentEval = minimax(board, depth - 1, alpha, beta, true);
 
-          undoMove(board, move, captured);
-          minEval = Math.min(minEval, currentEval);
-          beta = Math.min(beta, currentEval);
-          if (beta <= alpha) break; 
+        if (isMaximizing) {
+            let maxEval = -Infinity;
+            for (let i = 0; i < moves.length; i++) {
+                let move = moves[i];
+                doMove(board, move, turnColor);
+                let evalScore = minimax(board, depth - 1, alpha, beta, false, myColor, oppColor, size);
+                undoMove(board, move, turnColor);
+                maxEval = Math.max(maxEval, evalScore);
+                alpha = Math.max(alpha, evalScore);
+                if (beta <= alpha) break;
+            }
+            return maxEval;
+        } else {
+            let minEval = Infinity;
+            for (let i = 0; i < moves.length; i++) {
+                let move = moves[i];
+                doMove(board, move, turnColor);
+                let evalScore = minimax(board, depth - 1, alpha, beta, true, myColor, oppColor, size);
+                undoMove(board, move, turnColor);
+                minEval = Math.min(minEval, evalScore);
+                beta = Math.min(beta, evalScore);
+                if (beta <= alpha) break;
+            }
+            return minEval;
         }
-        return minEval;
-      }
     };
 
     const calculateAIMove = () => {
-      const diff = settings.aiDifficulty;
-      let depth = 1;
-      let randomness = 0;
+        const diff = settings.aiDifficulty;
+        let depth = 2;
+        let randomness = 0;
 
-      if (diff <= 3) { depth = 2; randomness = 0.5 - (diff * 0.1); } 
-      else if (diff <= 6) { depth = 3; randomness = 0.3 - ((diff-3) * 0.08); } 
-      else if (diff <= 10) { depth = 4; randomness = 0.15 - ((diff-6) * 0.03); } 
-      else if (diff <= 13) { depth = 4; randomness = 0; } 
-      else { depth = 5; randomness = 0; } 
+        if (diff <= 3) { depth = 2; randomness = 0.5 - (diff * 0.1); } 
+        else if (diff <= 6) { depth = 3; randomness = 0.3 - ((diff-3) * 0.08); } 
+        else if (diff <= 10) { depth = 4; randomness = 0.15 - ((diff-6) * 0.03); } 
+        else if (diff <= 13) { depth = 5; randomness = 0; } 
+        else { depth = 6; randomness = 0; } 
 
-      const aiColor = 'B';
-      // 確保 AI 最終選擇嘅步法必須嚴格合法 (包括解將)
-      let moves = [];
-      for (let y = 0; y <= 9; y++) {
-        for (let x = 0; x <= 8; x++) {
-          const p = gameState.board[y][x];
-          if (p && p.color === aiColor) {
-            let vMoves = getStrictValidMoves(gameState.board, x, y);
-            vMoves.forEach(m => moves.push({ from: {x, y}, to: {x: m.x, y: m.y} }));
-          }
-        }
-      }
-      
-      if (moves.length === 0) return null; // 絕殺無解
-
-      if (Math.random() < randomness) {
-         return moves[Math.floor(Math.random() * moves.length)];
-      }
-
-      let bestMoves = [];
-      const isMaximizing = true; 
-      let bestValue = -Infinity;
-      
-      moves.sort((a, b) => {
-        let scoreA = gameState.board[a.to.y][a.to.x] ? PIECE_VALUES[gameState.board[a.to.y][a.to.x].type] : 0;
-        let scoreB = gameState.board[b.to.y][b.to.x] ? PIECE_VALUES[gameState.board[b.to.y][b.to.x].type] : 0;
-        return scoreB - scoreA; 
-      });
-
-      for (let i = 0; i < moves.length; i++) {
-        let move = moves[i];
-        let captured = doMove(gameState.board, move);
-        let moveValue = 0;
+        const aiColor = gameState.turn;
+        const moves = gameState.validMoves;
+        const size = gameState.boardSize;
         
-        if (captured && captured.type === 'g') {
-           moveValue = 100000;
-        } else {
-           moveValue = minimax(gameState.board, depth - 1, -Infinity, Infinity, false);
+        if (moves.length === 0) return null;
+
+        if (Math.random() < randomness) {
+            return moves[Math.floor(Math.random() * moves.length)];
         }
 
-        undoMove(gameState.board, move, captured);
+        let bestMoves = [];
+        let bestValue = -Infinity;
+        const oppColor = aiColor === 'R' ? 'W' : 'R';
 
-        if (moveValue > -50000 && moveValue < 50000) {
-            moveValue += (Math.random() * 4 - 2); 
-        }
+        for (let i = 0; i < moves.length; i++) {
+            let move = moves[i];
+            doMove(gameState.board, move, aiColor);
+            let moveValue = minimax(gameState.board, depth - 1, -Infinity, Infinity, false, aiColor, oppColor, size);
+            undoMove(gameState.board, move, aiColor);
 
-        if (moveValue > bestValue) { 
-            bestValue = moveValue; 
-            bestMoves = [move]; 
-        } else if (Math.abs(moveValue - bestValue) < 0.1) { 
-            bestMoves.push(move); 
+            if (moveValue > -50000 && moveValue < 50000) {
+                moveValue += (Math.random() * 2 - 1); 
+            }
+
+            if (moveValue > bestValue) { 
+                bestValue = moveValue; 
+                bestMoves = [move]; 
+            } else if (Math.abs(moveValue - bestValue) < 0.1) { 
+                bestMoves.push(move); 
+            }
         }
-      }
-      return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+        return bestMoves[Math.floor(Math.random() * bestMoves.length)];
     };
 
     const triggerAI = () => {
        const aiMove = calculateAIMove();
        if (aiMove) {
           gameState.isThinking = false;
-          performMove(aiMove.from.x, aiMove.from.y, aiMove.to.x, aiMove.to.y);
+          performMove(aiMove);
        }
     };
 
@@ -578,50 +418,32 @@
         }
 
         const color = gameState.turn;
-        let depth = 4;
+        const size = gameState.boardSize;
+        let depth = 5; 
         
-        // 嚴格過濾合法步法，確保若被將軍，必定只顯示能解將嘅棋
-        let moves = [];
-        for (let y = 0; y <= 9; y++) {
-            for (let x = 0; x <= 8; x++) {
-                const p = gameState.board[y][x];
-                if (p && p.color === color) {
-                    let vMoves = getStrictValidMoves(gameState.board, x, y);
-                    vMoves.forEach(m => moves.push({ from: {x, y}, to: {x: m.x, y: m.y} }));
-                }
-            }
-        }
-
+        let moves = gameState.validMoves;
         if (moves.length === 0) { currentHints = []; return; }
 
         let evaluatedMoves = [];
+        const oppColor = color === 'R' ? 'W' : 'R';
+
         for (let i = 0; i < moves.length; i++) {
             let move = moves[i];
-            let captured = doMove(gameState.board, move);
-            let moveValue = 0;
-
-            if (captured && captured.type === 'g') {
-                moveValue = color === 'B' ? 100000 : -100000;
-            } else {
-                moveValue = minimax(gameState.board, depth - 1, -Infinity, Infinity, color === 'R');
-            }
-
-            undoMove(gameState.board, move, captured);
+            doMove(gameState.board, move, color);
+            let moveValue = minimax(gameState.board, depth - 1, -Infinity, Infinity, false, color, oppColor, size);
+            undoMove(gameState.board, move, color);
+            
+            moveValue += (Math.random() * 2 - 1);
             evaluatedMoves.push({ move, score: moveValue });
         }
 
-        if (color === 'B') {
-            evaluatedMoves.sort((a, b) => b.score - a.score);
-        } else {
-            evaluatedMoves.sort((a, b) => a.score - b.score);
-        }
-
+        evaluatedMoves.sort((a, b) => b.score - a.score);
         currentHints = evaluatedMoves.slice(0, 3).map(e => e.move);
     };
 
     window.toggleHintMode = () => {
         isHintMode = !isHintMode;
-        if (isHintMode && gameState && !gameState.winner && !gameState.isThinking && !gameState.isTossing) {
+        if (isHintMode && gameState && !gameState.winner && !gameState.isThinking && !gameState.isTossing && gameState.validMoves.length > 0) {
             gameState.isCalculatingHints = true;
             render();
             setTimeout(() => {
@@ -636,81 +458,62 @@
     };
 
     // --- 動畫與核心流程 ---
-    const performMove = (sx, sy, tx, ty) => {
+    const performMove = (move) => {
         historyStack.push(cloneState(gameState));
         
-        const movingPiece = gameState.board[sy][sx];
-        const targetPiece = gameState.board[ty][tx];
-
-        const logEntry = { turn: gameState.turn, piece: movingPiece.label, from: { x: sx, y: sy }, to: { x: tx, y: ty }, captured: targetPiece ? targetPiece.label : null };
+        const turnColor = gameState.turn;
+        const coords = `${String.fromCharCode(65 + move.x)}${move.y + 1}`;
+        const logEntry = { turn: turnColor, desc: `落子 ${coords}，翻轉 ${move.flips.length} 子` };
         gameState.gameLog.push(logEntry);
 
-        gameState.board[ty][tx] = movingPiece;
-        gameState.board[sy][sx] = null;
+        gameState.board[move.y][move.x] = turnColor;
+        gameState.lastMove = { x: move.x, y: move.y };
+        gameState.lastFlipped = move.flips;
         
-        gameState.lastMove = { from: {x: sx, y: sy}, to: {x: tx, y: ty} };
+        // 實時更新 board state，等 render 時動畫會跟隨
+        move.flips.forEach(f => {
+            gameState.board[f.y][f.x] = turnColor;
+        });
+
         gameState.isAnimating = true; 
         currentHints = []; 
-        
-        if (targetPiece) gameState.animatingCapture = targetPiece;
-
-        gameState.selectedPiece = null;
         gameState.validMoves = [];
+        gameState.counts = countPieces(gameState.board, gameState.boardSize);
         
         render(); 
 
         setTimeout(() => {
             gameState.isAnimating = false;
-            if (targetPiece) {
-                gameState.showCaptureEffect = { x: tx, y: ty, piece: targetPiece, capturerColor: movingPiece.color };
-                gameState.animatingCapture = null;
-                render();
-                setTimeout(() => {
-                    gameState.showCaptureEffect = null;
-                    completeMoveLogic(targetPiece);
-                }, 800); 
-            } else {
-                completeMoveLogic(null);
-            }
-        }, 400); 
+            completeMoveLogic();
+        }, 800); // 配合 CSS 0.8s 動畫
     };
 
-    const completeMoveLogic = (targetPiece) => {
-        if (targetPiece) {
-            gameState.captured[gameState.turn].push(targetPiece);
-            if (targetPiece.type === 'g') gameState.winner = gameState.turn;
-        }
-
-        if (!gameState.winner) {
-            gameState.turn = gameState.turn === 'R' ? 'B' : 'R';
+    const completeMoveLogic = () => {
+        gameState.lastFlipped = [];
+        
+        const nextColor = gameState.turn === 'R' ? 'W' : 'R';
+        const size = gameState.boardSize;
+        let nextMoves = getValidMoves(gameState.board, nextColor, size);
+        
+        if (nextMoves.length > 0) {
+            gameState.turn = nextColor;
+            gameState.validMoves = nextMoves;
             if (gameState.turn === 'R') gameState.turnCount++;
-
-            // 判斷當前方是否被將軍
-            gameState.inCheck = isInCheck(gameState.board, gameState.turn);
-
-            // 絕殺判斷 (Checkmate)
-            let hasMoves = false;
-            for (let y = 0; y <= 9; y++) {
-                for (let x = 0; x <= 8; x++) {
-                    const p = gameState.board[y][x];
-                    if (p && p.color === gameState.turn) {
-                        if (getStrictValidMoves(gameState.board, x, y).length > 0) {
-                            hasMoves = true; break;
-                        }
-                    }
-                }
-                if (hasMoves) break;
-            }
-            if (!hasMoves) {
-                // 完全無步可行，宣佈絕殺，由對手獲勝
-                gameState.winner = gameState.turn === 'R' ? 'B' : 'R';
+        } else {
+            let currentMoves = getValidMoves(gameState.board, gameState.turn, size);
+            if (currentMoves.length > 0) {
+                gameState.gameLog.push({ turn: nextColor, desc: '無步可行 (Pass)' });
+                gameState.validMoves = currentMoves;
+            } else {
+                gameState.validMoves = [];
+                gameState.winner = gameState.counts.R > gameState.counts.W ? 'R' : (gameState.counts.W > gameState.counts.R ? 'W' : 'DRAW');
             }
         }
 
         if (gameState.winner) {
             recordFinishedGame();
             render();
-        } else if (settings.mode === 'PvE' && gameState.turn === 'B') {
+        } else if (settings.mode === 'PvE' && gameState.turn !== settings.playerColor) {
             gameState.isThinking = true;
             render();
             setTimeout(triggerAI, 1000);
@@ -758,7 +561,7 @@
         const p2Input = document.getElementById('input-p2');
         if(p2Input) p2Input.style.display = isPvE ? 'none' : 'block';
         const p1Input = document.getElementById('input-p1');
-        if(p1Input) p1Input.placeholder = isPvE ? "你的名字" : "玩家 1";
+        if(p1Input) p1Input.placeholder = isPvE ? "你的名字" : "玩家 1 (紅)";
 
         const btnFmPlayer = document.getElementById('btn-fm-player');
         const btnFmAi = document.getElementById('btn-fm-ai');
@@ -779,6 +582,13 @@
                 } else {
                     btn.className = baseClass + (isActive ? 'bg-purple-600 text-white font-bold border border-purple-600 shadow-[0_0_10px_rgba(147,51,234,0.5)]' : 'bg-[#111] text-purple-500/70 font-medium border border-purple-900/50 hover:bg-purple-900/30 hover:text-purple-400');
                 }
+            }
+        }
+        
+        for (let size of [6, 8, 10]) {
+            const btn = document.getElementById(`btn-size-${size}`);
+            if (btn) {
+                btn.className = `board-size-btn flex-1 py-3 lg:py-3.5 rounded-lg text-[11px] lg:text-[14px] tracking-[0.1em] uppercase key-base ${pendingSettings.boardSize === size ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}`;
             }
         }
 
@@ -829,18 +639,19 @@
       isRecordOpen = false;
       
       if (pendingSettings) settings = cloneState(pendingSettings);
-      settings.playerColor = 'R'; 
-
+      
       const p1Name = settings.player1Name.trim() || (settings.mode === 'PvE' ? 'YOU' : 'P1');
       const aiName = AI_NAMES[Math.floor(Math.random() * AI_NAMES.length)];
       const p2Name = settings.mode === 'PvE' ? aiName : (settings.player2Name.trim() || 'P2');
 
+      const size = settings.boardSize || 8;
+      const initialBoard = getInitialBoard(size);
+
       gameState = {
-        board: getInitialBoard(), turn: 'R', selectedPiece: null, validMoves: [], winner: null,
-        captured: { 'R': [], 'B': [] }, turnCount: 1, isThinking: false, isAnimating: false,
-        animatingCapture: null, showCaptureEffect: null, lastMove: null, gameLog: [], isTossing: false,
+        board: initialBoard, turn: 'R', boardSize: size, validMoves: [], winner: null,
+        counts: countPieces(initialBoard, size), turnCount: 1, isThinking: false, isAnimating: false,
+        lastMove: null, lastFlipped: [], gameLog: [], isTossing: false,
         isCalculatingHints: false,
-        inCheck: false,
         redName: p1Name,
         whiteName: p2Name,
         startingTurn: 'R' 
@@ -848,41 +659,59 @@
       historyStack = [];
       currentHints = [];
 
+      // 黑白棋「先攻」必定為紅方
       if (settings.mode === 'PvE') {
           if (settings.firstMove === 'RANDOM') {
               gameState.isTossing = true;
-              gameState.turn = Math.random() < 0.5 ? 'R' : 'B';
-              gameState.startingTurn = gameState.turn;
+              settings.playerColor = Math.random() < 0.5 ? 'R' : 'W';
+          } else {
+              settings.playerColor = settings.firstMove === 'AI' ? 'W' : 'R';
+          }
+
+          if (settings.playerColor === 'W') {
+              gameState.redName = p2Name; // 電腦係紅 (先攻)
+              gameState.whiteName = p1Name; // 玩家係白
+          } else {
+              gameState.redName = p1Name; // 玩家係紅 (先攻)
+              gameState.whiteName = p2Name; // 電腦係白
+          }
+
+          if (gameState.isTossing) {
               render(); 
               setTimeout(() => {
                   gameState.isTossing = false;
                   render();
-                  if (gameState.turn === 'B') { 
+                  if (gameState.turn !== settings.playerColor) { 
                       gameState.isThinking = true;
                       render();
                       setTimeout(triggerAI, 1000);
-                  } else if (isHintMode) {
-                      gameState.isCalculatingHints = true; render();
-                      setTimeout(() => { updateHintsLogic(); gameState.isCalculatingHints = false; render(); }, 10);
+                  } else {
+                      gameState.validMoves = getValidMoves(gameState.board, 'R', size);
+                      if (isHintMode) {
+                          gameState.isCalculatingHints = true; render();
+                          setTimeout(() => { updateHintsLogic(); gameState.isCalculatingHints = false; render(); }, 10);
+                      }
+                      render();
                   }
               }, 3500); 
               return;
           } else {
-              gameState.turn = settings.firstMove === 'AI' ? 'B' : 'R';
-              gameState.startingTurn = gameState.turn;
-              if (gameState.turn === 'B') {
+              if (gameState.turn !== settings.playerColor) {
                   gameState.isThinking = true;
                   setTimeout(() => { 
                       render(); 
                       setTimeout(triggerAI, 1000); 
                   }, 0);
-              } else if (isHintMode) {
-                  gameState.isCalculatingHints = true; render();
-                  setTimeout(() => { updateHintsLogic(); gameState.isCalculatingHints = false; render(); }, 10);
+              } else {
+                  gameState.validMoves = getValidMoves(gameState.board, 'R', size);
+                  if (isHintMode) {
+                      gameState.isCalculatingHints = true; render();
+                      setTimeout(() => { updateHintsLogic(); gameState.isCalculatingHints = false; render(); }, 10);
+                  }
               }
           }
       } else {
-          gameState.startingTurn = 'R';
+          gameState.validMoves = getValidMoves(gameState.board, 'R', size);
           if (isHintMode) {
               gameState.isCalculatingHints = true; render();
               setTimeout(() => { updateHintsLogic(); gameState.isCalculatingHints = false; render(); }, 10);
@@ -892,14 +721,13 @@
     };
 
     window.handleUndo = () => {
-      if (historyStack.length === 0 || gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing) return;
+      if (historyStack.length === 0 || gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.isTossing) return;
       if (settings.mode === 'PvE') {
          if (historyStack.length >= 2) { historyStack.pop(); gameState = historyStack.pop(); }
       } else {
          gameState = historyStack.pop();
       }
-      gameState.lastMove = null; gameState.isAnimating = false; gameState.showCaptureEffect = null;
-      gameState.inCheck = isInCheck(gameState.board, gameState.turn); // Undo 都要更新將軍狀態
+      gameState.lastMove = null; gameState.isAnimating = false; gameState.lastFlipped = [];
       
       if (isHintMode) {
           gameState.isCalculatingHints = true; render();
@@ -910,25 +738,12 @@
     };
 
     window.handleSquareClick = (x, y) => {
-      if (gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing) return;
+      if (gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.isTossing) return;
       
-      const piece = gameState.board[y][x];
-      const isSelected = gameState.selectedPiece && gameState.selectedPiece.x === x && gameState.selectedPiece.y === y;
-
-      if (isSelected) { gameState.selectedPiece = null; gameState.validMoves = []; render(); return; }
+      if (settings.mode === 'PvE' && gameState.turn !== settings.playerColor) return;
 
       const isValidMove = gameState.validMoves.find(m => m.x === x && m.y === y);
-      if (gameState.selectedPiece && isValidMove) { performMove(gameState.selectedPiece.x, gameState.selectedPiece.y, x, y); return; }
-
-      if (piece && piece.color === gameState.turn) {
-        if (settings.mode === 'PvE' && piece.color !== settings.playerColor) return;
-        gameState.selectedPiece = { x, y };
-        // 玩家點擊時，採用 STRICT moves 確保唔會自殺 / 強制解將
-        gameState.validMoves = getStrictValidMoves(gameState.board, x, y);
-        render();
-      } else {
-        gameState.selectedPiece = null; gameState.validMoves = []; render();
-      }
+      if (isValidMove) { performMove(isValidMove); }
     };
 
     // --- 獨立 Menu 渲染 ---
@@ -973,25 +788,25 @@
             ${backToLobbyHTML}
             ${closeBtnHTML}
           </header>
-          <div class="flex-1 flex flex-col items-center justify-center gap-8 pb-10 px-6 w-full mt-4 lg:mt-0">
+          <div class="flex-1 flex flex-col items-center justify-center gap-6 pb-10 px-6 w-full mt-4 lg:mt-0">
             <div class="flex flex-col items-center justify-center gap-3 mb-2">
-               <img src="./assets/Logo.svg" alt="CHESS" class="h-[22px] lg:h-[28px] object-contain opacity-90 icon-white">
-               <div class="text-white font-chess tracking-[0.4em] text-[13px] lg:text-[15px] font-light opacity-60">中國象棋</div>
+               <img src="./assets/Logo.svg" alt="LOGO" class="h-[22px] lg:h-[28px] object-contain opacity-90 icon-white">
+               <div class="text-white font-chess tracking-[0.4em] text-[13px] lg:text-[15px] font-light opacity-60">黑白棋</div>
             </div>
 
             <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3">
               <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase">GAME MODE</div>
               <div class="flex w-full gap-2">
-                <button id="btn-mode-pve" data-val="PvE" onclick="window.setSetting('mode', 'PvE')" class="mode-btn flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.mode === 'PvE' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">單人 (對電腦)</button>
-                <button id="btn-mode-pvp" data-val="PvP" onclick="window.setSetting('mode', 'PvP')" class="mode-btn flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.mode === 'PvP' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">雙人 (對戰)</button>
+                <button id="btn-mode-pve" data-val="PvE" onclick="window.setSetting('mode', 'PvE')" class="mode-btn flex-1 py-3 lg:py-3.5 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.mode === 'PvE' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">單人 (對電腦)</button>
+                <button id="btn-mode-pvp" data-val="PvP" onclick="window.setSetting('mode', 'PvP')" class="mode-btn flex-1 py-3 lg:py-3.5 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.mode === 'PvP' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">雙人 (對戰)</button>
               </div>
             </div>
 
             <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3">
               <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase w-full text-center">PLAYER NAME</div>
               <div class="flex w-full gap-2">
-                <input type="text" id="input-p1" value="${pendingSettings.player1Name}" oninput="window.setPlayerName('player1Name', this.value)" placeholder="${isPvE ? '你的名字' : '玩家 1'}" class="flex-1 min-w-0 bg-[#111] border border-neutral-800 rounded-lg py-3.5 px-4 text-[12px] lg:text-[14px] text-white text-center focus:outline-none focus:border-neutral-500 transition-colors placeholder-neutral-600 font-medium tracking-widest">
-                <input type="text" id="input-p2" value="${pendingSettings.player2Name}" oninput="window.setPlayerName('player2Name', this.value)" placeholder="玩家 2" class="flex-1 min-w-0 bg-[#111] border border-neutral-800 rounded-lg py-3.5 px-4 text-[12px] lg:text-[14px] text-white text-center focus:outline-none focus:border-neutral-500 transition-colors placeholder-neutral-600 font-medium tracking-widest" style="display: ${isPvE ? 'none' : 'block'}">
+                <input type="text" id="input-p1" value="${pendingSettings.player1Name}" oninput="window.setPlayerName('player1Name', this.value)" placeholder="${isPvE ? '你的名字' : '玩家 1 (紅)'}" class="flex-1 min-w-0 bg-[#111] border border-neutral-800 rounded-lg py-3 lg:py-3.5 px-4 text-[12px] lg:text-[14px] text-white text-center focus:outline-none focus:border-neutral-500 transition-colors placeholder-neutral-600 font-medium tracking-widest">
+                <input type="text" id="input-p2" value="${pendingSettings.player2Name}" oninput="window.setPlayerName('player2Name', this.value)" placeholder="玩家 2 (白)" class="flex-1 min-w-0 bg-[#111] border border-neutral-800 rounded-lg py-3 lg:py-3.5 px-4 text-[12px] lg:text-[14px] text-white text-center focus:outline-none focus:border-neutral-500 transition-colors placeholder-neutral-600 font-medium tracking-widest" style="display: ${isPvE ? 'none' : 'block'}">
               </div>
             </div>
 
@@ -1004,16 +819,24 @@
                 ${diffGridHTML}
               </div>
               <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3 mt-2">
+                <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase">BOARD SIZE</div>
+                <div class="flex w-full gap-2">
+                  <button id="btn-size-6" data-val="6" onclick="window.setSetting('boardSize', 6)" class="board-size-btn flex-1 py-3 lg:py-3.5 rounded-lg text-[11px] lg:text-[14px] tracking-[0.1em] uppercase key-base ${pendingSettings.boardSize === 6 ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">6 x 6</button>
+                  <button id="btn-size-8" data-val="8" onclick="window.setSetting('boardSize', 8)" class="board-size-btn flex-1 py-3 lg:py-3.5 rounded-lg text-[11px] lg:text-[14px] tracking-[0.1em] uppercase key-base ${pendingSettings.boardSize === 8 ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">8 x 8</button>
+                  <button id="btn-size-10" data-val="10" onclick="window.setSetting('boardSize', 10)" class="board-size-btn flex-1 py-3 lg:py-3.5 rounded-lg text-[11px] lg:text-[14px] tracking-[0.1em] uppercase key-base ${pendingSettings.boardSize === 10 ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">10 x 10</button>
+                </div>
+              </div>
+              <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3 mt-2">
                 <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase">FIRST MOVE</div>
                 <div class="flex w-full gap-2">
-                  <button id="btn-fm-player" data-val="PLAYER" onclick="window.setSetting('firstMove', 'PLAYER')" class="fm-btn flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === 'PLAYER' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">先攻</button>
-                  <button id="btn-fm-ai" data-val="AI" onclick="window.setSetting('firstMove', 'AI')" class="fm-btn flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === 'AI' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">後攻</button>
-                  <button id="btn-fm-random" data-val="RANDOM" onclick="window.setSetting('firstMove', 'RANDOM')" class="fm-btn flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === 'RANDOM' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">隨機</button>
+                  <button id="btn-fm-player" data-val="PLAYER" onclick="window.setSetting('firstMove', 'PLAYER')" class="fm-btn flex-1 py-3 lg:py-3.5 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === 'PLAYER' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">先攻 (執紅)</button>
+                  <button id="btn-fm-ai" data-val="AI" onclick="window.setSetting('firstMove', 'AI')" class="fm-btn flex-1 py-3 lg:py-3.5 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === 'AI' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">後攻 (執白)</button>
+                  <button id="btn-fm-random" data-val="RANDOM" onclick="window.setSetting('firstMove', 'RANDOM')" class="fm-btn flex-1 py-3 lg:py-3.5 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === 'RANDOM' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">隨機</button>
                 </div>
               </div>
             </div>
             
-            <div id="empty-space" class="h-[120px] w-full max-w-[340px] lg:max-w-[440px]" style="display: ${!isPvE ? 'block' : 'none'}"></div>
+            <div id="empty-space" class="h-[100px] w-full max-w-[340px] lg:max-w-[440px]" style="display: ${!isPvE ? 'block' : 'none'}"></div>
             <div class="w-full max-w-[340px] lg:max-w-[440px] mt-2">
               <button onclick="window.initGame()" class="w-full bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black py-4 lg:py-5 rounded-lg font-bold tracking-[0.15em] text-[12px] lg:text-[16px] uppercase key-base">${gameState ? "RESTART 重新開始" : "開始新棋局"}</button>
             </div>
@@ -1022,128 +845,76 @@
       `;
     };
 
-    // --- 渲染 SVG ---
-    const generateBoardSVG = () => {
-      const OFFSET_X = 20; const OFFSET_Y = 20;
-      let svg = `<g stroke="#475569" stroke-width="1">`;
+    // --- 渲染 SVG 與 棋盤 ---
+    const generateBoardHTML = () => {
+      const size = gameState.boardSize;
+      // 動態計算格仔大小同偏移量，確保無論 6/8/10 都完美居中置放喺 360x400 畫布內
+      const GRID_SIZE = Math.floor(340 / size); 
+      const OFFSET_X = (360 - size * GRID_SIZE) / 2;
+      const OFFSET_Y = (400 - size * GRID_SIZE) / 2;
 
-      for (let i = 0; i <= BOARD_HEIGHT; i++) svg += `<line x1="${OFFSET_X}" y1="${OFFSET_Y + i * GRID_SIZE}" x2="${OFFSET_X + BOARD_WIDTH * GRID_SIZE}" y2="${OFFSET_Y + i * GRID_SIZE}" />`;
-      for (let i = 0; i <= BOARD_WIDTH; i++) {
-        svg += `<line x1="${OFFSET_X + i * GRID_SIZE}" y1="${OFFSET_Y}" x2="${OFFSET_X + i * GRID_SIZE}" y2="${OFFSET_Y + 4 * GRID_SIZE}" />`;
-        if (i === 0 || i === BOARD_WIDTH) svg += `<line x1="${OFFSET_X + i * GRID_SIZE}" y1="${OFFSET_Y + 4 * GRID_SIZE}" x2="${OFFSET_X + i * GRID_SIZE}" y2="${OFFSET_Y + 5 * GRID_SIZE}" />`;
-        svg += `<line x1="${OFFSET_X + i * GRID_SIZE}" y1="${OFFSET_Y + 5 * GRID_SIZE}" x2="${OFFSET_X + i * GRID_SIZE}" y2="${OFFSET_Y + BOARD_HEIGHT * GRID_SIZE}" />`;
-      }
+      let squaresHTML = '';
+      let piecesHTML = '';
 
-      svg += `<line x1="${OFFSET_X + 3 * GRID_SIZE}" y1="${OFFSET_Y}" x2="${OFFSET_X + 5 * GRID_SIZE}" y2="${OFFSET_Y + 2 * GRID_SIZE}" />`;
-      svg += `<line x1="${OFFSET_X + 5 * GRID_SIZE}" y1="${OFFSET_Y}" x2="${OFFSET_X + 3 * GRID_SIZE}" y2="${OFFSET_Y + 2 * GRID_SIZE}" />`;
-      svg += `<line x1="${OFFSET_X + 3 * GRID_SIZE}" y1="${OFFSET_Y + 7 * GRID_SIZE}" x2="${OFFSET_X + 5 * GRID_SIZE}" y2="${OFFSET_Y + 9 * GRID_SIZE}" />`;
-      svg += `<line x1="${OFFSET_X + 5 * GRID_SIZE}" y1="${OFFSET_Y + 7 * GRID_SIZE}" x2="${OFFSET_X + 3 * GRID_SIZE}" y2="${OFFSET_Y + 9 * GRID_SIZE}" />`;
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const cx = OFFSET_X + x * GRID_SIZE + GRID_SIZE/2;
+          const cy = OFFSET_Y + y * GRID_SIZE + GRID_SIZE/2;
+          
+          squaresHTML += `<rect x="${OFFSET_X + x * GRID_SIZE}" y="${OFFSET_Y + y * GRID_SIZE}" width="${GRID_SIZE}" height="${GRID_SIZE}" fill="#000000" stroke="#334155" stroke-width="1" onclick="window.handleSquareClick(${x}, ${y})" class="cursor-pointer" />`;
 
-      svg += `</g>
-        <text x="${OFFSET_X + 2 * GRID_SIZE}" y="${OFFSET_Y + 4.5 * GRID_SIZE}" fill="#475569" opacity="0.5" font-weight="400" font-size="20" class="font-chess" text-anchor="middle" dominant-baseline="central">楚 河</text>
-        <text x="${OFFSET_X + 6 * GRID_SIZE}" y="${OFFSET_Y + 4.5 * GRID_SIZE}" fill="#475569" opacity="0.5" font-weight="400" font-size="20" class="font-chess" text-anchor="middle" dominant-baseline="central">漢 界</text>
-      `;
+          const piece = gameState.board[y][x];
+          if (piece) {
+            let isFlipped = false;
+            let newlyDropped = false;
+            if (gameState.isAnimating) {
+                isFlipped = gameState.lastFlipped.some(f => f.x === x && f.y === y);
+                newlyDropped = gameState.lastMove && gameState.lastMove.x === x && gameState.lastMove.y === y;
+            }
 
-      const drawCross = (x, y) => {
-        const cx = OFFSET_X + x * GRID_SIZE; const cy = OFFSET_Y + y * GRID_SIZE;
-        const s = 4, l = 10; let res = `<g stroke="#475569" stroke-width="1">`;
-        if (x > 0) res += `<polyline points="${cx-l},${cy-s} ${cx-s},${cy-s} ${cx-s},${cy-l}" fill="none"/><polyline points="${cx-l},${cy+s} ${cx-s},${cy+s} ${cx-s},${cy+l}" fill="none"/>`;
-        if (x < 8) res += `<polyline points="${cx+l},${cy-s} ${cx+s},${cy-s} ${cx+s},${cy-l}" fill="none"/><polyline points="${cx+l},${cy+s} ${cx+s},${cy+s} ${cx+s},${cy+l}" fill="none"/>`;
-        return res + `</g>`;
-      };
-      [ {x:1, y:2}, {x:7, y:2}, {x:0, y:3}, {x:2, y:3}, {x:4, y:3}, {x:6, y:3}, {x:8, y:3}, {x:1, y:7}, {x:7, y:7}, {x:0, y:6}, {x:2, y:6}, {x:4, y:6}, {x:6, y:6}, {x:8, y:6} ].forEach(pos => svg += drawCross(pos.x, pos.y));
+            // 動畫狀態判定：如果有isFlipped，應用實時嘅前後轉換 CSS 動畫
+            let wrapperClass = piece === 'R' ? 'rot-red' : 'rot-white';
+            if (isFlipped) {
+                wrapperClass = piece === 'R' ? 'anim-flip-to-red' : 'anim-flip-to-white';
+            }
 
-      let interactionSVG = `<g opacity="0">`;
-      for (let y = 0; y <= BOARD_HEIGHT; y++) {
-        for (let x = 0; x <= BOARD_WIDTH; x++) {
-          interactionSVG += `<rect x="${OFFSET_X + x * GRID_SIZE - 20}" y="${OFFSET_Y + y * GRID_SIZE - 20}" width="40" height="40" fill="transparent" onclick="window.handleSquareClick(${x}, ${y})" style="cursor:pointer;" />`;
-        }
-      }
-      interactionSVG += `</g>`;
-
-      // 將軍 (Check) UI - 帥/將 光圈提示
-      let checkGlowSVG = '';
-      if (gameState.inCheck && !gameState.winner) {
-          for(let y = 0; y <= 9; y++) {
-              for(let x = 0; x <= 8; x++) {
-                  const p = gameState.board[y][x];
-                  if(p && p.type === 'g' && p.color === gameState.turn) {
-                      const cx = OFFSET_X + x * GRID_SIZE;
-                      const cy = OFFSET_Y + y * GRID_SIZE;
-                      checkGlowSVG += `<circle cx="${cx}" cy="${cy}" r="24" fill="none" stroke="#ef4444" stroke-width="2" opacity="0.8" class="animate-pulse" pointer-events="none" />`;
-                      checkGlowSVG += `<circle cx="${cx}" cy="${cy}" r="16" fill="#ef4444" opacity="0.3" class="animate-pulse" pointer-events="none" />`;
-                  }
-              }
+            piecesHTML += `
+              <foreignObject x="${OFFSET_X + x * GRID_SIZE + 2}" y="${OFFSET_Y + y * GRID_SIZE + 2}" width="${GRID_SIZE - 4}" height="${GRID_SIZE - 4}" pointer-events="none">
+                <div xmlns="http://www.w3.org/1999/xhtml" class="piece-container w-full h-full p-[2px] ${newlyDropped ? 'anim-drop' : ''}">
+                    <div class="piece-wrapper ${wrapperClass}">
+                        <div class="piece-face piece-red shadow-lg"></div>
+                        <div class="piece-face piece-white shadow-lg"></div>
+                    </div>
+                </div>
+              </foreignObject>
+            `;
           }
+        }
       }
 
       let validMovesSVG = ``;
       gameState.validMoves.forEach(m => {
-        const cx = OFFSET_X + m.x * GRID_SIZE; const cy = OFFSET_Y + m.y * GRID_SIZE;
-        const isCapture = gameState.board[m.y][m.x] !== null;
-        if (isCapture) {
-          validMovesSVG += `<path d="M ${cx-15} ${cy-15} L ${cx-8} ${cy-15} M ${cx-15} ${cy-15} L ${cx-15} ${cy-8} M ${cx+15} ${cy-15} L ${cx+8} ${cy-15} M ${cx+15} ${cy-15} L ${cx+15} ${cy-8} M ${cx-15} ${cy+15} L ${cx-8} ${cy+15} M ${cx-15} ${cy+15} L ${cx-15} ${cy+8} M ${cx+15} ${cy+15} L ${cx+8} ${cy+15} M ${cx+15} ${cy+15} L ${cx+15} ${cy+8}" fill="none" stroke="#22d3ee" stroke-width="2" class="valid-move" onclick="window.handleSquareClick(${m.x}, ${m.y})" />`;
-        } else {
-          validMovesSVG += `<circle cx="${cx}" cy="${cy}" r="6" fill="#22d3ee" opacity="0.6" class="valid-move" onclick="window.handleSquareClick(${m.x}, ${m.y})" />`;
-        }
+        const cx = OFFSET_X + m.x * GRID_SIZE + GRID_SIZE/2; 
+        const cy = OFFSET_Y + m.y * GRID_SIZE + GRID_SIZE/2;
+        validMovesSVG += `<circle cx="${cx}" cy="${cy}" r="${size >= 10 ? 4 : 6}" fill="#22d3ee" opacity="0.2" class="valid-move" onclick="window.handleSquareClick(${m.x}, ${m.y})" />`;
       });
-
-      let baseTargetPieceSVG = '';
-      if (gameState.isAnimating && gameState.animatingCapture) {
-          const cx = OFFSET_X + gameState.lastMove.to.x * GRID_SIZE; const cy = OFFSET_Y + gameState.lastMove.to.y * GRID_SIZE;
-          const p = gameState.animatingCapture;
-          const strokeColor = p.color === 'R' ? '#ef4444' : '#f8fafc';
-          const textColor = p.color === 'R' ? '#ef4444' : '#f8fafc';
-          baseTargetPieceSVG += `<g transform="translate(${cx}, ${cy})" pointer-events="none"><circle cx="0" cy="0" r="16" fill="#111111" stroke="${strokeColor}" stroke-width="1.5" /><circle cx="0" cy="0" r="13" fill="none" stroke="${strokeColor}" stroke-width="0.5" opacity="0.5" /><text x="0" y="0" fill="${textColor}" font-size="18" class="font-chess" text-anchor="middle" dominant-baseline="central">${p.label}</text></g>`;
-      }
-
-      let piecesSVG = ``;
-      for (let y = 0; y <= BOARD_HEIGHT; y++) {
-        for (let x = 0; x <= BOARD_WIDTH; x++) {
-          const piece = gameState.board[y][x];
-          if (piece) {
-            const cx = OFFSET_X + x * GRID_SIZE; const cy = OFFSET_Y + y * GRID_SIZE;
-            const isSelected = gameState.selectedPiece && gameState.selectedPiece.x === x && gameState.selectedPiece.y === y;
-            const bgColor = '#111111'; const strokeColor = piece.color === 'R' ? '#ef4444' : '#f8fafc'; const textColor = piece.color === 'R' ? '#ef4444' : '#f8fafc';
-            
-            const glow = isSelected ? `<circle cx="0" cy="0" r="18" fill="none" stroke="#22d3ee" stroke-width="2" />` : '';
-            
-            let animTag = '';
-            if (gameState.isAnimating && gameState.lastMove && gameState.lastMove.to.x === x && gameState.lastMove.to.y === y) {
-                const oldCx = OFFSET_X + gameState.lastMove.from.x * GRID_SIZE; const oldCy = OFFSET_Y + gameState.lastMove.from.y * GRID_SIZE;
-                animTag = `<animateTransform attributeName="transform" type="translate" from="${oldCx - cx} ${oldCy - cy}" to="0 0" dur="0.4s" additive="sum" fill="freeze" />`;
-            }
-            piecesSVG += `<g class="chess-piece" transform="translate(${cx}, ${cy})" onclick="window.handleSquareClick(${x}, ${y})">${animTag}${glow}<circle cx="0" cy="0" r="16" fill="${bgColor}" stroke="${strokeColor}" stroke-width="1.5" /><circle cx="0" cy="0" r="13" fill="none" stroke="${strokeColor}" stroke-width="0.5" opacity="0.5" /><text x="0" y="0" fill="${textColor}" font-size="18" class="font-chess" text-anchor="middle" dominant-baseline="central">${piece.label}</text></g>`;
-          }
-        }
-      }
-
-      let captureEffectsSVG = '';
-      if (gameState.showCaptureEffect) {
-          const cx = OFFSET_X + gameState.showCaptureEffect.x * GRID_SIZE; const cy = OFFSET_Y + gameState.showCaptureEffect.y * GRID_SIZE;
-          const p = gameState.showCaptureEffect.piece; const waveColor = gameState.showCaptureEffect.capturerColor === 'R' ? '#ef4444' : '#f8fafc';
-          const strokeColor = p.color === 'R' ? '#ef4444' : '#f8fafc'; const textColor = p.color === 'R' ? '#ef4444' : '#f8fafc';
-          captureEffectsSVG += `<g pointer-events="none"><circle cx="${cx}" cy="${cy}" r="16" fill="none" stroke="${waveColor}" stroke-width="6"><animate attributeName="r" from="16" to="240" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" /><animate attributeName="stroke-width" from="6" to="0" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" /><animate attributeName="opacity" from="0.8" to="0" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" /></circle><g transform="translate(${cx}, ${cy})"><g class="anim-capture-fly"><circle cx="0" cy="0" r="16" fill="#111111" stroke="${strokeColor}" stroke-width="1.5" /><circle cx="0" cy="0" r="13" fill="none" stroke="${strokeColor}" stroke-width="0.5" opacity="0.5" /><text x="0" y="0" fill="${textColor}" font-size="18" class="font-chess" text-anchor="middle" dominant-baseline="central">${p.label}</text></g></g></g>`;
-      }
 
       let hintsSVG = '';
       if (isHintMode && currentHints.length > 0 && !gameState.isCalculatingHints) {
           currentHints.forEach((hint, index) => {
-              const sx = OFFSET_X + hint.from.x * GRID_SIZE;
-              const sy = OFFSET_Y + hint.from.y * GRID_SIZE;
-              const tx = OFFSET_X + hint.to.x * GRID_SIZE;
-              const ty = OFFSET_Y + hint.to.y * GRID_SIZE;
+              const cx = OFFSET_X + hint.x * GRID_SIZE + GRID_SIZE/2;
+              const cy = OFFSET_Y + hint.y * GRID_SIZE + GRID_SIZE/2;
 
               const color = '#3b82f6'; 
               const strokeWidth = index === 0 ? 3 : 2;
               const opacity = index === 0 ? 1 : (index === 1 ? 0.6 : 0.25);
+              const r = (GRID_SIZE / 2) - 4;
 
-              hintsSVG += `<circle cx="${sx}" cy="${sy}" r="19" fill="none" stroke="${color}" stroke-width="${strokeWidth}" opacity="${opacity}" class="animate-pulse" pointer-events="none" />`;
-              hintsSVG += `<circle cx="${tx}" cy="${ty}" r="14" fill="none" stroke="${color}" stroke-width="${strokeWidth}" opacity="${opacity}" stroke-dasharray="4" class="animate-pulse" pointer-events="none" />`;
+              hintsSVG += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="${strokeWidth}" opacity="${opacity}" class="animate-pulse" pointer-events="none" />`;
           });
       }
 
-      return svg + checkGlowSVG + interactionSVG + validMovesSVG + baseTargetPieceSVG + piecesSVG + hintsSVG + captureEffectsSVG;
+      return `<g>${squaresHTML}</g><g>${validMovesSVG}</g><g>${piecesHTML}</g><g>${hintsSVG}</g>`;
     };
 
     function render() {
@@ -1162,7 +933,7 @@
           let historyListHTML = matchHistory.map(m => `
             <div onclick="window.viewMatchDetail(${m.id})" class="bg-[#111] rounded-lg p-5 border border-neutral-800 hover:border-neutral-600 transition-colors cursor-pointer group flex items-center justify-between">
                <div class="flex flex-col gap-1">
-                  <div class="text-[12px] lg:text-[15px] font-bold ${m.winner === 'R' ? 'text-red-500' : 'text-slate-100'} tracking-wider">${m.winner === 'R' ? '紅方' : '白方'} 獲勝</div>
+                  <div class="text-[12px] lg:text-[15px] font-bold ${m.winner === 'R' ? 'text-red-500' : m.winner === 'W' ? 'text-white' : 'text-neutral-500'} tracking-wider">${m.winner === 'R' ? '紅方獲勝' : m.winner === 'W' ? '白方獲勝' : '平局'} (${m.score.R} : ${m.score.W})</div>
                   <div class="text-[9px] lg:text-[11px] text-neutral-500 uppercase tracking-widest">${m.settings.mode} | ${m.settings.mode === 'PvE' ? `LV.${m.settings.aiDifficulty}` : 'PVP'} | 回合: ${Math.ceil(m.gameLog.length / 2)}</div>
                   <div class="text-[8px] lg:text-[10px] text-neutral-600 font-medium">${m.timestamp}</div>
                </div>
@@ -1174,9 +945,9 @@
             <div onclick="window.viewMatchDetail('current')" class="bg-[#1a1a1a] rounded-lg p-5 border-2 border-dashed border-neutral-700 hover:border-white transition-colors cursor-pointer mb-4 flex items-center justify-between">
                <div class="flex flex-col gap-1">
                   <div class="text-[14px] lg:text-[17px] font-bold text-white tracking-wide">當前賽局 (Current Match)</div>
-                  <div class="text-[9px] lg:text-[11px] text-neutral-400 uppercase tracking-widest">In Progress...</div>
+                  <div class="text-[9px] lg:text-[11px] text-neutral-400 uppercase tracking-widest">In Progress... (${gameState.counts.R} : ${gameState.counts.W})</div>
                </div>
-               <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+               <div class="w-2 h-2 bg-neutral-400 rounded-full animate-pulse"></div>
             </div>
           ` : '';
 
@@ -1198,16 +969,13 @@
               const actualIdx = matchData.gameLog.length - idx;
               const colorClass = log.turn === 'R' ? 'text-red-500' : 'text-slate-100';
               const teamName = log.turn === 'R' ? '紅' : '白';
-              const moveDesc = `${log.piece} : (${log.from.x + 1}, ${log.from.y + 1}) ➔ (${log.to.x + 1}, ${log.to.y + 1})`;
-              const captureLabel = log.captured ? `<span class="ml-2 text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded font-bold uppercase border border-red-500/30">食 ${log.captured}</span>` : '';
               return `
               <div class="flex items-center justify-between py-3 lg:py-4 border-b border-neutral-800/50 last:border-0">
                   <div class="flex items-center gap-3">
                       <div class="text-[10px] text-neutral-600 font-bold w-6">#${actualIdx}</div>
-                      <div class="w-6 h-6 rounded border border-neutral-700 bg-neutral-800 flex items-center justify-center ${colorClass} text-[12px] font-chess">${teamName}</div>
-                      <div class="text-[12px] lg:text-[14px] font-medium text-neutral-300 tracking-wide">${moveDesc}</div>
+                      <div class="w-6 h-6 rounded border border-neutral-700 bg-neutral-800 flex items-center justify-center ${colorClass} text-[12px] font-tc">${teamName}</div>
+                      <div class="text-[12px] lg:text-[14px] font-medium text-neutral-300 tracking-wide">${log.desc}</div>
                   </div>
-                  <div>${captureLabel}</div>
               </div>`;
           }).join('');
 
@@ -1231,8 +999,8 @@
 
       let tossHTML = '';
       if (gameState.isTossing) {
-         const tossMsg = gameState.turn === 'R' ? `${gameState.redName} 先攻` : `${gameState.whiteName} 先攻`;
-         const flipClass = gameState.turn === 'R' ? "anim-flip-red" : "anim-flip-white";
+         const tossMsg = settings.playerColor === 'R' ? `${gameState.redName} 先攻` : `${gameState.whiteName} 先攻`;
+         const flipClass = settings.playerColor === 'R' ? "anim-flip-red" : "anim-flip-white";
          
          tossHTML = `
          <div class="fixed inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center">
@@ -1251,8 +1019,8 @@
 
       let statusBannerHTML = '';
       if (gameState.winner) {
-        const winnerDisplay = gameState.winner === 'R' ? gameState.redName : gameState.whiteName;
-        statusBannerHTML = `<div class="w-full ${gameState.winner === 'R' ? 'bg-[#6a0404]' : 'bg-[#333333]'} rounded-lg py-3.5 flex items-center justify-center font-bold text-[14px] lg:text-[17px] tracking-[0.15em] text-white uppercase animate-pulse shadow-lg">${winnerDisplay} 獲勝 WIN!!!</div>`;
+        const winnerDisplay = gameState.winner === 'R' ? gameState.redName : (gameState.winner === 'W' ? gameState.whiteName : '平手 DRAW');
+        statusBannerHTML = `<div class="w-full ${gameState.winner === 'DRAW' ? 'bg-[#333]' : (gameState.winner === 'R' ? 'bg-[#6a0404]' : 'bg-[#1a1a1a] border border-white')} rounded-lg py-3.5 flex items-center justify-center font-bold text-[14px] lg:text-[17px] tracking-[0.15em] text-white uppercase animate-pulse shadow-lg">${winnerDisplay} !!!</div>`;
       } else {
         const isPVE = settings.mode === 'PvE';
         let rightContent = '';
@@ -1260,13 +1028,15 @@
 
         if (isPVE) {
             if (gameState.turn === settings.playerColor) {
-                rightContent = `<span class="text-red-500 font-bold tracking-wider uppercase">${gameState.redName} TURN</span>`;
+                const pName = settings.playerColor === 'R' ? gameState.redName : gameState.whiteName;
+                rightContent = `<span class="text-red-500 font-bold tracking-wider uppercase">${pName} TURN</span>`;
             } else {
+                const aiName = settings.playerColor === 'R' ? gameState.whiteName : gameState.redName;
                 if (gameState.isThinking) {
-                    rightContent = `<div class="flex items-center gap-3"><span class="text-white font-bold tracking-wider uppercase">${gameState.whiteName} TURN</span><span class="text-[#22d3ee] font-bold animate-pulse tracking-widest">THINKING...</span></div>`;
+                    rightContent = `<div class="flex items-center gap-3"><span class="text-white font-bold tracking-wider uppercase">${aiName} TURN</span><span class="text-[#22d3ee] font-bold animate-pulse tracking-widest">THINKING...</span></div>`;
                     borderClass = 'border-[#22d3ee]/30 shadow-[0_0_15px_rgba(34,211,238,0.1)]';
                 } else {
-                    rightContent = `<span class="text-white font-bold tracking-wider uppercase">${gameState.whiteName} TURN</span>`;
+                    rightContent = `<span class="text-white font-bold tracking-wider uppercase">${aiName} TURN</span>`;
                 }
             }
         } else {
@@ -1277,31 +1047,29 @@
             }
         }
 
-        let checkWarningHTML = gameState.inCheck && !gameState.winner 
-          ? `<span class="text-[#ef4444] font-black animate-pulse tracking-widest ml-3 border border-[#ef4444] px-2 py-0.5 rounded text-[11px] bg-red-900/20 shadow-[0_0_8px_rgba(239,68,68,0.5)]">將軍</span>` 
-          : '';
-
         statusBannerHTML = `<div class="w-full bg-[#111111] rounded-lg py-3.5 lg:py-4 flex items-center justify-between px-6 font-medium text-[12px] lg:text-[16px] tracking-[0.15em] text-neutral-300 uppercase border ${borderClass} transition-colors duration-300">
-            <div class="flex items-center"><span>TURN ${gameState.turnCount}</span>${checkWarningHTML}</div>
+            <div class="flex items-center"><span>TURN ${Math.ceil(gameState.gameLog.length / 2) + 1}</span></div>
             ${rightContent}
         </div>`;
       }
 
-      const renderCaptured = (color) => {
-        const pieces = gameState.captured[color];
-        if (pieces.length === 0) return '<div class="text-neutral-600 text-[10px] uppercase tracking-widest py-1">NONE</div>';
-        return pieces.map(p => `<div class="w-6 h-6 rounded-full border border-neutral-700 bg-black flex items-center justify-center ${p.color === 'R' ? 'text-red-500' : 'text-slate-100'} text-[12px] font-chess">${p.label}</div>`).join('');
-      };
-
       const capturedAreaHTML = `
         <div class="flex flex-col gap-3 px-4 lg:px-6 w-full">
-            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-3">
-              <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-20 truncate">${gameState.whiteName}</div>
-              <div class="flex-1 flex flex-wrap gap-1 justify-end">${renderCaptured('B')}</div>
+            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-3 relative overflow-hidden">
+              <div class="absolute left-0 top-0 bottom-0 w-1 ${gameState.turn === 'W' ? 'bg-white shadow-[0_0_8px_white]' : 'bg-transparent'} transition-colors"></div>
+              <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-20 truncate ml-2">${gameState.whiteName}</div>
+              <div class="flex items-center gap-3">
+                 <span class="text-white text-[16px] font-bold">${gameState.counts.W}</span>
+                 <div class="w-[20px] h-[20px] rounded-full bg-[#f8fafc] border-2 border-[#cbd5e1] shadow-sm"></div>
+              </div>
             </div>
-            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-3">
-              <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-20 truncate">${gameState.redName}</div>
-              <div class="flex-1 flex flex-wrap gap-1 justify-end">${renderCaptured('R')}</div>
+            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-3 relative overflow-hidden">
+              <div class="absolute left-0 top-0 bottom-0 w-1 ${gameState.turn === 'R' ? 'bg-red-500 shadow-[0_0_8px_#ef4444]' : 'bg-transparent'} transition-colors"></div>
+              <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-20 truncate ml-2">${gameState.redName}</div>
+              <div class="flex items-center gap-3">
+                 <span class="text-red-500 text-[16px] font-bold">${gameState.counts.R}</span>
+                 <div class="w-[20px] h-[20px] rounded-full bg-[#ef4444] border-2 border-[#b91c1c] shadow-sm"></div>
+              </div>
             </div>
         </div>
       `;
@@ -1315,9 +1083,9 @@
 
       let modeDisplay = '';
       if (settings.mode === 'PvE') {
-          if (settings.firstMove === 'PLAYER') modeDisplay = '先攻';
-          else if (settings.firstMove === 'AI') modeDisplay = '後攻';
-          else modeDisplay = gameState.startingTurn === 'R' ? '隨機 - 先攻' : '隨機 - 後攻';
+          if (settings.firstMove === 'PLAYER') modeDisplay = '先攻 (紅)';
+          else if (settings.firstMove === 'AI') modeDisplay = '後攻 (白)';
+          else modeDisplay = settings.playerColor === 'R' ? '隨機 - 先攻' : '隨機 - 後攻';
       } else {
           modeDisplay = '雙人對戰';
       }
@@ -1342,20 +1110,20 @@
         <div class="w-full h-full bg-black relative flex flex-col overflow-hidden">
           
           <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
-            <div class="flex items-center"><img src="./assets/Logo.svg" alt="CHESS" class="h-[19px] lg:h-[25px] object-contain opacity-90 icon-white"></div>
+            <div class="flex items-center"><img src="./assets/Logo.svg" alt="LOGO" class="h-[19px] lg:h-[25px] object-contain opacity-90 icon-white"></div>
             <div class="flex items-center gap-4 lg:gap-6">
-              <button onclick="window.toggleHintMode()" ${gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-center justify-center transition-all duration-300 key-base ${isHintMode ? 'opacity-100 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]' : 'opacity-70 hover:opacity-100'}">
+              <button onclick="window.toggleHintMode()" ${gameState.isThinking || gameState.isAnimating || gameState.isTossing || gameState.validMoves.length === 0 ? 'disabled style="opacity:0.2"' : ''} class="flex items-center justify-center transition-all duration-300 key-base ${isHintMode ? 'opacity-100 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]' : 'opacity-70 hover:opacity-100'}">
                 <img src="./assets/ai.svg" alt="AI" class="h-[19px] lg:h-[24px] object-contain ${isHintMode ? 'icon-hint-active' : 'icon-white'}">
               </button>
-              <button onclick="window.handleUndo()" ${historyStack.length === 0 || gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/back.svg" alt="UNDO" class="h-[14px] lg:h-[18px] object-contain icon-white"></button>
+              <button onclick="window.handleUndo()" ${historyStack.length === 0 || gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/back.svg" alt="UNDO" class="h-[14px] lg:h-[18px] object-contain icon-white"></button>
               <button onclick="window.toggleRecord()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/record.svg" alt="REC" class="h-[16px] lg:h-[22px] object-contain icon-white"></button>
-              <button onclick="window.openMenu()" ${gameState.isThinking || gameState.isAnimating || gameState.showCaptureEffect || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/setting.svg" alt="SET" class="h-[14px] lg:h-[18px] object-contain icon-white"></button>
+              <button onclick="window.openMenu()" ${gameState.isThinking || gameState.isAnimating || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/setting.svg" alt="SET" class="h-[14px] lg:h-[18px] object-contain icon-white"></button>
             </div>
           </header>
 
           <div class="absolute top-[60px] lg:top-[85px] left-5 lg:left-12 z-20 pointer-events-none">
             <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase">
-              中國象棋<br>
+              黑白棋 Reversi<br>
               ${modeDisplay}<br>
               ${roundDisplay}
             </div>
@@ -1365,7 +1133,7 @@
             <div class="flex-1 relative min-h-0 flex flex-col lg:justify-center lg:py-8 lg:pr-8">
               <div class="flex-1 flex items-center justify-center pb-2 lg:pb-0 w-full h-full min-h-0 overflow-visible pt-10 lg:pt-0">
                 <svg viewBox="0 0 360 400" overflow="visible" class="w-full max-w-[400px] lg:max-w-[500px] h-auto max-h-[75vh] lg:h-full lg:max-h-[85vh] transition-transform origin-center">
-                  ${generateBoardSVG()}
+                  ${generateBoardHTML()}
                 </svg>
               </div>
             </div>
