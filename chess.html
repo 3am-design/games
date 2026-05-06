@@ -1284,8 +1284,9 @@
 
       let tossHTML = '';
       if (gameState.isTossing) {
-         const tossMsg = gameState.turn === 'R' ? `${gameState.redName} 先攻` : `${gameState.whiteName} 先攻`;
-         const flipClass = gameState.turn === 'R' ? "anim-flip-red" : "anim-flip-white";
+         // 隨機結果以「玩家視角」顯示：玩家抽到紅 = 先攻；玩家抽到黑/白 = 後攻。
+         const tossMsg = settings.playerColor === 'R' ? '先攻' : '後攻';
+         const flipClass = settings.playerColor === 'R' ? "anim-flip-red" : "anim-flip-white";
          
          tossHTML = `
          <div class="fixed inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center">

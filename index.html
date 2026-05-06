@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   
   <link rel="dns-prefetch" href="https://fonts.googleapis.com">
-  <title>Games</title>
+  <title>Board Games Hub - 遊戲大堂</title>
   
   <!-- 引入 Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -154,27 +154,50 @@
             </div>
         </a>
 
-        <!-- Game 5: ??? (Coming Soon) -->
-        <div class="game-card relative bg-[#080808] border border-neutral-900 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 animate-fade-in stagger-4 overflow-hidden cursor-not-allowed group">
-            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] rounded-2xl border-2 border-dashed border-neutral-800 flex items-center justify-center bg-[#0d0d0d] group-hover:border-neutral-700 transition-colors">
-                <span class="text-neutral-700 font-inter text-[28px] lg:text-[36px] font-light">?</span>
+        <!-- Game 5: 鬥獸棋 (Jungle Chess) -->
+        <a href="jungle.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-4 overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            
+            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-emerald-900/40 rounded-xl overflow-hidden">
+                <!-- 陸地格線 -->
+                <div class="absolute inset-0 flex flex-col justify-evenly py-1 lg:py-2"><div class="w-full h-[1px] bg-neutral-800"></div><div class="w-full h-[1px] bg-neutral-800"></div></div>
+                <div class="absolute inset-0 flex justify-evenly px-1 lg:px-2"><div class="h-full w-[1px] bg-neutral-800"></div><div class="h-full w-[1px] bg-neutral-800"></div></div>
+                
+                <!-- 河流 (Rivers) -->
+                <div class="absolute w-[14px] h-[22px] lg:w-[18px] lg:h-[28px] bg-cyan-900/40 border border-cyan-800/60 translate-x-[-14px] lg:translate-x-[-18px] rounded-sm"></div>
+                <div class="absolute w-[14px] h-[22px] lg:w-[18px] lg:h-[28px] bg-cyan-900/40 border border-cyan-800/60 translate-x-[14px] lg:translate-x-[18px] rounded-sm"></div>
+                
+                <!-- 棋子 (猛獸對峙) -->
+                <div class="absolute w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] bg-[#111] border-[2px] border-emerald-500 rounded-full translate-x-[-14px] translate-y-[-20px] lg:translate-x-[-18px] lg:translate-y-[-26px] shadow-[0_0_10px_rgba(16,185,129,0.5)] z-10"></div>
+                <div class="absolute w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] bg-[#111] border-[2px] border-rose-500 rounded-full translate-x-[14px] translate-y-[20px] lg:translate-x-[18px] lg:translate-y-[26px] shadow-[0_0_10px_rgba(244,63,94,0.5)] z-10"></div>
             </div>
+            
             <div class="flex flex-col items-center mt-2">
-                <span class="text-neutral-600 font-tc font-bold text-[16px] lg:text-[18px] tracking-widest">敬請期待</span>
-                <span class="text-neutral-700 text-[9px] lg:text-[11px] tracking-[0.2em] uppercase mt-1">Coming Soon</span>
+                <span class="text-white font-tc font-bold text-[16px] lg:text-[18px] tracking-wider">鬥獸棋</span>
+                <span class="text-neutral-500 text-[9px] lg:text-[11px] tracking-[0.2em] uppercase mt-1">Jungle</span>
             </div>
-        </div>
+        </a>
 
-        <!-- Game 6: ??? (Coming Soon) -->
-        <div class="game-card relative bg-[#080808] border border-neutral-900 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 animate-fade-in stagger-4 overflow-hidden cursor-not-allowed group">
-            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] rounded-2xl border-2 border-dashed border-neutral-800 flex items-center justify-center bg-[#0d0d0d] group-hover:border-neutral-700 transition-colors">
-                <span class="text-neutral-700 font-inter text-[28px] lg:text-[36px] font-light">?</span>
+        <!-- Game 6: 數獨 (Sudoku) -->
+        <a href="sudoku.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-4 overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-purple-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            
+            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-purple-900/40 rounded-xl overflow-hidden">
+                <!-- 九宮格線 (3x3) -->
+                <div class="absolute inset-0 flex flex-col justify-evenly py-0"><div class="w-full h-[1px] bg-purple-500/30"></div><div class="w-full h-[1px] bg-purple-500/30"></div></div>
+                <div class="absolute inset-0 flex justify-evenly px-0"><div class="h-full w-[1px] bg-purple-500/30"></div><div class="h-full w-[1px] bg-purple-500/30"></div></div>
+                
+                <!-- 數字點綴 (Neon Numbers) -->
+                <span class="absolute text-purple-400 font-inter text-[12px] lg:text-[16px] font-semibold translate-x-[-18px] translate-y-[-18px] lg:translate-x-[-24px] lg:translate-y-[-24px]">5</span>
+                <span class="absolute text-purple-300 font-inter text-[12px] lg:text-[16px] font-semibold translate-x-[18px] translate-y-[0px] lg:translate-x-[24px] lg:translate-y-[0px]">9</span>
+                <span class="absolute text-purple-500 font-inter text-[12px] lg:text-[16px] font-bold translate-x-[0px] translate-y-[18px] lg:translate-x-[0px] lg:translate-y-[24px] shadow-[0_0_10px_rgba(168,85,247,0.8)]">3</span>
             </div>
+            
             <div class="flex flex-col items-center mt-2">
-                <span class="text-neutral-600 font-tc font-bold text-[16px] lg:text-[18px] tracking-widest">敬請期待</span>
-                <span class="text-neutral-700 text-[9px] lg:text-[11px] tracking-[0.2em] uppercase mt-1">Coming Soon</span>
+                <span class="text-white font-tc font-bold text-[16px] lg:text-[18px] tracking-wider">數獨</span>
+                <span class="text-neutral-500 text-[9px] lg:text-[11px] tracking-[0.2em] uppercase mt-1">Sudoku</span>
             </div>
-        </div>
+        </a>
 
     </div>
   </main>

@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Games - 數獨</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Noto+Sans+TC:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      future: { hoverOnlyWhenSupported: true },
+      theme: {
+        extend: {
+          colors: {
+            'c4-red': '#ef4444',
+            'c4-board': '#000000',
+            'c4-board-border': '#0f172a'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+    
+    @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    .anim-pop { animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+    html, body { 
+      overscroll-behavior-y: none; 
+      background-color: #000000; 
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      color: #ffffff;
+      height: 100%;
+      height: -webkit-fill-available;
+      overflow: hidden;
+      margin: 0;
+      touch-action: manipulation;
+    }
+    
+    .app-container { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    button { -webkit-tap-highlight-color: transparent; outline: none; touch-action: manipulation; }
+
+    .key-base { transition: background-color 0.2s ease-out, color 0.2s ease-out, border-color 0.2s, opacity 0.2s; }
+    .key-base:active { opacity: 0.5; transition: none; }
+    
+    .icon-white { filter: brightness(0) invert(1); }
+
+    /* 數獨九宮格邊框樣式 */
+    .sudoku-cell { border-right: 1px solid #334155; border-bottom: 1px solid #334155; }
+    .sudoku-cell:nth-child(3n) { border-right: 2px solid #64748b; }
+    .sudoku-cell:nth-child(9n) { border-right: none; }
+    .sudoku-row:nth-child(3n) .sudoku-cell { border-bottom: 2px solid #64748b; }
+    .sudoku-row:nth-child(9) .sudoku-cell { border-bottom: none; }
+  </style>
+</head>
+<body class="bg-black selection:bg-white/30">
+
+  <div id="app" class="app-container"></div>
+
+  <script>
+    const cloneState = (state) => JSON.parse(JSON.stringify(state));
+
+    let gameState = null;
+    let historyStack = [];
+    let isMenuOpen = true;
+    let isRuleOpen = false;
+    
+    // 遊戲設定
+    let settings = { difficulty: 'NORMAL' };
+    let pendingSettings = cloneState(settings);
+
+    // --- 數獨生成演算法 ---
+    const BLANK_COUNTS = { 'EASY': 30, 'NORMAL': 45, 'HARD': 55 };
+
+    // 洗牌 Function
+    const shuffleArray = (array) => {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    };
+
+    // 檢查某個數字放喺 (r,c) 合唔合法
+    const isValid = (board, r, c, num) => {
+        for (let i = 0; i < 9; i++) {
+            if (board[r][i] === num) return false; // Row
+            if (board[i][c] === num) return false; // Col
+            // 3x3 Block
+            const br = 3 * Math.floor(r / 3) + Math.floor(i / 3);
+            const bc = 3 * Math.floor(c / 3) + i % 3;
+            if (board[br][bc] === num) return false;
+        }
+        return true;
+    };
+
+    // 使用回溯法 (Backtracking) 生成完整有效底盤
+    const fillBoard = (board) => {
+        for (let r = 0; r < 9; r++) {
+            for (let c = 0; c < 9; c++) {
+                if (board[r][c] === 0) {
+                    const nums = shuffleArray([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+                    for (let num of nums) {
+                        if (isValid(board, r, c, num)) {
+                            board[r][c] = num;
+                            if (fillBoard(board)) return true;
+                            board[r][c] = 0;
+                        }
+                    }
+                    return false; // 冇數字啱，需要退回
+                }
+            }
+        }
+        return true;
+    };
+
+    const generateSudoku = (difficulty) => {
+        let board = Array(9).fill().map(() => Array(9).fill(0));
+        fillBoard(board); // 生成完整答案
+        
+        const solution = cloneState(board);
+        const blanks = BLANK_COUNTS[difficulty];
+        let cells = [];
+        for(let r=0; r<9; r++) for(let c=0; c<9; c++) cells.push({r,c});
+        cells = shuffleArray(cells);
+
+        // 挖洞
+        for (let i = 0; i < blanks; i++) {
+            board[cells[i].r][cells[i].c] = 0;
+        }
+
+        // 轉換為遊戲用嘅 Object 結構
+        let gameBoard = Array(9).fill().map(() => Array(9).fill(null));
+        for (let r = 0; r < 9; r++) {
+            for (let c = 0; c < 9; c++) {
+                const val = board[r][c];
+                gameBoard[r][c] = {
+                    value: val === 0 ? null : val,
+                    isFixed: val !== 0,
+                    notes: [] // 1-9
+                };
+            }
+        }
+        return { initialBoard: gameBoard, solution };
+    };
+
+    // --- 遊戲邏輯 ---
+    window.initGame = () => {
+      isMenuOpen = false;
+      if (pendingSettings) settings = cloneState(pendingSettings);
+      
+      const { initialBoard, solution } = generateSudoku(settings.difficulty);
+
+      gameState = {
+        board: initialBoard,
+        solution: solution,
+        selectedCell: null, // {r, c}
+        selectedNumber: null, // 用於「先選字後點格」模式
+        isNotesMode: false,
+        startTime: Date.now(),
+        elapsedStr: '00:00',
+        timerInterval: null,
+        isWon: false
+      };
+      
+      historyStack = [];
+      
+      if (gameState.timerInterval) clearInterval(gameState.timerInterval);
+      gameState.timerInterval = setInterval(() => {
+          if(!gameState.isWon) {
+              const totalSecs = Math.floor((Date.now() - gameState.startTime) / 1000);
+              const m = String(Math.floor(totalSecs / 60)).padStart(2, '0');
+              const s = String(totalSecs % 60).padStart(2, '0');
+              gameState.elapsedStr = `${m}:${s}`;
+              document.getElementById('timer-display').innerText = gameState.elapsedStr;
+          }
+      }, 1000);
+
+      render();
+    };
+
+    // 檢查成個 Board 嘅衝突 (Errors)
+    const getConflicts = (board) => {
+        let conflicts = Array(9).fill().map(() => Array(9).fill(false));
+        
+        for (let r = 0; r < 9; r++) {
+            for (let c = 0; c < 9; c++) {
+                const val = board[r][c].value;
+                if (!val) continue;
+                
+                // Check Row & Col
+                for (let i = 0; i < 9; i++) {
+                    if (i !== c && board[r][i].value === val) { conflicts[r][c] = true; conflicts[r][i] = true; }
+                    if (i !== r && board[i][c].value === val) { conflicts[r][c] = true; conflicts[i][c] = true; }
+                }
+                // Check 3x3
+                const br = 3 * Math.floor(r / 3);
+                const bc = 3 * Math.floor(c / 3);
+                for (let i = 0; i < 3; i++) {
+                    for (let j = 0; j < 3; j++) {
+                        const checkR = br + i; const checkC = bc + j;
+                        if ((checkR !== r || checkC !== c) && board[checkR][checkC].value === val) {
+                            conflicts[r][c] = true; conflicts[checkR][checkC] = true;
+                        }
+                    }
+                }
+            }
+        }
+        return conflicts;
+    };
+
+    const checkWinCondition = () => {
+        for (let r = 0; r < 9; r++) {
+            for (let c = 0; c < 9; c++) {
+                if (gameState.board[r][c].value !== gameState.solution[r][c]) return false;
+            }
+        }
+        return true;
+    };
+
+    const fillCell = (r, c, num) => {
+        const cell = gameState.board[r][c];
+        if (cell.isFixed) return;
+
+        historyStack.push(cloneState(gameState.board));
+
+        if (gameState.isNotesMode) {
+            // 切換草稿數字
+            if (cell.value !== null) cell.value = null; // 如果本身有大字，清空
+            const noteIdx = cell.notes.indexOf(num);
+            if (noteIdx > -1) cell.notes.splice(noteIdx, 1);
+            else { cell.notes.push(num); cell.notes.sort(); }
+        } else {
+            // 輸入正式數字
+            if (cell.value === num) cell.value = null; // Toggle 消除
+            else {
+                cell.value = num;
+                cell.notes = []; // 輸入大字就清空草稿
+            }
+        }
+
+        if (checkWinCondition()) {
+            gameState.isWon = true;
+            clearInterval(gameState.timerInterval);
+        }
+    };
+
+    // --- 用戶操作 ---
+    window.selectCell = (r, c) => {
+        if (gameState.isWon) return;
+        
+        if (gameState.selectedNumber !== null) {
+            // 模式 2：已鎖定數字，點擊直接填寫
+            fillCell(r, c, gameState.selectedNumber);
+        } else {
+            // 模式 1：正常選取格仔
+            if (gameState.selectedCell && gameState.selectedCell.r === r && gameState.selectedCell.c === c) {
+                gameState.selectedCell = null; // Deselect
+            } else {
+                gameState.selectedCell = {r, c};
+            }
+        }
+        render();
+    };
+
+    window.inputNumber = (num) => {
+        if (gameState.isWon) return;
+        
+        if (gameState.selectedCell) {
+            // 模式 1：先選格仔，點擊數字後填寫並自動解除選取
+            fillCell(gameState.selectedCell.r, gameState.selectedCell.c, num);
+            gameState.selectedCell = null; // 填完取消 Select
+        } else {
+            // 模式 2：未選格仔，切換鎖定數字模式
+            if (gameState.selectedNumber === num) {
+                gameState.selectedNumber = null; // 重覆按一次解除
+            } else {
+                gameState.selectedNumber = num;
+            }
+        }
+        
+        render();
+    };
+
+    window.clearCell = () => {
+        if (gameState.isWon || !gameState.selectedCell) return;
+        const {r, c} = gameState.selectedCell;
+        
+        if (gameState.board[r][c].isFixed) {
+            gameState.selectedCell = null; // 固定格仔照樣取消 Select
+            render();
+            return;
+        }
+
+        historyStack.push(cloneState(gameState.board));
+        gameState.board[r][c].value = null;
+        gameState.board[r][c].notes = [];
+        gameState.selectedCell = null; // 填完/清除完取消 Select
+        render();
+    };
+
+    window.toggleNotes = () => {
+        gameState.isNotesMode = !gameState.isNotesMode;
+        render();
+    };
+
+    window.useHint = () => {
+        if (gameState.isWon || !gameState.selectedCell) return;
+        const {r, c} = gameState.selectedCell;
+        const cell = gameState.board[r][c];
+        if (cell.isFixed || cell.value === gameState.solution[r][c]) return;
+
+        historyStack.push(cloneState(gameState.board));
+        cell.value = gameState.solution[r][c];
+        cell.notes = [];
+        gameState.selectedCell = null; // 填完取消 Select
+        
+        if (checkWinCondition()) {
+            gameState.isWon = true;
+            clearInterval(gameState.timerInterval);
+        }
+        render();
+    };
+
+    window.handleUndo = () => {
+        if (historyStack.length === 0 || gameState.isWon) return;
+        gameState.board = historyStack.pop();
+        gameState.selectedCell = null;
+        render();
+    };
+
+    // --- Menu 相關 ---
+    window.openMenu = () => { pendingSettings = cloneState(settings); isMenuOpen = true; render(); };
+    window.cancelMenu = () => { isMenuOpen = false; render(); };
+    window.setDifficulty = (val) => { if (pendingSettings) { pendingSettings.difficulty = val; updateMenuDOM(); }};
+    window.toggleRule = () => { isRuleOpen = !isRuleOpen; render(); };
+
+    const updateMenuDOM = () => {
+        const diffs = ['EASY', 'NORMAL', 'HARD'];
+        diffs.forEach(d => {
+            const btn = document.getElementById(`btn-diff-${d}`);
+            if (btn) {
+                btn.className = `flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.1em] uppercase key-base ${pendingSettings.difficulty === d ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900'}`;
+            }
+        });
+    };
+
+    // --- HTML 生成 ---
+    const getMenuHTML = () => {
+      if (!isMenuOpen) return '';
+
+      const backToLobbyHTML = `<a href="index.html" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] hover:text-white transition-colors pt-1 lg:pt-1.5 flex items-center gap-1.5 key-base" style="text-decoration: none;"><img src="./assets/gamehub.svg" alt="Hub" class="h-[12px] opacity-70 icon-white" onerror="this.style.display='none'"> 返回遊戲大堂</a>`;
+      const closeBtnHTML = gameState 
+        ? `<button onclick="window.cancelMenu()" class="text-white text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-neutral-300 transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white" onerror="this.outerHTML='✕'"></button>`
+        : `<div class="h-[12px] lg:h-[15px] pt-1 lg:pt-1.5"></div>`;
+
+      return `
+        <div id="menu-layer" class="fixed inset-0 z-50 bg-black flex flex-col overflow-y-auto animate-fade-in">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+            ${backToLobbyHTML}
+            ${closeBtnHTML}
+          </header>
+          <div class="flex-1 flex flex-col items-center justify-center gap-6 pb-10 px-6 w-full mt-4 lg:mt-0">
+            <div class="flex flex-col items-center justify-center gap-3 mb-4">
+               <img src="./assets/Logo.svg" alt="LOGO" class="h-[22px] lg:h-[28px] object-contain opacity-90 icon-white" onerror="this.style.display='none'">
+               <div class="text-white font-chess tracking-[0.4em] text-[15px] lg:text-[18px] font-light opacity-60">數獨</div>
+            </div>
+
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-4">
+              <div class="text-neutral-500 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase">DIFFICULTY 難度選擇</div>
+              <div class="flex w-full gap-2 lg:gap-3">
+                <button id="btn-diff-EASY" onclick="window.setDifficulty('EASY')" class="flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.1em] uppercase key-base ${pendingSettings.difficulty === 'EASY' ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900'}">新手 Easy</button>
+                <button id="btn-diff-NORMAL" onclick="window.setDifficulty('NORMAL')" class="flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.1em] uppercase key-base ${pendingSettings.difficulty === 'NORMAL' ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900'}">普通 Normal</button>
+                <button id="btn-diff-HARD" onclick="window.setDifficulty('HARD')" class="flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.1em] uppercase key-base ${pendingSettings.difficulty === 'HARD' ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900'}">大師 Hard</button>
+              </div>
+            </div>
+            
+            <div class="w-full max-w-[340px] lg:max-w-[440px] mt-6">
+              <button onclick="window.initGame()" class="w-full bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black py-4 lg:py-5 rounded-lg font-bold tracking-[0.15em] text-[13px] lg:text-[16px] uppercase key-base">${gameState ? "RESTART 重新開始" : "開始新遊戲 START"}</button>
+            </div>
+          </div>
+        </div>
+      `;
+    };
+
+    const getRuleHTML = () => {
+      if (!isRuleOpen) return '';
+      return `
+        <div class="fixed inset-0 z-[70] bg-black/90 flex flex-col items-center justify-center animate-fade-in px-4">
+            <div class="bg-[#111] border border-neutral-800 rounded-xl w-full max-w-[400px] flex flex-col overflow-hidden shadow-2xl shadow-black">
+                <div class="p-4 lg:p-5 border-b border-neutral-800 flex justify-between items-center bg-[#1a1a1a]">
+                    <div class="text-white font-bold tracking-[0.2em] text-[15px] lg:text-[17px]">玩法教學 RULES</div>
+                    <button onclick="window.toggleRule()" class="text-neutral-400 hover:text-white transition-colors"><img src="./assets/close.svg" alt="X" class="h-[12px] icon-white" onerror="this.outerHTML='✕'"></button>
+                </div>
+                <div class="p-5 lg:p-6 text-[14px] lg:text-[16px] text-neutral-300 leading-relaxed space-y-5">
+                    <div>
+                        <div class="text-white font-bold mb-1.5 flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-blue-500"></div>【基本規則】</div>
+                        <div class="pl-3.5">填滿整個 9x9 嘅格仔，並確保：<br>1. 每一行 (Row) 包含 1-9，唔可以重複。<br>2. 每一列 (Column) 包含 1-9，唔可以重複。<br>3. 每個 3x3 粗線九宮格內包含 1-9，唔可以重複。</div>
+                    </div>
+                    <div>
+                        <div class="text-white font-bold mb-1.5 flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-blue-500"></div>【工具運用】</div>
+                        <div class="pl-3.5 space-y-1">
+                            <div>• <span class="text-blue-400 font-bold">草稿 (Notes)</span>：按「📝」切換，可以喺同一格記低多個可能嘅數字。</div>
+                            <div>• <span class="text-red-400 font-bold">錯誤提示</span>：當輸入發生衝突，格仔會變成紅色。</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-4 lg:p-5 border-t border-neutral-800 bg-[#0a0a0a]">
+                    <button onclick="window.toggleRule()" class="w-full py-3.5 bg-white text-black font-bold rounded-lg tracking-[0.2em] text-[15px] hover:bg-neutral-200 transition-colors">我明白了</button>
+                </div>
+            </div>
+        </div>
+      `;
+    };
+
+    function render() {
+      const appDiv = document.getElementById('app');
+      if (!gameState) { appDiv.innerHTML = getMenuHTML(); return; }
+
+      const conflicts = getConflicts(gameState.board);
+      let selectedValue = null;
+      if (gameState.selectedCell) {
+          const {r, c} = gameState.selectedCell;
+          selectedValue = gameState.board[r][c].value;
+      } else if (gameState.selectedNumber !== null) {
+          selectedValue = gameState.selectedNumber;
+      }
+
+      // 生成 Board UI (用 CSS Grid) - 強制加入 grid-rows-9 解決空格塌陷問題
+      let boardHTML = `<div class="grid grid-cols-9 grid-rows-9 w-full aspect-square bg-[#0f172a] rounded-lg overflow-hidden border-2 border-[#64748b] shadow-2xl relative">`;
+      
+      for (let r = 0; r < 9; r++) {
+          boardHTML += `<div class="contents sudoku-row">`;
+          for (let c = 0; c < 9; c++) {
+              const cell = gameState.board[r][c];
+              
+              // 決定背景色
+              let bgClass = 'bg-[#000000]';
+              let textClass = 'text-white';
+              
+              const isSelected = gameState.selectedCell && gameState.selectedCell.r === r && gameState.selectedCell.c === c;
+              const isRelated = gameState.selectedCell && (gameState.selectedCell.r === r || gameState.selectedCell.c === c || (Math.floor(gameState.selectedCell.r/3) === Math.floor(r/3) && Math.floor(gameState.selectedCell.c/3) === Math.floor(c/3)));
+              const isSameValue = selectedValue !== null && cell.value === selectedValue;
+              
+              if (conflicts[r][c]) {
+                  bgClass = 'bg-red-950/60';
+                  textClass = cell.isFixed ? 'text-red-400' : 'text-red-500';
+              } else if (isSelected) {
+                  bgClass = 'bg-blue-600/60';
+              } else if (isSameValue) {
+                  bgClass = 'bg-blue-500/30';
+              } else if (isRelated) {
+                  bgClass = 'bg-sky-400/[0.014]'; // 再淺多 30%
+              } else if (cell.isFixed) {
+                  bgClass = 'bg-[#0a0a0a]'; // 固定數字稍微深色啲區分
+              }
+
+              if (!conflicts[r][c]) {
+                  if (cell.isFixed) textClass = 'text-neutral-300 font-medium';
+                  else textClass = 'text-[#38bdf8] font-light'; // 玩家填嘅字係冰藍色
+              }
+
+              let cellContent = '';
+              if (cell.value) {
+                  cellContent = `<span class="${cell.isFixed ? '' : 'anim-pop'}">${cell.value}</span>`;
+              } else if (cell.notes.length > 0) {
+                  // 草稿數字：淡色、斜體、稍微加粗(font-normal)、防截斷(加 padding px-1)
+                  cellContent = `<span class="text-[#64748b]/60 italic font-normal tracking-tighter whitespace-nowrap overflow-hidden text-ellipsis w-full text-center px-1">${cell.notes.join('')}</span>`;
+              }
+
+              boardHTML += `
+                  <div onclick="window.selectCell(${r}, ${c})" class="sudoku-cell flex items-center justify-center text-xl lg:text-3xl cursor-pointer select-none transition-colors duration-150 ${bgClass} ${textClass}">
+                      ${cellContent}
+                  </div>
+              `;
+          }
+          boardHTML += `</div>`;
+      }
+      boardHTML += `</div>`;
+
+      // 贏咗嘅 Banner
+      let winBanner = '';
+      if (gameState.isWon) {
+          winBanner = `<div class="absolute inset-0 z-40 bg-black/80 flex flex-col items-center justify-center animate-fade-in backdrop-blur-sm">
+             <div class="text-3xl lg:text-4xl font-bold text-white tracking-[0.2em] mb-4">PUZZLE SOLVED</div>
+             <div class="text-blue-400 tracking-widest uppercase mb-8">用時 TIME: ${gameState.elapsedStr}</div>
+             <button onclick="window.openMenu()" class="px-8 py-3 bg-white text-black font-bold tracking-[0.1em] rounded-lg hover:bg-neutral-200 transition-colors">再玩一局 PLAY AGAIN</button>
+          </div>`;
+      }
+
+      // 控制面板 NumPad
+      let numPadHTML = `<div class="grid grid-cols-5 gap-2 lg:gap-3 w-full max-w-[400px]">`;
+      for (let i = 1; i <= 9; i++) {
+          const isSelectedNum = gameState.selectedNumber === i;
+          const btnClass = isSelectedNum 
+              ? 'bg-blue-600/60 border-blue-400 text-white' 
+              : 'bg-[#111] border-neutral-800 text-white hover:bg-[#1a1a1a] hover:border-neutral-600 active:bg-neutral-800';
+          numPadHTML += `<button onclick="window.inputNumber(${i})" class="aspect-square flex items-center justify-center rounded-lg border ${btnClass} text-2xl lg:text-3xl font-light transition-colors">${i}</button>`;
+      }
+      // 功能鍵
+      numPadHTML += `
+         <button onclick="window.clearCell()" class="aspect-square flex items-center justify-center rounded-lg bg-[#111] border border-neutral-800 hover:bg-[#1a1a1a] hover:border-neutral-600 active:bg-neutral-800 transition-colors text-neutral-400"><span class="text-2xl lg:text-3xl leading-none">⌫</span></button>
+      </div>`;
+
+      const modeStr = gameState.isNotesMode ? "bg-blue-600/20 border-blue-500/50 text-blue-400" : "bg-[#111] border-neutral-800 hover:bg-[#1a1a1a] hover:border-neutral-600 text-neutral-400";
+      
+      const toolsHTML = `
+      <div class="flex items-center justify-between w-full max-w-[400px] mb-4">
+          <button onclick="window.useHint()" class="flex-1 py-3 flex items-center justify-center rounded-lg bg-[#111] border border-neutral-800 hover:bg-[#1a1a1a] hover:border-neutral-600 transition-colors text-neutral-400 gap-2 text-xs tracking-widest uppercase mx-1">
+             <img src="./assets/ai.svg" alt="HINT" class="h-[14px] lg:h-[16px] object-contain opacity-70 icon-white" onerror="this.outerHTML='💡'"> 提示
+          </button>
+          <button onclick="window.toggleNotes()" class="flex-1 py-3 flex items-center justify-center rounded-lg border transition-colors gap-2 text-xs tracking-widest uppercase mx-1 ${modeStr}">
+             <img src="./assets/edit.svg" alt="EDIT" class="h-[14px] lg:h-[16px] object-contain ${gameState.isNotesMode ? 'icon-hint-active' : 'icon-white opacity-70'}" onerror="this.outerHTML='📝'"> 草稿 ${gameState.isNotesMode ? 'ON' : 'OFF'}
+          </button>
+      </div>
+      `;
+
+      appDiv.innerHTML = `
+        ${getMenuHTML()}
+        ${getRuleHTML()}
+        
+        <div class="w-full h-full bg-black relative flex flex-col overflow-hidden">
+          <header class="flex-none pt-4 lg:pt-6 pb-2 px-4 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+            <div class="flex items-center"><img src="./assets/Logo.svg" alt="LOGO" class="h-[19px] lg:h-[25px] object-contain opacity-90 icon-white" onerror="this.style.display='none'"></div>
+            <div class="flex items-center gap-4 lg:gap-6">
+              <button onclick="window.toggleRule()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base text-white text-[13px] lg:text-[15px] font-medium tracking-[0.1em]">玩法</button>
+              <button onclick="window.handleUndo()" ${historyStack.length === 0 || gameState.isWon ? 'disabled style="opacity:0.2"' : ''} class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/back.svg" alt="UNDO" class="h-[14px] lg:h-[18px] object-contain icon-white" onerror="this.outerHTML='↶'"></button>
+              <button onclick="window.openMenu()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/setting.svg" alt="SET" class="h-[14px] lg:h-[18px] object-contain icon-white" onerror="this.outerHTML='⚙'"></button>
+            </div>
+          </header>
+          
+          <div class="px-4 lg:px-5 lg:absolute lg:top-[85px] lg:left-12 z-20 pointer-events-none mt-1 lg:mt-0 flex flex-row lg:flex-col justify-between items-end lg:items-start">
+            <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase">
+              數獨<br>
+              難度 <span class="text-white">${settings.difficulty}</span>
+            </div>
+            <div id="timer-display" class="text-white font-mono text-[14px] lg:text-[20px] lg:mt-2 tracking-widest">${gameState.elapsedStr}</div>
+          </div>
+
+          <main class="flex-1 w-full max-w-md lg:max-w-[1000px] mx-auto flex flex-col lg:flex-row items-center justify-center lg:justify-between min-h-0 relative z-10 px-4 pt-2 pb-6 lg:pb-0 gap-6 lg:gap-12">
+            
+            <!-- 左邊 Board -->
+            <div class="w-full max-w-[440px] lg:max-w-[500px] relative">
+              ${boardHTML}
+              ${winBanner}
+            </div>
+
+            <!-- 右邊 Controls -->
+            <div class="w-full lg:w-[360px] flex flex-col items-center">
+               ${toolsHTML}
+               ${numPadHTML}
+            </div>
+
+          </main>
+        </div>
+      `;
+    }
+
+    window.onload = () => { render(); };
+  </script>
+</body>
+</html>
