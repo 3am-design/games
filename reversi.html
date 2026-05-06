@@ -298,22 +298,105 @@
     };
 
     // --- 電腦 AI 邏輯 ---
+    // 黑白棋嘅「基本常識」：角位 > 行動力 > 少送角；翻得多唔一定係好棋。
+    const isCornerMove = (move, size) => {
+        return (move.x === 0 && move.y === 0) ||
+               (move.x === size - 1 && move.y === 0) ||
+               (move.x === 0 && move.y === size - 1) ||
+               (move.x === size - 1 && move.y === size - 1);
+    };
+
+    const isDangerousXSquare = (board, move, size) => {
+        const dangerMap = [
+            { x: 1, y: 1, cx: 0, cy: 0 },
+            { x: size - 2, y: 1, cx: size - 1, cy: 0 },
+            { x: 1, y: size - 2, cx: 0, cy: size - 1 },
+            { x: size - 2, y: size - 2, cx: size - 1, cy: size - 1 }
+        ];
+        return dangerMap.some(d => move.x === d.x && move.y === d.y && board[d.cy][d.cx] === null);
+    };
+
+    const givesOpponentCorner = (board, move, color, size) => {
+        const oppColor = color === 'R' ? 'W' : 'R';
+        doMove(board, move, color);
+        const oppMoves = getValidMoves(board, oppColor, size);
+        const givesCorner = oppMoves.some(m => isCornerMove(m, size));
+        undoMove(board, move, color);
+        return givesCorner;
+    };
+
+    const getGamePhase = (board, size) => {
+        const counts = countPieces(board, size);
+        const occupied = counts.R + counts.W;
+        const total = size * size;
+        if (occupied < total * 0.35) return 'early';
+        if (occupied < total * 0.75) return 'mid';
+        return 'late';
+    };
+
+    const countCorners = (board, color, size) => {
+        const corners = [[0,0], [size-1,0], [0,size-1], [size-1,size-1]];
+        return corners.reduce((sum, [x, y]) => sum + (board[y][x] === color ? 1 : 0), 0);
+    };
+
+    const countFrontierDiscs = (board, color, size) => {
+        let count = 0;
+        const dirs = [[-1,-1], [0,-1], [1,-1], [-1,0], [1,0], [-1,1], [0,1], [1,1]];
+        for (let y = 0; y < size; y++) {
+            for (let x = 0; x < size; x++) {
+                if (board[y][x] !== color) continue;
+                for (let [dx, dy] of dirs) {
+                    const nx = x + dx, ny = y + dy;
+                    if (nx >= 0 && nx < size && ny >= 0 && ny < size && board[ny][nx] === null) {
+                        count++;
+                        break;
+                    }
+                }
+            }
+        }
+        return count;
+    };
+
+    const getRootMoveBonus = (board, move, color, size) => {
+        let bonus = 0;
+        if (isCornerMove(move, size)) bonus += 12000;
+        if (isDangerousXSquare(board, move, size)) bonus -= 4500;
+        if (givesOpponentCorner(board, move, color, size)) bonus -= 9000;
+        return bonus;
+    };
+
+    const getSafeRandomMoves = (board, moves, color, size) => {
+        const safeMoves = moves.filter(m => !isDangerousXSquare(board, m, size) && !givesOpponentCorner(board, m, color, size));
+        return safeMoves.length > 0 ? safeMoves : moves;
+    };
+
     const evaluateBoard = (board, color, size) => {
         let score = 0;
         let myColor = color;
         let oppColor = color === 'R' ? 'W' : 'R';
         const evalMap = getEvalMap(size);
+        const phase = getGamePhase(board, size);
+        const counts = countPieces(board, size);
+        const pieceDiff = counts[myColor] - counts[oppColor];
+        const positionWeight = phase === 'late' ? 0.35 : (phase === 'mid' ? 0.9 : 1.1);
+        const mobilityWeight = phase === 'early' ? 22 : (phase === 'mid' ? 16 : 5);
+        const frontierWeight = phase === 'late' ? 2 : 8;
+        const pieceWeight = phase === 'late' ? 22 : (phase === 'mid' ? 2 : -1);
         
         for (let y = 0; y < size; y++) {
             for (let x = 0; x < size; x++) {
-                if (board[y][x] === myColor) score += evalMap[y][x];
-                else if (board[y][x] === oppColor) score -= evalMap[y][x];
+                if (board[y][x] === myColor) score += evalMap[y][x] * positionWeight;
+                else if (board[y][x] === oppColor) score -= evalMap[y][x] * positionWeight;
             }
         }
-        // Mobility
+
         const myMoves = getValidMoves(board, myColor, size).length;
         const oppMoves = getValidMoves(board, oppColor, size).length;
-        score += (myMoves - oppMoves) * 10;
+        score += (myMoves - oppMoves) * mobilityWeight;
+
+        score += (countCorners(board, myColor, size) - countCorners(board, oppColor, size)) * 2500;
+        score -= (countFrontierDiscs(board, myColor, size) - countFrontierDiscs(board, oppColor, size)) * frontierWeight;
+        score += pieceDiff * pieceWeight;
         
         return score;
     };
@@ -376,22 +459,32 @@
         const aiColor = gameState.turn;
         const moves = gameState.validMoves;
         const size = gameState.boardSize;
+        const oppColor = aiColor === 'R' ? 'W' : 'R';
         
         if (moves.length === 0) return null;
 
+        // 角位係黑白棋最大資產：任何難度都應該優先拎角。
+        const cornerMoves = moves.filter(m => isCornerMove(m, size));
+        if (cornerMoves.length > 0) {
+            return cornerMoves[Math.floor(Math.random() * cornerMoves.length)];
+        }
+
+        // 低 LV 可以有隨機性，但唔應該完全亂到主動送角。
         if (Math.random() < randomness) {
-            return moves[Math.floor(Math.random() * moves.length)];
+            const safeRandomMoves = getSafeRandomMoves(gameState.board, moves, aiColor, size);
+            return safeRandomMoves[Math.floor(Math.random() * safeRandomMoves.length)];
         }
 
         let bestMoves = [];
         let bestValue = -Infinity;
-        const oppColor = aiColor === 'R' ? 'W' : 'R';
 
         for (let i = 0; i < moves.length; i++) {
             let move = moves[i];
             doMove(gameState.board, move, aiColor);
             let moveValue = minimax(gameState.board, depth - 1, -Infinity, Infinity, false, aiColor, oppColor, size);
             undoMove(gameState.board, move, aiColor);
+
+            moveValue += getRootMoveBonus(gameState.board, move, aiColor, size);
 
             if (moveValue > -50000 && moveValue < 50000) {
                 moveValue += (Math.random() * 2 - 1); 
@@ -442,7 +535,8 @@
             let moveValue = minimax(gameState.board, depth - 1, -Infinity, Infinity, false, color, oppColor, size);
             undoMove(gameState.board, move, color);
             
-            moveValue += (Math.random() * 2 - 1);
+            // Hint 要穩定同教學向，所以唔加 random；同時突出角位、避開送角。
+            moveValue += getRootMoveBonus(gameState.board, move, color, size);
             evaluatedMoves.push({ move, score: moveValue });
         }
 
