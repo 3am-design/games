@@ -27,7 +27,8 @@
 
     /* --- 黑白棋 3D 翻轉動畫 --- */
     .piece-container { perspective: 800px; pointer-events: none; }
-    .piece-wrapper { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
+    /* 放慢翻轉動畫至 1.2s */
+    .piece-wrapper { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 1.2s cubic-bezier(0.4, 0, 0.2, 1); }
     .piece-face { position: absolute; width: 100%; height: 100%; border-radius: 50%; backface-visibility: hidden; top: 0; left: 0; }
     .piece-red { background: #ef4444; border: 2px solid #b91c1c; transform: rotateY(0deg); }
     .piece-white { background: #f8fafc; border: 2px solid #cbd5e1; transform: rotateY(180deg); }
@@ -42,8 +43,8 @@
     /* --- 翻轉動畫 --- */
     @keyframes flipToRedFromWhite { 0% { transform: rotateY(180deg); } 100% { transform: rotateY(0deg); } }
     @keyframes flipToWhiteFromRed { 0% { transform: rotateY(0deg); } 100% { transform: rotateY(180deg); } }
-    .anim-flip-to-red { animation: flipToRedFromWhite 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
-    .anim-flip-to-white { animation: flipToWhiteFromRed 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+    .anim-flip-to-red { animation: flipToRedFromWhite 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+    .anim-flip-to-white { animation: flipToWhiteFromRed 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
 
     /* --- 擲先後 3D 硬幣動畫 --- */
     .coin-scene { perspective: 800px; width: 100px; height: 100px; }
@@ -485,7 +486,7 @@
         setTimeout(() => {
             gameState.isAnimating = false;
             completeMoveLogic();
-        }, 800); // 配合 CSS 0.8s 動畫
+        }, 1200); // 配合 CSS 1.2s 動畫
     };
 
     const completeMoveLogic = () => {
@@ -647,8 +648,9 @@
       const size = settings.boardSize || 8;
       const initialBoard = getInitialBoard(size);
 
+      // 預先載入 validMoves，避免 AI 行先時 Hang 機
       gameState = {
-        board: initialBoard, turn: 'R', boardSize: size, validMoves: [], winner: null,
+        board: initialBoard, turn: 'R', boardSize: size, validMoves: getValidMoves(initialBoard, 'R', size), winner: null,
         counts: countPieces(initialBoard, size), turnCount: 1, isThinking: false, isAnimating: false,
         lastMove: null, lastFlipped: [], gameLog: [], isTossing: false,
         isCalculatingHints: false,
@@ -686,7 +688,6 @@
                       render();
                       setTimeout(triggerAI, 1000);
                   } else {
-                      gameState.validMoves = getValidMoves(gameState.board, 'R', size);
                       if (isHintMode) {
                           gameState.isCalculatingHints = true; render();
                           setTimeout(() => { updateHintsLogic(); gameState.isCalculatingHints = false; render(); }, 10);
@@ -703,7 +704,6 @@
                       setTimeout(triggerAI, 1000); 
                   }, 0);
               } else {
-                  gameState.validMoves = getValidMoves(gameState.board, 'R', size);
                   if (isHintMode) {
                       gameState.isCalculatingHints = true; render();
                       setTimeout(() => { updateHintsLogic(); gameState.isCalculatingHints = false; render(); }, 10);
@@ -711,7 +711,6 @@
               }
           }
       } else {
-          gameState.validMoves = getValidMoves(gameState.board, 'R', size);
           if (isHintMode) {
               gameState.isCalculatingHints = true; render();
               setTimeout(() => { updateHintsLogic(); gameState.isCalculatingHints = false; render(); }, 10);
@@ -848,7 +847,6 @@
     // --- 渲染 SVG 與 棋盤 ---
     const generateBoardHTML = () => {
       const size = gameState.boardSize;
-      // 動態計算格仔大小同偏移量，確保無論 6/8/10 都完美居中置放喺 360x400 畫布內
       const GRID_SIZE = Math.floor(340 / size); 
       const OFFSET_X = (360 - size * GRID_SIZE) / 2;
       const OFFSET_Y = (400 - size * GRID_SIZE) / 2;
@@ -872,7 +870,6 @@
                 newlyDropped = gameState.lastMove && gameState.lastMove.x === x && gameState.lastMove.y === y;
             }
 
-            // 動畫狀態判定：如果有isFlipped，應用實時嘅前後轉換 CSS 動畫
             let wrapperClass = piece === 'R' ? 'rot-red' : 'rot-white';
             if (isFlipped) {
                 wrapperClass = piece === 'R' ? 'anim-flip-to-red' : 'anim-flip-to-white';
@@ -893,11 +890,14 @@
       }
 
       let validMovesSVG = ``;
-      gameState.validMoves.forEach(m => {
-        const cx = OFFSET_X + m.x * GRID_SIZE + GRID_SIZE/2; 
-        const cy = OFFSET_Y + m.y * GRID_SIZE + GRID_SIZE/2;
-        validMovesSVG += `<circle cx="${cx}" cy="${cy}" r="${size >= 10 ? 4 : 6}" fill="#22d3ee" opacity="0.2" class="valid-move" onclick="window.handleSquareClick(${m.x}, ${m.y})" />`;
-      });
+      // 只在玩家回合或雙人模式下，才顯示可落子嘅淡藍色提示點
+      if (settings.mode !== 'PvE' || gameState.turn === settings.playerColor) {
+          gameState.validMoves.forEach(m => {
+            const cx = OFFSET_X + m.x * GRID_SIZE + GRID_SIZE/2; 
+            const cy = OFFSET_Y + m.y * GRID_SIZE + GRID_SIZE/2;
+            validMovesSVG += `<circle cx="${cx}" cy="${cy}" r="${size >= 10 ? 4 : 6}" fill="#22d3ee" opacity="0.2" class="valid-move" onclick="window.handleSquareClick(${m.x}, ${m.y})" />`;
+          });
+      }
 
       let hintsSVG = '';
       if (isHintMode && currentHints.length > 0 && !gameState.isCalculatingHints) {
@@ -999,7 +999,7 @@
 
       let tossHTML = '';
       if (gameState.isTossing) {
-         const tossMsg = settings.playerColor === 'R' ? `${gameState.redName} 先攻` : `${gameState.whiteName} 先攻`;
+         const tossMsg = settings.playerColor === 'R' ? '先攻' : '後攻';
          const flipClass = settings.playerColor === 'R' ? "anim-flip-red" : "anim-flip-white";
          
          tossHTML = `
@@ -1083,8 +1083,8 @@
 
       let modeDisplay = '';
       if (settings.mode === 'PvE') {
-          if (settings.firstMove === 'PLAYER') modeDisplay = '先攻 (紅)';
-          else if (settings.firstMove === 'AI') modeDisplay = '後攻 (白)';
+          if (settings.firstMove === 'PLAYER') modeDisplay = '先攻';
+          else if (settings.firstMove === 'AI') modeDisplay = '後攻';
           else modeDisplay = settings.playerColor === 'R' ? '隨機 - 先攻' : '隨機 - 後攻';
       } else {
           modeDisplay = '雙人對戰';
@@ -1123,7 +1123,7 @@
 
           <div class="absolute top-[60px] lg:top-[85px] left-5 lg:left-12 z-20 pointer-events-none">
             <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase">
-              黑白棋 Reversi<br>
+              黑白棋 ${gameState.boardSize}x${gameState.boardSize}<br>
               ${modeDisplay}<br>
               ${roundDisplay}
             </div>
