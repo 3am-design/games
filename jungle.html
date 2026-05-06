@@ -98,6 +98,128 @@
     
     .icon-white { filter: brightness(0) invert(1); }
     .icon-hint-active { filter: brightness(0) saturate(100%) invert(48%) sepia(90%) saturate(3362%) hue-rotate(206deg) brightness(102%) contrast(94%); }
+  
+
+    /* --- Mobile layout guard: prevent board / panels from overflowing browser chrome --- */
+    :root { --app-height: 100dvh; }
+    .app-container { height: var(--app-height); }
+
+    @media (max-width: 767px) {
+      html, body { height: var(--app-height); overflow: hidden; }
+
+      .jungle-screen {
+        height: var(--app-height);
+        min-height: 0;
+        overflow: hidden;
+      }
+
+      .jungle-header {
+        padding-top: max(12px, env(safe-area-inset-top));
+        padding-bottom: 4px;
+      }
+
+      .jungle-header img { max-height: 18px; }
+      .jungle-header-actions { gap: 14px; }
+
+      .jungle-meta {
+        position: static !important;
+        padding: 0 16px;
+        margin-top: 0;
+        margin-bottom: 2px;
+        z-index: 20;
+      }
+
+      .jungle-meta > div {
+        font-size: 10px;
+        line-height: 1.45;
+        letter-spacing: 0.12em;
+      }
+
+      .jungle-main {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        padding-bottom: max(8px, env(safe-area-inset-bottom));
+      }
+
+      .jungle-board-section {
+        flex: 1 1 auto;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 10px;
+      }
+
+      .jungle-board-wrap {
+        width: min(88vw, calc((var(--app-height) - 300px) * 0.70));
+        min-width: 220px;
+        max-width: 360px;
+        padding: 0;
+        margin: 0 auto;
+      }
+
+      .jungle-board-svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        max-height: calc(var(--app-height) - 300px);
+      }
+
+      .jungle-side-panel {
+        flex: 0 0 auto;
+        width: 100%;
+        padding: 0 12px;
+        padding-bottom: max(8px, env(safe-area-inset-bottom));
+        background: #000;
+      }
+
+      .jungle-status-wrap {
+        margin: 6px 0 8px 0;
+        padding: 0;
+        height: auto;
+      }
+
+      .jungle-status-wrap > div {
+        min-height: 48px;
+        padding-top: 12px;
+        padding-bottom: 12px;
+      }
+
+      .jungle-player-area {
+        padding-bottom: 0;
+      }
+
+      .jungle-player-cards {
+        padding-left: 0;
+        padding-right: 0;
+        gap: 8px;
+      }
+
+      .jungle-player-card {
+        padding-top: 10px;
+        padding-bottom: 10px;
+        min-height: 46px;
+      }
+
+      .jungle-legend {
+        margin-top: 12px;
+        margin-bottom: 0;
+        gap: 28px;
+      }
+    }
+
+    @media (max-width: 390px) {
+      .jungle-board-wrap {
+        width: min(86vw, calc((var(--app-height) - 292px) * 0.69));
+        min-width: 210px;
+      }
+      .jungle-board-svg { max-height: calc(var(--app-height) - 292px); }
+      .jungle-header-actions { gap: 12px; }
+    }
+
   </style>
 </head>
 <body class="bg-black selection:bg-white/30">
@@ -105,6 +227,14 @@
   <div id="app" class="app-container"></div>
 
   <script>
+
+    const updateAppHeight = () => {
+      document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
+    };
+    updateAppHeight();
+    window.addEventListener('resize', updateAppHeight);
+    window.addEventListener('orientationchange', () => setTimeout(updateAppHeight, 120));
+
     const AI_NAMES = ['獅王', '虎將', '飛豹', '雪狼', '狂犬', '靈貓', '飛鼠', '巨象'];
     const ANIMALS = { 1: '鼠', 2: '貓', 3: '狗', 4: '狼', 5: '豹', 6: '虎', 7: '獅', 8: '象' };
     const COLS = 7;
@@ -808,7 +938,7 @@
       }
 
       return `
-        <svg viewBox="-10 -10 ${BOARD_W + 20} ${BOARD_H + 20}" preserveAspectRatio="xMidYMid meet" class="w-full h-auto max-h-[65vh] lg:h-full lg:max-h-[85vh] transition-transform origin-center">
+        <svg viewBox="-10 -10 ${BOARD_W + 20} ${BOARD_H + 20}" preserveAspectRatio="xMidYMid meet" class="jungle-board-svg lg:h-full lg:max-h-[85vh] transition-transform origin-center">
           ${bgHTML}
           ${waterHTML}
           ${linesHTML}
@@ -985,20 +1115,20 @@
 
       // 將文字圖例抽出並顯示於下方
       const capturedAreaHTML = `
-        <div class="flex flex-col gap-2 lg:gap-3 px-3 lg:px-6 w-full">
-            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-2.5 lg:p-3 relative overflow-hidden">
+        <div class="jungle-player-cards flex flex-col gap-2 lg:gap-3 px-3 lg:px-6 w-full">
+            <div class="jungle-player-card flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-2.5 lg:p-3 relative overflow-hidden">
               <div class="absolute left-0 top-0 bottom-0 w-1 ${gameState.turn === 'W' ? 'bg-white shadow-[0_0_8px_#ffffff]' : 'bg-transparent'} transition-colors"></div>
               <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-full truncate ml-2">${gameState.whiteName}</div>
               <svg viewBox="0 0 42 42" class="w-[20px] h-[20px] lg:w-[24px] lg:h-[24px] flex-shrink-0"><circle cx="21" cy="21" r="19" fill="#111" stroke="#ffffff" stroke-width="1.5"/><circle cx="21" cy="21" r="15.5" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.7"/></svg>
             </div>
-            <div class="flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-2.5 lg:p-3 relative overflow-hidden">
+            <div class="jungle-player-card flex items-center justify-between bg-[#0a0a0a] border border-neutral-800 rounded-lg p-2.5 lg:p-3 relative overflow-hidden">
               <div class="absolute left-0 top-0 bottom-0 w-1 ${gameState.turn === 'R' ? 'bg-c4-red shadow-[0_0_8px_#ef4444]' : 'bg-transparent'} transition-colors"></div>
               <div class="text-[10px] lg:text-[12px] text-neutral-500 font-medium tracking-[0.15em] uppercase w-full truncate ml-2">${gameState.redName}</div>
               <svg viewBox="0 0 42 42" class="w-[20px] h-[20px] lg:w-[24px] lg:h-[24px] flex-shrink-0"><circle cx="21" cy="21" r="19" fill="#111" stroke="#ef4444" stroke-width="1.5"/><circle cx="21" cy="21" r="15.5" fill="none" stroke="#ef4444" stroke-width="1" opacity="0.7"/></svg>
             </div>
         </div>
         <!-- 圖例 Legend -->
-        <div class="flex items-center justify-center gap-8 mt-5 mb-2 opacity-80 px-4">
+        <div class="jungle-legend flex items-center justify-center gap-8 mt-5 mb-2 opacity-80 px-4">
             <div class="flex items-center gap-2 text-[10px] lg:text-[12px] text-neutral-400 font-medium tracking-[0.1em]">
                 <svg viewBox="0 0 24 24" class="w-[18px] h-[18px]"><rect x="4" y="4" width="16" height="16" fill="#a3a3a3" fill-opacity="0.1" stroke="#a3a3a3" stroke-width="1.5" stroke-dasharray="2" transform="rotate(45 12 12)"/></svg>
                 陷阱 TRAP
@@ -1015,7 +1145,7 @@
           <button onclick="window.toggleRecord()" class="w-[220px] lg:w-[260px] py-4 lg:py-5 rounded-lg border border-neutral-800 text-white font-medium text-xs lg:text-[14px] tracking-[0.15em] uppercase hover:bg-neutral-900 transition-colors key-base">MATCH RECORD</button>
           <button onclick="window.openMenu()" class="w-[220px] lg:w-[260px] py-4 lg:py-5 rounded-lg bg-white text-black font-medium text-xs lg:text-[14px] tracking-[0.15em] uppercase hover:bg-neutral-200 transition-colors key-base">MAIN MENU 主選單</button>
         </div>
-      ` : `<div class="flex-none bg-black pb-4 lg:pb-0">${capturedAreaHTML}</div>`;
+      ` : `<div class="jungle-player-area flex-none bg-black pb-4 lg:pb-0">${capturedAreaHTML}</div>`;
 
       let modeDisplay = settings.mode === 'PvE' ? (settings.firstMove === 'PLAYER' ? '先攻' : settings.firstMove === 'AI' ? '後攻' : (settings.playerColor === 'R' ? '隨機 - 先攻' : '隨機 - 後攻')) : '雙人對戰';
       let roundDisplay = `PVP <span class="mx-2 opacity-50">|</span> 回合 ${Math.ceil(gameState.gameLog.length / 2) + 1}`;
@@ -1031,10 +1161,10 @@
         ${recordHTML}
         ${ruleHTML}
         ${tossHTML}
-        <div class="w-full h-full bg-black relative flex flex-col overflow-hidden">
-          <header class="flex-none pt-4 lg:pt-6 pb-2 px-4 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+        <div class="jungle-screen w-full h-full bg-black relative flex flex-col overflow-hidden">
+          <header class="jungle-header flex-none pt-4 lg:pt-6 pb-2 px-4 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
             <div class="flex items-center"><img src="./assets/Logo.svg" alt="LOGO" class="h-[19px] lg:h-[25px] object-contain opacity-90 icon-white" onerror="this.style.display='none'"></div>
-            <div class="flex items-center gap-4 lg:gap-6">
+            <div class="jungle-header-actions flex items-center gap-4 lg:gap-6">
               <button onclick="window.toggleRule()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base text-white text-[13px] lg:text-[15px] font-medium tracking-[0.1em]">玩法</button>
               <button onclick="window.toggleHintMode()" ${gameState.isThinking || gameState.isAnimating || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-center justify-center transition-all duration-300 key-base ${isHintMode ? 'opacity-100 drop-shadow-[0_0_8px_rgba(59,130,246,0.6)]' : 'opacity-70 hover:opacity-100'}"><img src="./assets/ai.svg" alt="AI" class="h-[19px] lg:h-[24px] object-contain ${isHintMode ? 'icon-hint-active' : 'icon-white'}" onerror="this.outerHTML='💡'"></button>
               <button onclick="window.handleUndo()" ${historyStack.length === 0 || gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/back.svg" alt="UNDO" class="h-[14px] lg:h-[18px] object-contain icon-white" onerror="this.outerHTML='↶'"></button>
@@ -1042,17 +1172,17 @@
               <button onclick="window.openMenu()" ${gameState.isThinking || gameState.isAnimating || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/setting.svg" alt="SET" class="h-[14px] lg:h-[18px] object-contain icon-white" onerror="this.outerHTML='⚙'"></button>
             </div>
           </header>
-          <div class="px-4 lg:px-5 lg:absolute lg:top-[85px] lg:left-12 z-20 pointer-events-none mt-1 lg:mt-0">
+          <div class="jungle-meta px-4 lg:px-5 lg:absolute lg:top-[85px] lg:left-12 z-20 pointer-events-none mt-1 lg:mt-0">
             <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase">鬥獸棋<br>${modeDisplay}<br>${roundDisplay}</div>
           </div>
-          <main class="flex-1 w-full max-w-md lg:max-w-[1200px] mx-auto flex flex-col lg:flex-row min-h-0 relative z-10">
-            <div class="flex-1 relative min-h-0 flex flex-col justify-center lg:py-8 lg:pr-8">
+          <main class="jungle-main flex-1 w-full max-w-md lg:max-w-[1200px] mx-auto flex flex-col lg:flex-row min-h-0 relative z-10">
+            <div class="jungle-board-section flex-1 relative min-h-0 flex flex-col justify-center lg:py-8 lg:pr-8">
               <div class="flex-1 flex items-center justify-center w-full h-full min-h-0">
-                <div class="w-full px-4 max-w-[440px] lg:max-w-[480px] mx-auto lg:px-0 flex justify-center">${generateBoardHTML()}</div>
+                <div class="jungle-board-wrap w-full px-4 max-w-[440px] lg:max-w-[480px] mx-auto lg:px-0 flex justify-center">${generateBoardHTML()}</div>
               </div>
             </div>
-            <div class="flex-none lg:w-[480px] lg:h-full flex flex-col justify-end lg:justify-center bg-black z-10 relative pb-6 lg:pb-0">
-              <div class="flex-none lg:mb-4"><div class="mt-2 mb-3 lg:mt-4 lg:mb-4 px-3 lg:px-6 h-12">${statusBannerHTML}</div></div>
+            <div class="jungle-side-panel flex-none lg:w-[480px] lg:h-full flex flex-col justify-end lg:justify-center bg-black z-10 relative pb-6 lg:pb-0">
+              <div class="flex-none lg:mb-4"><div class="jungle-status-wrap mt-2 mb-3 lg:mt-4 lg:mb-4 px-3 lg:px-6 h-12">${statusBannerHTML}</div></div>
               <div class="flex-none">${controlPanelHTML}</div>
             </div>
           </main>
