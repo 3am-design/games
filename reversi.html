@@ -1083,9 +1083,7 @@
 
       let modeDisplay = '';
       if (settings.mode === 'PvE') {
-          if (settings.firstMove === 'PLAYER') modeDisplay = '先攻';
-          else if (settings.firstMove === 'AI') modeDisplay = '後攻';
-          else modeDisplay = settings.playerColor === 'R' ? '隨機 - 先攻' : '隨機 - 後攻';
+          modeDisplay = settings.playerColor === 'R' ? '先攻' : '後攻';
       } else {
           modeDisplay = '雙人對戰';
       }
@@ -1121,7 +1119,7 @@
             </div>
           </header>
 
-          <div class="absolute top-[60px] lg:top-[85px] left-5 lg:left-12 z-20 pointer-events-none">
+          <div class="px-5 lg:absolute lg:top-[85px] lg:left-12 z-20 pointer-events-none mt-2 lg:mt-0">
             <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase">
               黑白棋 ${gameState.boardSize}x${gameState.boardSize}<br>
               ${modeDisplay}<br>
