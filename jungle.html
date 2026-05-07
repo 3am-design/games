@@ -312,55 +312,153 @@
     };
 
     // --- AI 邏輯 (Alpha-Beta Minimax) ---
-    const evaluateBoard = (board, color) => {
+    const getOpponentColor = (color) => color === 'R' ? 'W' : 'R';
+    const getTargetDen = (color) => color === 'R' ? { x: 3, y: 8 } : { x: 3, y: 0 };
+    const getOwnDen = (color) => color === 'R' ? { x: 3, y: 0 } : { x: 3, y: 8 };
+    const manhattan = (x1, y1, x2, y2) => Math.abs(x1 - x2) + Math.abs(y1 - y2);
+
+    const undoAppliedMove = (board, move, captured) => {
+        board[move.fy][move.fx] = board[move.ty][move.tx];
+        board[move.ty][move.tx] = captured;
+    };
+
+    const getWinnerOnBoard = (board) => {
+        if (board[0][3] && board[0][3].owner === 'W') return 'W';
+        if (board[8][3] && board[8][3].owner === 'R') return 'R';
+        if (getAllValidMoves(board, 'R').length === 0) return 'W';
+        if (getAllValidMoves(board, 'W').length === 0) return 'R';
+        return null;
+    };
+
+    const isDenEntryMove = (move, color) => {
+        const den = getTargetDen(color);
+        return move.tx === den.x && move.ty === den.y;
+    };
+
+    const getImmediateDenMoves = (board, color) => {
+        return getAllValidMoves(board, color).filter(m => isDenEntryMove(m, color));
+    };
+
+    const givesOpponentImmediateDen = (board, move, color) => {
+        const captured = applyMove(board, move);
+        const oppColor = getOpponentColor(color);
+        const dangerous = getImmediateDenMoves(board, oppColor).length > 0 || getWinnerOnBoard(board) === oppColor;
+        undoAppliedMove(board, move, captured);
+        return dangerous;
+    };
+
+    const getSafeMoves = (board, moves, color) => {
+        return moves.filter(m => !givesOpponentImmediateDen(board, m, color));
+    };
+
+    const moveOrderingScore = (board, move, color) => {
+        const piece = board[move.fy][move.fx];
+        const target = board[move.ty][move.tx];
+        const targetDen = getTargetDen(color);
+        const ownDen = getOwnDen(color);
         let score = 0;
-        const oppColor = color === 'R' ? 'W' : 'R';
-        const rankScores = {1:10, 2:20, 3:30, 4:40, 5:50, 6:60, 7:70, 8:80};
+
+        if (isDenEntryMove(move, color)) score += 100000;
+        if (target) score += 900 + target.rank * 130 - (piece ? piece.rank * 8 : 0);
+        score += (16 - manhattan(move.tx, move.ty, targetDen.x, targetDen.y)) * 18;
+        score -= Math.max(0, 5 - manhattan(move.tx, move.ty, ownDen.x, ownDen.y)) * 8;
+        if (piece && (piece.rank === 6 || piece.rank === 7) && Math.abs(move.tx - move.fx) + Math.abs(move.ty - move.fy) > 1) score += 90;
+        if (piece && piece.rank === 1 && isWater(move.tx, move.ty)) score += 45;
+        if (piece && isTrap(move.tx, move.ty, getOpponentColor(piece.owner))) score -= 160 + piece.rank * 30;
+        return score;
+    };
+
+    const sortMovesForAI = (board, moves, color) => {
+        return moves.slice().sort((a, b) => moveOrderingScore(board, b, color) - moveOrderingScore(board, a, color));
+    };
+
+    const evaluateBoard = (board, color) => {
+        const winner = getWinnerOnBoard(board);
+        if (winner) return winner === color ? 100000 : -100000;
+
+        let score = 0;
+        const oppColor = getOpponentColor(color);
+        const rankScores = { 1: 145, 2: 115, 3: 125, 4: 155, 5: 210, 6: 300, 7: 325, 8: 360 };
+        const myDen = getOwnDen(color);
+        const oppDen = getTargetDen(color);
+
+        const myMoves = getAllValidMoves(board, color);
+        const oppMoves = getAllValidMoves(board, oppColor);
+        score += (myMoves.length - oppMoves.length) * 10;
+
+        if (getImmediateDenMoves(board, color).length > 0) score += 50000;
+        if (getImmediateDenMoves(board, oppColor).length > 0) score -= 60000;
 
         for (let y = 0; y < ROWS; y++) {
             for (let x = 0; x < COLS; x++) {
                 const p = board[y][x];
                 if (!p) continue;
-                let val = rankScores[p.rank];
-                
-                const targetDenY = p.owner === 'R' ? 8 : 0;
-                const targetDenX = 3;
-                const dist = Math.abs(x - targetDenX) + Math.abs(y - targetDenY);
-                val += (15 - dist) * 2; 
 
-                if (p.owner === color) score += val;
-                else score -= val;
+                const side = p.owner === color ? 1 : -1;
+                const targetDen = getTargetDen(p.owner);
+                const ownDen = getOwnDen(p.owner);
+                const oppOfPiece = getOpponentColor(p.owner);
+                let val = rankScores[p.rank];
+
+                const distToTarget = manhattan(x, y, targetDen.x, targetDen.y);
+                val += Math.max(0, 18 - distToTarget) * 10;
+                if (distToTarget <= 2) val += (3 - distToTarget) * 240;
+
+                const distToOwn = manhattan(x, y, ownDen.x, ownDen.y);
+                if (distToOwn <= 2) val += (3 - distToOwn) * 95;
+
+                if (isTrap(x, y, oppOfPiece)) val -= 260 + p.rank * 45;
+                if (isTrap(x, y, p.owner)) val += 45;
+                if (p.rank === 1 && isWater(x, y)) val += 85;
+                if ((p.rank === 6 || p.rank === 7) && !isWater(x, y)) {
+                    const jumpMoves = getAllValidMoves(board, p.owner).filter(m => m.fx === x && m.fy === y && (Math.abs(m.tx - m.fx) + Math.abs(m.ty - m.fy) > 1));
+                    val += jumpMoves.length * 55;
+                }
+
+                score += side * val;
             }
         }
+
+        // Capture pressure: reward safe captures, punish opponent's capture pressure.
+        for (let m of myMoves) {
+            const target = board[m.ty][m.tx];
+            if (target) score += 35 + target.rank * 28;
+        }
+        for (let m of oppMoves) {
+            const target = board[m.ty][m.tx];
+            if (target) score -= 40 + target.rank * 32;
+        }
+
+        // Extra den danger: enemy pieces near our den are far more important than material.
+        for (let m of oppMoves) {
+            const d = manhattan(m.tx, m.ty, myDen.x, myDen.y);
+            if (d <= 2) score -= (3 - d) * 420;
+        }
+        for (let m of myMoves) {
+            const d = manhattan(m.tx, m.ty, oppDen.x, oppDen.y);
+            if (d <= 2) score += (3 - d) * 330;
+        }
+
         return score;
     };
 
-    const minimax = (board, depth, alpha, beta, isMax, color, oppColor) => {
-        if (board[0][3] && board[0][3].owner === 'W') return isMax ? -99999 + depth : -99999 + depth;
-        if (board[8][3] && board[8][3].owner === 'R') return isMax ? 99999 - depth : 99999 - depth;
-        
+    const minimax = (board, depth, alpha, beta, isMax, color, oppColor, maxMoves = 18) => {
+        const winner = getWinnerOnBoard(board);
+        if (winner) return winner === color ? 100000 + depth : -100000 - depth;
         if (depth === 0) return evaluateBoard(board, color);
 
         const currentTurnColor = isMax ? color : oppColor;
-        const moves = getAllValidMoves(board, currentTurnColor);
-        
-        if (moves.length === 0) return isMax ? -90000 : 90000; 
+        let moves = getAllValidMoves(board, currentTurnColor);
+        if (moves.length === 0) return currentTurnColor === color ? -90000 - depth : 90000 + depth;
 
-        moves.sort((a, b) => {
-            let scoreA = board[a.ty][a.tx] ? board[a.ty][a.tx].rank : 0;
-            let scoreB = board[b.ty][b.tx] ? board[b.ty][b.tx].rank : 0;
-            return scoreB - scoreA;
-        });
+        moves = sortMovesForAI(board, moves, currentTurnColor).slice(0, maxMoves);
 
         if (isMax) {
             let maxEval = -Infinity;
             for (let m of moves) {
-                const captured = board[m.ty][m.tx];
-                board[m.ty][m.tx] = board[m.fy][m.fx];
-                board[m.fy][m.fx] = null;
-                let ev = minimax(board, depth - 1, alpha, beta, false, color, oppColor);
-                board[m.fy][m.fx] = board[m.ty][m.tx];
-                board[m.ty][m.tx] = captured;
+                const captured = applyMove(board, m);
+                let ev = minimax(board, depth - 1, alpha, beta, false, color, oppColor, maxMoves);
+                undoAppliedMove(board, m, captured);
                 maxEval = Math.max(maxEval, ev);
                 alpha = Math.max(alpha, ev);
                 if (beta <= alpha) break;
@@ -369,12 +467,9 @@
         } else {
             let minEval = Infinity;
             for (let m of moves) {
-                const captured = board[m.ty][m.tx];
-                board[m.ty][m.tx] = board[m.fy][m.fx];
-                board[m.fy][m.fx] = null;
-                let ev = minimax(board, depth - 1, alpha, beta, true, color, oppColor);
-                board[m.fy][m.fx] = board[m.ty][m.tx];
-                board[m.ty][m.tx] = captured;
+                const captured = applyMove(board, m);
+                let ev = minimax(board, depth - 1, alpha, beta, true, color, oppColor, maxMoves);
+                undoAppliedMove(board, m, captured);
                 minEval = Math.min(minEval, ev);
                 beta = Math.min(beta, ev);
                 if (beta <= alpha) break;
@@ -383,49 +478,116 @@
         }
     };
 
+    const getAIConfig = () => {
+        const diff = settings.aiDifficulty;
+        if (diff <= 3) return { depth: 2, random: 0.28, topN: 10, poolRatio: 0.45 };
+        if (diff <= 6) return { depth: 2, random: 0.16, topN: 12, poolRatio: 0.35 };
+        if (diff <= 10) return { depth: 3, random: 0.05, topN: 15, poolRatio: 0.25 };
+        if (diff <= 13) return { depth: 4, random: 0, topN: 18, poolRatio: 0.2 };
+        return { depth: 5, random: 0, topN: 20, poolRatio: 0.15 };
+    };
+
+    const evaluateMoveForColor = (board, move, color, depth, topN = 18) => {
+        const oppColor = getOpponentColor(color);
+        const captured = applyMove(board, move);
+        let score;
+        const winner = getWinnerOnBoard(board);
+        if (winner) score = winner === color ? 100000 : -100000;
+        else score = minimax(board, depth - 1, -Infinity, Infinity, false, color, oppColor, topN);
+
+        if (captured) score += captured.rank * 85 + 120;
+        undoAppliedMove(board, move, captured);
+
+        if (givesOpponentImmediateDen(board, move, color)) score -= 65000;
+        score += moveOrderingScore(board, move, color) * 0.35;
+        return score;
+    };
+
+    const findBestBlockingMove = (board, color, moves) => {
+        const oppColor = getOpponentColor(color);
+        const candidates = moves.filter(m => {
+            const captured = applyMove(board, m);
+            const stillDanger = getImmediateDenMoves(board, oppColor).length > 0 || getWinnerOnBoard(board) === oppColor;
+            undoAppliedMove(board, m, captured);
+            return !stillDanger;
+        });
+        if (candidates.length === 0) return null;
+        return sortMovesForAI(board, candidates, color)[0];
+    };
+
+    const getTacticalMove = (board, color) => {
+        const oppColor = getOpponentColor(color);
+        const moves = getAllValidMoves(board, color);
+        if (moves.length === 0) return null;
+
+        const winMoves = moves.filter(m => isDenEntryMove(m, color));
+        if (winMoves.length > 0) return sortMovesForAI(board, winMoves, color)[0];
+
+        const oppWinMoves = getImmediateDenMoves(board, oppColor);
+        if (oppWinMoves.length > 0) {
+            const block = findBestBlockingMove(board, color, moves);
+            if (block) return block;
+        }
+
+        return null;
+    };
+
+    const pickRandomFromTopSafePool = (board, evaluatedMoves, color, poolRatio) => {
+        const sorted = evaluatedMoves.slice().sort((a, b) => b.score - a.score);
+        const safe = sorted.filter(e => !givesOpponentImmediateDen(board, e.move, color));
+        const poolSource = safe.length > 0 ? safe : sorted;
+        const poolSize = Math.max(2, Math.ceil(poolSource.length * poolRatio));
+        const pool = poolSource.slice(0, Math.min(poolSize, poolSource.length));
+        return pool[Math.floor(Math.random() * pool.length)].move;
+    };
+
     const calculateAIMove = () => {
         const color = gameState.turn;
-        const oppColor = color === 'R' ? 'W' : 'R';
-        const validMoves = getAllValidMoves(gameState.board, color);
+        const oppColor = getOpponentColor(color);
+        let validMoves = getAllValidMoves(gameState.board, color);
         if (validMoves.length === 0) return null;
 
-        let depth = 2; 
-        if (settings.aiDifficulty >= 10) depth = 3;
-        else if (settings.aiDifficulty <= 3) depth = 1;
+        const tactical = getTacticalMove(gameState.board, color);
+        if (tactical) return tactical;
 
-        let bestScore = -Infinity;
-        let bestMoves = [];
+        const cfg = getAIConfig();
+        validMoves = sortMovesForAI(gameState.board, validMoves, color).slice(0, cfg.topN);
 
-        let randomness = settings.aiDifficulty <= 6 ? 0.3 : 0.05;
-        if (Math.random() < randomness) {
-            return validMoves[Math.floor(Math.random() * validMoves.length)];
-        }
-
+        let evaluatedMoves = [];
         for (let m of validMoves) {
-            const captured = gameState.board[m.ty][m.tx];
-            gameState.board[m.ty][m.tx] = gameState.board[m.fy][m.fx];
-            gameState.board[m.fy][m.fx] = null;
-            
-            if ((color === 'R' && m.ty === 8 && m.tx === 3) || (color === 'W' && m.ty === 0 && m.tx === 3)) {
-                gameState.board[m.fy][m.fx] = gameState.board[m.ty][m.tx];
-                gameState.board[m.ty][m.tx] = captured;
-                return m;
-            }
-
-            let score = minimax(gameState.board, depth - 1, -Infinity, Infinity, false, color, oppColor);
-            
-            gameState.board[m.fy][m.fx] = gameState.board[m.ty][m.tx];
-            gameState.board[m.ty][m.tx] = captured;
-
-            if (score > bestScore) {
-                bestScore = score;
-                bestMoves = [m];
-            } else if (score === bestScore) {
-                bestMoves.push(m);
-            }
+            const score = evaluateMoveForColor(gameState.board, m, color, cfg.depth, cfg.topN);
+            evaluatedMoves.push({ move: m, score });
         }
 
-        return bestMoves[Math.floor(Math.random() * bestMoves.length)];
+        evaluatedMoves.sort((a, b) => b.score - a.score);
+
+        // Low levels can still make imperfect choices, but only among evaluated / safer moves.
+        if (cfg.random > 0 && Math.random() < cfg.random) {
+            return pickRandomFromTopSafePool(gameState.board, evaluatedMoves, color, cfg.poolRatio);
+        }
+
+        const bestScore = evaluatedMoves[0].score;
+        const bestMoves = evaluatedMoves.filter(e => Math.abs(e.score - bestScore) < 0.1);
+        return bestMoves[Math.floor(Math.random() * bestMoves.length)].move;
+    };
+
+    const updateHintsLogic = () => {
+        currentHints = [];
+        if (!isHintMode || !gameState || gameState.winner || gameState.isThinking || gameState.isAnimating || gameState.isTossing) return;
+        if (settings.mode === 'PvE' && gameState.turn !== settings.playerColor) return;
+
+        const color = gameState.turn;
+        const tactical = getTacticalMove(gameState.board, color);
+        if (tactical) {
+            currentHints = [tactical];
+            return;
+        }
+
+        const moves = sortMovesForAI(gameState.board, getAllValidMoves(gameState.board, color), color).slice(0, 18);
+        const evaluated = moves.map(m => ({ move: m, score: evaluateMoveForColor(gameState.board, m, color, 4, 18) }));
+        evaluated.sort((a, b) => b.score - a.score);
+        currentHints = evaluated.filter(e => !givesOpponentImmediateDen(gameState.board, e.move, color)).slice(0, 2).map(e => e.move);
+        if (currentHints.length === 0) currentHints = evaluated.slice(0, 2).map(e => e.move);
     };
 
     const triggerAI = () => {
@@ -516,18 +678,27 @@
 
             if (gameState.winner) {
                 recordFinishedGame();
+                currentHints = [];
                 render();
             } else if (settings.mode === 'PvE' && gameState.turn !== settings.playerColor) {
+                currentHints = [];
                 gameState.isThinking = true;
                 render();
                 setTimeout(triggerAI, 600);
             } else {
+                if (isHintMode) updateHintsLogic();
+                else currentHints = [];
                 render();
             }
         }, 300);
     };
 
-    window.toggleHintMode = () => { isHintMode = !isHintMode; render(); };
+    window.toggleHintMode = () => {
+        isHintMode = !isHintMode;
+        if (isHintMode) updateHintsLogic();
+        else currentHints = [];
+        render();
+    };
 
     // --- 獨立 Menu 與 Record ---
     window.openMenu = () => { pendingSettings = cloneState(settings); isMenuOpen = true; isRecordOpen = false; render(); };
@@ -606,6 +777,7 @@
         redName: p1Name, whiteName: p2Name
       };
       historyStack = [];
+      currentHints = [];
 
       if (settings.mode === 'PvE') {
           if (settings.firstMove === 'RANDOM') {
@@ -630,7 +802,7 @@
                   render();
                   if (gameState.turn !== settings.playerColor) { 
                       gameState.isThinking = true; render(); setTimeout(triggerAI, 800);
-                  } else { render(); }
+                  } else { if (isHintMode) updateHintsLogic(); render(); }
               }, 3500); 
               return;
           } else {
@@ -639,6 +811,7 @@
               }
           }
       }
+      if (isHintMode && !(settings.mode === 'PvE' && gameState.turn !== settings.playerColor)) updateHintsLogic();
       render();
     };
 
@@ -654,6 +827,8 @@
       } else { gameState = historyStack.pop(); }
       
       gameState.lastMove = null; gameState.isAnimating = false; gameState.selectedPiece = null;
+      if (isHintMode) updateHintsLogic();
+      else currentHints = [];
       render();
     };
 
@@ -844,10 +1019,12 @@
             `;
           }
 
-          // 提示模式 (Hint)
-          const isHint = isHintMode && currentHints.find(m => m.fx === x && m.fy === y);
-          if (isHint && !gameState.isThinking) {
-              highlightHTML += `<circle cx="${cx}" cy="${cy}" r="${coinRadius + 2}" fill="none" stroke="#3b82f6" stroke-width="3" stroke-dasharray="4" class="animate-pulse" pointer-events="none" />`;
+          // 提示模式 (Hint): 起點用藍色虛線，終點用實心藍圈，令建議方向更清楚。
+          const isHintFrom = isHintMode && currentHints.find(m => m.fx === x && m.fy === y);
+          const isHintTo = isHintMode && currentHints.find(m => m.tx === x && m.ty === y);
+          if ((isHintFrom || isHintTo) && !gameState.isThinking) {
+              if (isHintFrom) highlightHTML += `<circle cx="${cx}" cy="${cy}" r="${coinRadius + 3}" fill="none" stroke="#3b82f6" stroke-width="3" stroke-dasharray="4" class="animate-pulse" pointer-events="none" />`;
+              if (isHintTo) highlightHTML += `<circle cx="${cx}" cy="${cy}" r="${coinRadius + 1}" fill="#3b82f6" fill-opacity="0.16" stroke="#3b82f6" stroke-width="3" class="animate-pulse" pointer-events="none" />`;
           }
         }
       }
