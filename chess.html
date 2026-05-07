@@ -275,7 +275,11 @@
         timestamp: new Date().toLocaleString(),
         settings: cloneState(settings),
         gameLog: cloneState(gameState.gameLog),
-        winner: gameState.winner
+        winner: gameState.winner,
+        redName: gameState.redName,
+        whiteName: gameState.whiteName,
+        playerColor: settings.playerColor,
+        aiColor: settings.mode === 'PvE' ? getAIColor() : null
       };
       matchHistory.unshift(newMatchRecord); 
       if (matchHistory.length > 50) matchHistory.pop(); 
@@ -1199,6 +1203,60 @@
       return svg + checkGlowSVG + interactionSVG + validMovesSVG + baseTargetPieceSVG + piecesSVG + hintsSVG + captureEffectsSVG;
     };
 
+    const getMatchParticipants = (matchData) => {
+      const mSettings = matchData.settings || settings;
+      const defaultP1 = (mSettings.player1Name || '').trim() || (mSettings.mode === 'PvE' ? 'YOU' : 'P1');
+      const defaultP2 = (mSettings.player2Name || '').trim() || (mSettings.mode === 'PvE' ? '電腦' : 'P2');
+      const playerColor = matchData.playerColor || mSettings.playerColor || 'R';
+
+      let redName = matchData.redName;
+      let whiteName = matchData.whiteName;
+
+      if (!redName || !whiteName) {
+        if (mSettings.mode === 'PvE') {
+          redName = playerColor === 'R' ? defaultP1 : defaultP2;
+          whiteName = playerColor === 'B' ? defaultP1 : defaultP2;
+        } else {
+          redName = defaultP1;
+          whiteName = defaultP2;
+        }
+      }
+
+      return { redName, whiteName, playerColor };
+    };
+
+    const getMatchWinnerName = (matchData) => {
+      if (!matchData || !matchData.winner) return '進行中';
+      const names = getMatchParticipants(matchData);
+      return matchData.winner === 'R' ? names.redName : names.whiteName;
+    };
+
+    const getMatchSummaryHTML = (matchData, options = {}) => {
+      const names = getMatchParticipants(matchData);
+      const mSettings = matchData.settings || settings;
+      const isLive = !!matchData.isLive;
+      const roundCount = Math.ceil((matchData.gameLog || []).length / 2);
+      const winnerName = matchData.winner ? getMatchWinnerName(matchData) : null;
+      const winnerColor = matchData.winner || null;
+      const modeText = mSettings.mode === 'PvE' ? `PVE | LV.${mSettings.aiDifficulty}` : 'PVP';
+      const titleText = winnerName ? `${winnerName} 獲勝` : (isLive ? '當前賽局' : '賽局紀錄');
+      const titleColor = winnerColor === 'R' ? 'text-red-500' : winnerColor === 'B' ? 'text-slate-100' : 'text-white';
+      const compact = options.compact;
+
+      return `
+        <div class="${compact ? 'bg-[#111] border border-neutral-800 rounded-lg p-4 lg:p-5 mb-4' : ''}">
+          <div class="flex flex-col gap-2">
+            <div class="${compact ? 'text-[14px] lg:text-[17px]' : 'text-[12px] lg:text-[15px]'} font-bold ${titleColor} tracking-wider">${titleText}</div>
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] lg:text-[12px] font-medium tracking-[0.12em] uppercase">
+              <span class="text-red-500">紅 <span class="text-neutral-200 normal-case tracking-[0.05em]">${names.redName}</span></span>
+              <span class="text-slate-100">白 <span class="text-neutral-200 normal-case tracking-[0.05em]">${names.whiteName}</span></span>
+            </div>
+            <div class="text-[9px] lg:text-[11px] text-neutral-500 uppercase tracking-widest">${modeText} | 回合: ${roundCount}${matchData.timestamp ? ` | ${matchData.timestamp}` : ''}</div>
+          </div>
+        </div>
+      `;
+    };
+
     function render() {
       const appDiv = document.getElementById('app');
       
@@ -1214,21 +1272,14 @@
         if (!selectedHistoryMatch) {
           let historyListHTML = matchHistory.map(m => `
             <div onclick="window.viewMatchDetail(${m.id})" class="bg-[#111] rounded-lg p-5 border border-neutral-800 hover:border-neutral-600 transition-colors cursor-pointer group flex items-center justify-between">
-               <div class="flex flex-col gap-1">
-                  <div class="text-[12px] lg:text-[15px] font-bold ${m.winner === 'R' ? 'text-red-500' : 'text-slate-100'} tracking-wider">${m.winner === 'R' ? '紅方' : '白方'} 獲勝</div>
-                  <div class="text-[9px] lg:text-[11px] text-neutral-500 uppercase tracking-widest">${m.settings.mode} | ${m.settings.mode === 'PvE' ? `LV.${m.settings.aiDifficulty}` : 'PVP'} | 回合: ${Math.ceil(m.gameLog.length / 2)}</div>
-                  <div class="text-[8px] lg:text-[10px] text-neutral-600 font-medium">${m.timestamp}</div>
-               </div>
+               ${getMatchSummaryHTML(m)}
                <img src="./assets/arrow.svg" alt="Detail" class="h-[10px] lg:h-[12px] opacity-20 group-hover:opacity-100 transition-opacity -rotate-90 icon-white">
             </div>
           `).join('');
 
           const currentEntry = gameState.gameLog.length > 0 ? `
             <div onclick="window.viewMatchDetail('current')" class="bg-[#1a1a1a] rounded-lg p-5 border-2 border-dashed border-neutral-700 hover:border-white transition-colors cursor-pointer mb-4 flex items-center justify-between">
-               <div class="flex flex-col gap-1">
-                  <div class="text-[14px] lg:text-[17px] font-bold text-white tracking-wide">當前賽局 (Current Match)</div>
-                  <div class="text-[9px] lg:text-[11px] text-neutral-400 uppercase tracking-widest">In Progress...</div>
-               </div>
+               ${getMatchSummaryHTML({ settings, gameLog: cloneState(gameState.gameLog), isLive: true, redName: gameState.redName, whiteName: gameState.whiteName, playerColor: settings.playerColor })}
                <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
             </div>
           ` : '';
@@ -1246,7 +1297,9 @@
           </div>
           `;
         } else {
-          let matchData = selectedHistoryMatch === 'current' ? { settings, gameLog: cloneState(gameState.gameLog), isLive: true } : selectedHistoryMatch;
+          let matchData = selectedHistoryMatch === 'current'
+            ? { settings, gameLog: cloneState(gameState.gameLog), isLive: true, redName: gameState.redName, whiteName: gameState.whiteName, playerColor: settings.playerColor, winner: gameState.winner }
+            : selectedHistoryMatch;
           let logContent = matchData.gameLog.slice().reverse().map((log, idx) => {
               const actualIdx = matchData.gameLog.length - idx;
               const colorClass = log.turn === 'R' ? 'text-red-500' : 'text-slate-100';
@@ -1267,14 +1320,15 @@
           recordHTML = `
           <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-hidden animate-fade-in">
             <header class="flex-none pt-6 pb-4 px-5 lg:px-12 flex items-center justify-between z-30 w-full border-b border-neutral-800 shrink-0">
-               <button onclick="window.viewMatchDetail(null)" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white transition-colors pt-1 lg:pt-1.5 flex items-center gap-1.5 key-base"><img src="./assets/arrow.svg" alt="<" class="h-[8px] rotate-90 opacity-60 icon-white"> BACK</button>
+               <button onclick="window.viewMatchDetail(null)" class="w-8 h-8 flex items-center justify-center text-neutral-400 hover:text-white transition-colors key-base"><img src="./assets/back.svg" alt="Back" class="h-[14px] lg:h-[18px] icon-white opacity-70"></button>
                <div class="flex flex-col items-center">
-                 <span class="text-white font-black tracking-[0.2em] text-[12px] lg:text-[16px] uppercase pt-0.5">LOG DETAIL</span>
-                 <span class="text-[8px] text-neutral-600 tracking-widest uppercase">${matchData.isLive ? 'LIVE' : 'PAST MATCH'}</span>
+                 <span class="text-white font-black tracking-[0.2em] text-[12px] lg:text-[16px] uppercase">LOG DETAIL</span>
+                 <span class="text-[8px] text-neutral-600 tracking-widest uppercase mt-1">${matchData.isLive ? 'LIVE' : 'PAST MATCH'}</span>
                </div>
-               <button onclick="window.toggleRecord()" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white active:text-white transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white"></button>
+               <button onclick="window.toggleRecord()" class="w-8 h-8 flex items-center justify-center text-neutral-400 hover:text-white active:text-white transition-colors key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white opacity-80"></button>
             </header>
             <div class="flex-1 overflow-y-auto hide-scrollbar flex flex-col pt-4 pb-10 px-5 max-w-[800px] w-full mx-auto">
+              ${getMatchSummaryHTML(matchData, { compact: true })}
               <div class="bg-[#111] rounded-lg p-4 lg:p-6 border border-neutral-800 shadow-sm flex flex-col">${logContent || '<div class="text-neutral-600 text-center py-10 text-xs">暫無步數</div>'}</div>
             </div>
           </div>

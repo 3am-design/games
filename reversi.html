@@ -205,6 +205,66 @@
       try { localStorage.setItem('reversi_history', JSON.stringify(matchHistory)); } catch (e) {}
     };
 
+
+    const getMatchNames = (matchData) => {
+      const matchSettings = matchData.settings || settings;
+      const p1Name = (matchSettings.player1Name || '').trim() || (matchSettings.mode === 'PvE' ? 'YOU' : 'P1');
+      const p2Fallback = matchSettings.mode === 'PvE' ? '電腦' : 'P2';
+      const p2Name = (matchSettings.player2Name || '').trim() || p2Fallback;
+      let redName = matchData.redName || matchData.rName;
+      let whiteName = matchData.whiteName || matchData.wName;
+
+      if (!redName || !whiteName) {
+        if (matchSettings.mode === 'PvE') {
+          if (matchSettings.playerColor === 'W') {
+            redName = redName || p2Name;
+            whiteName = whiteName || p1Name;
+          } else {
+            redName = redName || p1Name;
+            whiteName = whiteName || p2Name;
+          }
+        } else {
+          redName = redName || p1Name;
+          whiteName = whiteName || p2Name;
+        }
+      }
+      return { redName, whiteName };
+    };
+
+    const getWinnerName = (matchData) => {
+      const names = getMatchNames(matchData);
+      if (matchData.winner === 'R') return names.redName;
+      if (matchData.winner === 'W') return names.whiteName;
+      return '平手 DRAW';
+    };
+
+    const getMatchScore = (matchData) => {
+      if (matchData.score) return matchData.score;
+      if (matchData.counts) return matchData.counts;
+      if (matchData.isLive && gameState && gameState.counts) return gameState.counts;
+      return { R: 0, W: 0 };
+    };
+
+    const getMatchSummaryHTML = (matchData, compact = false) => {
+      const names = getMatchNames(matchData);
+      const score = getMatchScore(matchData);
+      const winnerName = getWinnerName(matchData);
+      const isDraw = matchData.winner === 'DRAW';
+      const winnerClass = matchData.winner === 'R' ? 'text-red-500' : (matchData.winner === 'W' ? 'text-white' : 'text-neutral-400');
+      const meta = `${matchData.settings?.mode || settings.mode} | ${(matchData.settings?.mode || settings.mode) === 'PvE' ? `LV.${matchData.settings?.aiDifficulty || settings.aiDifficulty}` : 'PVP'} | ${matchData.settings?.boardSize || gameState?.boardSize || 8}X${matchData.settings?.boardSize || gameState?.boardSize || 8} | 回合: ${Math.ceil((matchData.gameLog || []).length / 2)}`;
+      const timeHTML = matchData.timestamp ? `<div class="text-[8px] lg:text-[10px] text-neutral-600 font-medium">${matchData.timestamp}</div>` : '';
+      return `
+        <div class="flex flex-col gap-${compact ? '2' : '2.5'}">
+          <div class="text-[13px] lg:text-[16px] font-bold ${winnerClass} tracking-wider">${isDraw ? '平局' : `${winnerName} 獲勝`} <span class="text-neutral-500">(${score.R} : ${score.W})</span></div>
+          <div class="flex flex-wrap gap-x-4 gap-y-1 text-[10px] lg:text-[12px] tracking-[0.14em] uppercase">
+            <span class="text-red-500">紅 ${names.redName}</span>
+            <span class="text-white">白 ${names.whiteName}</span>
+          </div>
+          <div class="text-[9px] lg:text-[11px] text-neutral-500 uppercase tracking-widest">${meta}</div>
+          ${timeHTML}
+        </div>`;
+    };
+
     const recordFinishedGame = () => {
       if (!gameState || !gameState.winner) return;
       const newMatchRecord = {
@@ -213,6 +273,8 @@
         settings: cloneState(settings),
         gameLog: cloneState(gameState.gameLog),
         winner: gameState.winner,
+        redName: gameState.redName,
+        whiteName: gameState.whiteName,
         score: { R: gameState.counts.R, W: gameState.counts.W }
       };
       matchHistory.unshift(newMatchRecord); 
@@ -1060,20 +1122,19 @@
         if (!selectedHistoryMatch) {
           let historyListHTML = matchHistory.map(m => `
             <div onclick="window.viewMatchDetail(${m.id})" class="bg-[#111] rounded-lg p-5 border border-neutral-800 hover:border-neutral-600 transition-colors cursor-pointer group flex items-center justify-between">
-               <div class="flex flex-col gap-1">
-                  <div class="text-[12px] lg:text-[15px] font-bold ${m.winner === 'R' ? 'text-red-500' : m.winner === 'W' ? 'text-white' : 'text-neutral-500'} tracking-wider">${m.winner === 'R' ? '紅方獲勝' : m.winner === 'W' ? '白方獲勝' : '平局'} (${m.score.R} : ${m.score.W})</div>
-                  <div class="text-[9px] lg:text-[11px] text-neutral-500 uppercase tracking-widest">${m.settings.mode} | ${m.settings.mode === 'PvE' ? `LV.${m.settings.aiDifficulty}` : 'PVP'} | 回合: ${Math.ceil(m.gameLog.length / 2)}</div>
-                  <div class="text-[8px] lg:text-[10px] text-neutral-600 font-medium">${m.timestamp}</div>
+               <div class="flex flex-col gap-1.5">
+                  ${getMatchSummaryHTML(m, true)}
                </div>
                <img src="./assets/arrow.svg" alt="Detail" class="h-[10px] lg:h-[12px] opacity-20 group-hover:opacity-100 transition-opacity -rotate-90 icon-white">
             </div>
           `).join('');
 
+          const currentMatchData = { settings, gameLog: cloneState(gameState.gameLog), winner: gameState.winner, isLive: true, redName: gameState.redName, whiteName: gameState.whiteName, score: gameState.counts };
           const currentEntry = gameState.gameLog.length > 0 ? `
             <div onclick="window.viewMatchDetail('current')" class="bg-[#1a1a1a] rounded-lg p-5 border-2 border-dashed border-neutral-700 hover:border-white transition-colors cursor-pointer mb-4 flex items-center justify-between">
-               <div class="flex flex-col gap-1">
-                  <div class="text-[14px] lg:text-[17px] font-bold text-white tracking-wide">當前賽局 (Current Match)</div>
-                  <div class="text-[9px] lg:text-[11px] text-neutral-400 uppercase tracking-widest">In Progress... (${gameState.counts.R} : ${gameState.counts.W})</div>
+               <div class="flex flex-col gap-1.5">
+                  <div class="text-[14px] lg:text-[17px] font-bold text-white tracking-wide">當前賽局</div>
+                  ${getMatchSummaryHTML(currentMatchData, true)}
                </div>
                <div class="w-2 h-2 bg-neutral-400 rounded-full animate-pulse"></div>
             </div>
@@ -1083,7 +1144,7 @@
           <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-hidden animate-fade-in">
             <header class="flex-none pt-6 pb-4 px-5 lg:px-12 flex items-center justify-center z-30 w-full border-b border-neutral-800 shrink-0 relative">
                <div class="text-white font-bold tracking-[0.15em] text-[12px] lg:text-[16px] uppercase pt-0.5">MATCH RECORD</div>
-               <button onclick="window.toggleRecord()" class="absolute right-5 lg:right-12 text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white active:text-white transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white"></button>
+               <button onclick="window.toggleRecord()" class="absolute right-5 lg:right-12 h-8 w-8 flex items-center justify-center text-neutral-400 hover:text-white active:text-white transition-colors key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white"></button>
             </header>
             <div class="flex-1 overflow-y-auto hide-scrollbar flex flex-col pt-6 pb-10 px-5 max-w-[800px] w-full mx-auto">
               ${currentEntry}
@@ -1092,17 +1153,22 @@
           </div>
           `;
         } else {
-          let matchData = selectedHistoryMatch === 'current' ? { settings, gameLog: cloneState(gameState.gameLog), isLive: true } : selectedHistoryMatch;
+          let matchData = selectedHistoryMatch === 'current' ? { settings, gameLog: cloneState(gameState.gameLog), isLive: true, winner: gameState.winner, redName: gameState.redName, whiteName: gameState.whiteName, score: gameState.counts } : selectedHistoryMatch;
           let logContent = matchData.gameLog.slice().reverse().map((log, idx) => {
               const actualIdx = matchData.gameLog.length - idx;
               const colorClass = log.turn === 'R' ? 'text-red-500' : 'text-slate-100';
               const teamName = log.turn === 'R' ? '紅' : '白';
+              const names = getMatchNames(matchData);
+              const playerName = log.turn === 'R' ? names.redName : names.whiteName;
               return `
               <div class="flex items-center justify-between py-3 lg:py-4 border-b border-neutral-800/50 last:border-0">
                   <div class="flex items-center gap-3">
                       <div class="text-[10px] text-neutral-600 font-bold w-6">#${actualIdx}</div>
                       <div class="w-6 h-6 rounded border border-neutral-700 bg-neutral-800 flex items-center justify-center ${colorClass} text-[12px] font-tc">${teamName}</div>
-                      <div class="text-[12px] lg:text-[14px] font-medium text-neutral-300 tracking-wide">${log.desc}</div>
+                      <div class="flex flex-col gap-0.5">
+                        <div class="text-[10px] text-neutral-500 tracking-[0.12em] uppercase">${playerName}</div>
+                        <div class="text-[12px] lg:text-[14px] font-medium text-neutral-300 tracking-wide">${log.desc}</div>
+                      </div>
                   </div>
               </div>`;
           }).join('');
@@ -1110,14 +1176,15 @@
           recordHTML = `
           <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-hidden animate-fade-in">
             <header class="flex-none pt-6 pb-4 px-5 lg:px-12 flex items-center justify-between z-30 w-full border-b border-neutral-800 shrink-0">
-               <button onclick="window.viewMatchDetail(null)" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white transition-colors pt-1 lg:pt-1.5 flex items-center gap-1.5 key-base"><img src="./assets/arrow.svg" alt="<" class="h-[8px] rotate-90 opacity-60 icon-white"> BACK</button>
+               <button onclick="window.viewMatchDetail(null)" class="h-8 w-8 flex items-center justify-center text-neutral-400 hover:text-white transition-colors key-base"><img src="./assets/back.svg" alt="Back" class="h-[14px] lg:h-[18px] icon-white"></button>
                <div class="flex flex-col items-center">
                  <span class="text-white font-black tracking-[0.2em] text-[12px] lg:text-[16px] uppercase pt-0.5">LOG DETAIL</span>
                  <span class="text-[8px] text-neutral-600 tracking-widest uppercase">${matchData.isLive ? 'LIVE' : 'PAST MATCH'}</span>
                </div>
-               <button onclick="window.toggleRecord()" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white active:text-white transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white"></button>
+               <button onclick="window.toggleRecord()" class="h-8 w-8 flex items-center justify-center text-neutral-400 hover:text-white active:text-white transition-colors key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white"></button>
             </header>
-            <div class="flex-1 overflow-y-auto hide-scrollbar flex flex-col pt-4 pb-10 px-5 max-w-[800px] w-full mx-auto">
+            <div class="flex-1 overflow-y-auto hide-scrollbar flex flex-col pt-4 pb-10 px-5 max-w-[800px] w-full mx-auto gap-4">
+              <div class="bg-[#111] rounded-lg p-4 lg:p-5 border border-neutral-800 shadow-sm">${getMatchSummaryHTML(matchData)}</div>
               <div class="bg-[#111] rounded-lg p-4 lg:p-6 border border-neutral-800 shadow-sm flex flex-col">${logContent || '<div class="text-neutral-600 text-center py-10 text-xs">暫無步數</div>'}</div>
             </div>
           </div>
@@ -1251,8 +1318,8 @@
             </div>
           </header>
 
-          <div class="px-4 lg:px-5 lg:absolute lg:top-[85px] lg:left-12 z-20 pointer-events-none mt-1 lg:mt-0">
-            <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase">
+          <div class="px-4 lg:px-12 z-20 pointer-events-none mt-1 lg:mt-0 w-full">
+            <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase max-w-md lg:max-w-none mx-auto lg:mx-0 lg:pl-0">
               黑白棋 ${gameState.boardSize}x${gameState.boardSize}<br>
               ${modeDisplay}<br>
               ${roundDisplay}

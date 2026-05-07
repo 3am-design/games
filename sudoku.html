@@ -680,12 +680,12 @@
             </div>
           </header>
           
-          <div class="px-4 lg:px-5 lg:absolute lg:top-[85px] lg:left-12 z-20 pointer-events-none mt-1 lg:mt-0 flex flex-row lg:flex-col justify-between items-end lg:items-start">
-            <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase">
+          <div class="px-4 lg:px-12 lg:absolute lg:top-[85px] lg:left-0 z-20 pointer-events-none mt-1 lg:mt-0 flex flex-col items-start w-full lg:w-auto">
+            <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase text-left">
               數獨<br>
               難度 <span class="text-white">${DIFFICULTY_CONFIG[settings.difficulty]?.label || settings.difficulty}</span><br>空格 <span class="text-white">${gameState.blanksMade}</span>
             </div>
-            <div id="timer-display" class="text-white font-mono text-[14px] lg:text-[20px] lg:mt-2 tracking-widest">${gameState.elapsedStr}</div>
+            <div id="timer-display" class="text-white font-mono text-[14px] lg:text-[20px] mt-2 tracking-widest text-left">${gameState.elapsedStr}</div>
           </div>
 
           <main class="flex-1 w-full max-w-md lg:max-w-[1000px] mx-auto flex flex-col lg:flex-row items-center justify-center lg:justify-between min-h-0 relative z-10 px-4 pt-2 pb-6 lg:pb-0 gap-6 lg:gap-12">

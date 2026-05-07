@@ -31,7 +31,7 @@
       height: -webkit-fill-available;
       overflow: hidden;
       margin: 0;
-      touch-action: manipulation;
+      touch-action: none;
     }
 
     .app-container { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
@@ -123,11 +123,15 @@
       height: calc((100% - (var(--size) - 1) * 8px) / var(--size));
       left: calc(var(--c) * ((100% - (var(--size) - 1) * 8px) / var(--size)) + var(--c) * 8px);
       top: calc(var(--r) * ((100% - (var(--size) - 1) * 8px) / var(--size)) + var(--r) * 8px);
-      /* 物理滑動過渡動畫 */
-      transition: left 0.15s ease-in-out, top 0.15s ease-in-out;
+      /* 更順滑的硬件加速滑動 */
+      transition: left 0.18s cubic-bezier(0.22, 1, 0.36, 1), top 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+      will-change: left, top;
+      transform: translateZ(0);
       z-index: 10;
     }
     .tile-inner {
+      will-change: transform, filter, box-shadow;
+      transform: translateZ(0);
       width: 100%;
       height: 100%;
       display: flex;
@@ -136,6 +140,79 @@
       border-radius: 8px;
       font-weight: 700;
     }
+
+
+    .game-stage {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .game-info-panel {
+      flex: 0 0 auto;
+    }
+
+    .game-board-stage {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 12px 24px 28px;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .game-board-frame {
+      width: min(82vw, 64vh, 500px);
+      max-width: 500px;
+      margin: 0 auto;
+    }
+
+    @media (min-width: 1024px) {
+      .game-stage {
+        display: grid;
+        grid-template-columns: minmax(300px, 1fr) minmax(360px, 500px) minmax(300px, 1fr);
+        grid-template-rows: 1fr;
+        align-items: center;
+        width: 100%;
+        min-height: 0;
+      }
+      .game-info-panel {
+        grid-column: 1;
+        justify-self: start;
+        align-self: start;
+      }
+      .game-board-stage {
+        grid-column: 2;
+        align-self: center;
+        justify-self: center;
+        padding: 0;
+      }
+      .game-board-frame {
+        width: min(500px, 58vh, 32vw);
+      }
+    }
+
+    @media (max-width: 1023px) {
+      .game-info-panel { margin-top: 28px; }
+      .game-board-stage {
+        /* Mobile: center the board against the visible play area, not just the leftover space under the score panel. */
+        padding: 0 24px 18px;
+        transform: translateY(-7vh);
+      }
+      .game-board-frame { width: min(86vw, 46vh, 440px); }
+    }
+
+    @media (max-width: 1023px) and (max-height: 760px) {
+      .game-info-panel { margin-top: 14px; }
+      .game-board-stage { transform: translateY(-4vh); }
+      .game-board-frame { width: min(82vw, 42vh, 400px); }
+    }
+
   </style>
 </head>
 <body class="bg-black selection:bg-white/30">
@@ -360,7 +437,7 @@
             renderTiles();
             isAnimating = false;
           }
-        }, 150); // 對應 CSS 的 transition 0.15s
+        }, 180); // 對應 CSS 的 transition 0.18s
       }
     };
 
@@ -433,8 +510,9 @@
 
     const handleDragStart = (e) => {
       if (state.isMenuOpen || state.isGameOver || (state.isGameWon && !state.hasContinued)) return;
-      const board = e.target.closest && e.target.closest('.game-board-container');
-      if (!board) return;
+      if (e.target.closest && e.target.closest('button, a, input, #menu-layer, #overlay-layer')) return;
+      const playArea = e.target.closest && e.target.closest('#game-play-area');
+      if (!playArea) return;
       const p = getClientPoint(e);
       dragStartX = p.x;
       dragStartY = p.y;
@@ -468,7 +546,7 @@
     }
 
     document.addEventListener('touchmove', function(e) {
-      if (!state.isMenuOpen && e.target.closest && e.target.closest('.game-board-container')) e.preventDefault();
+      if (!state.isMenuOpen && e.target.closest && e.target.closest('#game-play-area') && !e.target.closest('button, a, input, #menu-layer, #overlay-layer')) e.preventDefault();
     }, { passive: false });
 
     document.addEventListener('keydown', e => {
@@ -560,33 +638,37 @@
             </div>
           </header>
 
-          <div class="px-4 lg:px-12 z-20 pointer-events-none mt-7 lg:mt-10 flex flex-col items-start w-full">
-            <div class="text-[13px] lg:text-[15px] text-neutral-400 font-medium tracking-[0.22em] leading-[1.65] uppercase">
-              2048<br>
-              <span class="text-white font-bold tracking-[0.18em]">${MODES[state.mode].label}</span><br>
-              <span class="text-neutral-500">BEST</span> <span id="best-display" class="text-white font-mono tracking-[0.08em]">${state.bestScore}</span>
-            </div>
-            <div class="mt-8 lg:mt-10 pointer-events-auto">
-              <div class="text-neutral-500 text-[14px] lg:text-[16px] uppercase tracking-[0.22em] font-sans mb-2">SCORE</div>
-              <div id="score-display" class="text-white font-mono text-[40px] lg:text-[56px] tracking-widest leading-none">${state.score}</div>
-            </div>
-          </div>
-
-          <main class="flex-1 w-full max-w-[500px] mx-auto flex flex-col items-center justify-center relative z-10 px-6 pb-8 lg:pb-0 pt-4 lg:pt-0">
-            <div class="w-full relative mt-4 lg:mt-0 game-board-container aspect-square" style="--size: ${size};" tabindex="0" aria-label="2048 game board. Drag, swipe, or use arrow keys to move tiles.">
-              <!-- 固定的背景網格 -->
-              <div class="grid-bg">
-                ${emptyGridCells}
+          <div id="game-play-area" class="game-stage relative z-10">
+            <section class="game-info-panel px-4 lg:px-12 pointer-events-none flex flex-col items-start w-full">
+              <div class="text-[13px] lg:text-[15px] text-neutral-400 font-medium tracking-[0.22em] leading-[1.65] uppercase">
+                2048<br>
+                <span class="text-white font-bold tracking-[0.18em]">${MODES[state.mode].label}</span><br>
+                <span class="text-neutral-500">BEST</span> <span id="best-display" class="text-white font-mono tracking-[0.08em]">${state.bestScore}</span>
               </div>
-              <!-- 獨立管理的棋子層 -->
-              <div id="tiles-layer" class="tile-container"></div>
-              <!-- 遊戲結束/勝利的遮罩層 -->
-              <div id="overlay-layer"></div>
-            </div>
-            <div class="mt-4 text-[10px] lg:text-[12px] text-neutral-600 tracking-[0.18em] uppercase text-center select-none">
-              Drag / Swipe / Arrow Keys
-            </div>
-          </main>
+              <div class="mt-8 lg:mt-10 pointer-events-auto">
+                <div class="text-neutral-500 text-[14px] lg:text-[16px] uppercase tracking-[0.22em] font-sans mb-2">SCORE</div>
+                <div id="score-display" class="text-white font-mono text-[40px] lg:text-[56px] tracking-widest leading-none">${state.score}</div>
+              </div>
+            </section>
+
+            <main class="game-board-stage" aria-label="2048 drag area. Drag anywhere in this play area, swipe, or use arrow keys.">
+              <div class="game-board-frame relative">
+                <div class="w-full relative game-board-container aspect-square" style="--size: ${size};" tabindex="0" aria-label="2048 game board. Drag, swipe, or use arrow keys to move tiles.">
+                  <!-- 固定的背景網格 -->
+                  <div class="grid-bg">
+                    ${emptyGridCells}
+                  </div>
+                  <!-- 獨立管理的棋子層 -->
+                  <div id="tiles-layer" class="tile-container"></div>
+                  <!-- 遊戲結束/勝利的遮罩層 -->
+                  <div id="overlay-layer"></div>
+                </div>
+                <div class="mt-4 text-[10px] lg:text-[12px] text-neutral-600 tracking-[0.18em] uppercase text-center select-none">
+                  Drag anywhere / Swipe / Arrow Keys
+                </div>
+              </div>
+            </main>
+          </div>
         </div>
       `;
       

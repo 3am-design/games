@@ -121,7 +121,7 @@
   <div id="app" class="app-container"></div>
 
   <script>
-    const AI_NAMES = ['獅王', '虎將', '飛豹', '雪狼', '狂犬', '靈貓', '飛鼠', '巨象'];
+    const AI_NAMES = ['呂布', '趙雲', '關羽', '張飛', '諸葛亮', '曹操', '司馬懿', '周瑜', '孫權', '馬超', '黃忠', '典韋', '夏侯惇', '張遼', '甘寧', '太史慈', '董卓', '陸遜'];
     const ANIMALS = { 1: '鼠', 2: '貓', 3: '狗', 4: '狼', 5: '豹', 6: '虎', 7: '獅', 8: '象' };
     const COLS = 7;
     const ROWS = 9;
@@ -204,7 +204,8 @@
       if (!gameState || !gameState.winner) return;
       const newMatchRecord = {
         id: Date.now(), timestamp: new Date().toLocaleString(),
-        settings: cloneState(settings), gameLog: cloneState(gameState.gameLog), winner: gameState.winner
+        settings: cloneState(settings), gameLog: cloneState(gameState.gameLog), winner: gameState.winner,
+        redName: gameState.redName, whiteName: gameState.whiteName
       };
       matchHistory.unshift(newMatchRecord); 
       if (matchHistory.length > 50) matchHistory.pop(); 
@@ -351,6 +352,146 @@
         return moves.filter(m => !givesOpponentImmediateDen(board, m, color));
     };
 
+    const isPieceThreatened = (board, x, y, owner) => {
+        const oppColor = getOpponentColor(owner);
+        return getAllValidMoves(board, oppColor).some(m => m.tx === x && m.ty === y);
+    };
+
+    const getThreatenedPieces = (board, color) => {
+        const oppColor = getOpponentColor(color);
+        const oppMoves = getAllValidMoves(board, oppColor);
+        const threatened = [];
+        for (let y = 0; y < ROWS; y++) {
+            for (let x = 0; x < COLS; x++) {
+                const p = board[y][x];
+                if (!p || p.owner !== color) continue;
+                const threats = oppMoves.filter(m => m.tx === x && m.ty === y);
+                if (threats.length > 0) threatened.push({ x, y, piece: p, threats });
+            }
+        }
+        return threatened;
+    };
+
+    const getPieceSafetyPenalty = (piece, x, y) => {
+        if (!piece) return 0;
+        let penalty = 0;
+        if (piece.rank >= 8) penalty += 3600;      // 象尤其要避鼠
+        else if (piece.rank >= 7) penalty += 3000; // 獅
+        else if (piece.rank >= 6) penalty += 2600; // 虎
+        else if (piece.rank >= 5) penalty += 1600; // 豹
+        else penalty += 450 + piece.rank * 120;
+
+        // 高價值棋走入對方陷阱，幾乎等於自殺
+        if (isTrap(x, y, getOpponentColor(piece.owner))) penalty += 2600 + piece.rank * 260;
+        return penalty;
+    };
+
+    const getImmediateCaptureMovesAgainst = (board, color, targetX, targetY) => {
+        return getAllValidMoves(board, color).filter(m => m.tx === targetX && m.ty === targetY);
+    };
+
+    const moveLeavesPieceThreatened = (board, move, color) => {
+        const captured = applyMove(board, move);
+        const movedPiece = board[move.ty][move.tx];
+        const threatened = movedPiece ? isPieceThreatened(board, move.tx, move.ty, color) : false;
+        undoAppliedMove(board, move, captured);
+        return threatened;
+    };
+
+    const getEmergencyThreatMove = (board, color) => {
+        const threatened = getThreatenedPieces(board, color)
+            .map(t => {
+                const strongestThreat = t.threats.reduce((best, m) => {
+                    const attacker = board[m.fy][m.fx];
+                    if (!best) return m;
+                    const bestAttacker = board[best.fy][best.fx];
+                    return (attacker?.rank || 0) > (bestAttacker?.rank || 0) ? m : best;
+                }, null);
+                const attacker = strongestThreat ? board[strongestThreat.fy][strongestThreat.fx] : null;
+                const isRatThreateningElephant = t.piece.rank === 8 && attacker?.rank === 1;
+                const priority = getPieceSafetyPenalty(t.piece, t.x, t.y) + (isRatThreateningElephant ? 5000 : 0);
+                return { ...t, strongestThreat, attacker, priority };
+            })
+            .filter(t => t.piece.rank >= 5 || (t.piece.rank === 8 && t.attacker?.rank === 1))
+            .sort((a, b) => b.priority - a.priority);
+
+        if (threatened.length === 0) return null;
+        const critical = threatened[0];
+        const allMoves = getAllValidMoves(board, color);
+
+        // 1) 如果可以即刻食走威脅者，優先處理
+        if (critical.strongestThreat) {
+            const captureThreatMoves = getImmediateCaptureMovesAgainst(board, color, critical.strongestThreat.fx, critical.strongestThreat.fy)
+                .filter(m => !givesOpponentImmediateDen(board, m, color));
+            if (captureThreatMoves.length > 0) return sortMovesForAI(board, captureThreatMoves, color)[0];
+        }
+
+        // 2) 否則，嘗試移走被威脅嘅高價值棋，到安全格
+        const escapeMoves = allMoves.filter(m => m.fx === critical.x && m.fy === critical.y)
+            .filter(m => !givesOpponentImmediateDen(board, m, color))
+            .filter(m => {
+                const captured = applyMove(board, m);
+                const safe = !isPieceThreatened(board, m.tx, m.ty, color) && !isTrap(m.tx, m.ty, getOpponentColor(color));
+                undoAppliedMove(board, m, captured);
+                return safe;
+            });
+        if (escapeMoves.length > 0) return sortMovesForAI(board, escapeMoves, color)[0];
+
+        // 3) 如果走唔到，至少試下移到較低風險位置
+        const lowerRiskMoves = allMoves.filter(m => m.fx === critical.x && m.fy === critical.y)
+            .filter(m => !givesOpponentImmediateDen(board, m, color));
+        if (lowerRiskMoves.length > 0) return sortMovesForAI(board, lowerRiskMoves, color)[0];
+
+        return null;
+    };
+
+    const getDenGuardScore = (board, color) => {
+        const ownDen = getOwnDen(color);
+        const oppColor = getOpponentColor(color);
+        let score = 0;
+        for (let y = 0; y < ROWS; y++) {
+            for (let x = 0; x < COLS; x++) {
+                const p = board[y][x];
+                if (!p) continue;
+                const dOwn = manhattan(x, y, ownDen.x, ownDen.y);
+                if (p.owner === color && dOwn <= 2) score += (3 - dOwn) * (120 + p.rank * 12);
+                if (p.owner === oppColor && dOwn <= 3) score -= (4 - dOwn) * (360 + p.rank * 35);
+            }
+        }
+        return score;
+    };
+
+    const getRoleScore = (board, x, y, piece) => {
+        if (!piece) return 0;
+        const targetDen = getTargetDen(piece.owner);
+        const ownDen = getOwnDen(piece.owner);
+        const oppColor = getOpponentColor(piece.owner);
+        let val = 0;
+        if (piece.rank === 1) {
+            if (isWater(x, y)) val += 180;
+            // 鼠貼近對方象有戰術價值；但自己象要反向怕鼠
+            const enemyElephantNearby = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy]) => {
+                const nx=x+dx, ny=y+dy;
+                return nx>=0 && nx<COLS && ny>=0 && ny<ROWS && board[ny][nx]?.owner===oppColor && board[ny][nx]?.rank===8;
+            });
+            if (enemyElephantNearby) val += 460;
+        }
+        if (piece.rank === 8) {
+            const enemyRatNearby = [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy]) => {
+                const nx=x+dx, ny=y+dy;
+                return nx>=0 && nx<COLS && ny>=0 && ny<ROWS && board[ny][nx]?.owner===oppColor && board[ny][nx]?.rank===1 && !isWater(nx,ny);
+            });
+            if (enemyRatNearby) val -= 2600;
+        }
+        if (piece.rank === 6 || piece.rank === 7) {
+            const jumpMoves = getAllValidMoves(board, piece.owner).filter(m => m.fx === x && m.fy === y && (Math.abs(m.tx - m.fx) + Math.abs(m.ty - m.fy) > 1));
+            val += jumpMoves.length * 115;
+            if (manhattan(x, y, targetDen.x, targetDen.y) <= 4) val += 220;
+        }
+        if ([2,3,4].includes(piece.rank) && manhattan(x, y, ownDen.x, ownDen.y) <= 2) val += 180;
+        return val;
+    };
+
     const moveOrderingScore = (board, move, color) => {
         const piece = board[move.fy][move.fx];
         const target = board[move.ty][move.tx];
@@ -364,7 +505,8 @@
         score -= Math.max(0, 5 - manhattan(move.tx, move.ty, ownDen.x, ownDen.y)) * 8;
         if (piece && (piece.rank === 6 || piece.rank === 7) && Math.abs(move.tx - move.fx) + Math.abs(move.ty - move.fy) > 1) score += 90;
         if (piece && piece.rank === 1 && isWater(move.tx, move.ty)) score += 45;
-        if (piece && isTrap(move.tx, move.ty, getOpponentColor(piece.owner))) score -= 160 + piece.rank * 30;
+        if (piece && isTrap(move.tx, move.ty, getOpponentColor(piece.owner))) score -= 480 + piece.rank * 90;
+        if (piece && moveLeavesPieceThreatened(board, move, color)) score -= getPieceSafetyPenalty(piece, move.tx, move.ty) * 0.45;
         return score;
     };
 
@@ -412,8 +554,11 @@
                 if (p.rank === 1 && isWater(x, y)) val += 85;
                 if ((p.rank === 6 || p.rank === 7) && !isWater(x, y)) {
                     const jumpMoves = getAllValidMoves(board, p.owner).filter(m => m.fx === x && m.fy === y && (Math.abs(m.tx - m.fx) + Math.abs(m.ty - m.fy) > 1));
-                    val += jumpMoves.length * 55;
+                    val += jumpMoves.length * 80;
                 }
+
+                val += getRoleScore(board, x, y, p);
+                if (isPieceThreatened(board, x, y, p.owner)) val -= getPieceSafetyPenalty(p, x, y);
 
                 score += side * val;
             }
@@ -439,6 +584,7 @@
             if (d <= 2) score += (3 - d) * 330;
         }
 
+        score += getDenGuardScore(board, color);
         return score;
     };
 
@@ -480,11 +626,11 @@
 
     const getAIConfig = () => {
         const diff = settings.aiDifficulty;
-        if (diff <= 3) return { depth: 2, random: 0.28, topN: 10, poolRatio: 0.45 };
-        if (diff <= 6) return { depth: 2, random: 0.16, topN: 12, poolRatio: 0.35 };
-        if (diff <= 10) return { depth: 3, random: 0.05, topN: 15, poolRatio: 0.25 };
-        if (diff <= 13) return { depth: 4, random: 0, topN: 18, poolRatio: 0.2 };
-        return { depth: 5, random: 0, topN: 20, poolRatio: 0.15 };
+        if (diff <= 3) return { depth: 2, random: 0.22, topN: 12, poolRatio: 0.35 };
+        if (diff <= 6) return { depth: 3, random: 0.10, topN: 16, poolRatio: 0.25 };
+        if (diff <= 10) return { depth: 4, random: 0.02, topN: 20, poolRatio: 0.18 };
+        if (diff <= 13) return { depth: 5, random: 0, topN: 24, poolRatio: 0.12 };
+        return { depth: 6, random: 0, topN: 28, poolRatio: 0.1 };
     };
 
     const evaluateMoveForColor = (board, move, color, depth, topN = 18) => {
@@ -495,11 +641,14 @@
         if (winner) score = winner === color ? 100000 : -100000;
         else score = minimax(board, depth - 1, -Infinity, Infinity, false, color, oppColor, topN);
 
-        if (captured) score += captured.rank * 85 + 120;
+        const movedPiece = board[move.ty][move.tx];
+        if (captured) score += captured.rank * 110 + 160;
+        if (movedPiece && isPieceThreatened(board, move.tx, move.ty, color)) score -= getPieceSafetyPenalty(movedPiece, move.tx, move.ty) * 0.9;
+        score += getDenGuardScore(board, color) * 0.25;
         undoAppliedMove(board, move, captured);
 
-        if (givesOpponentImmediateDen(board, move, color)) score -= 65000;
-        score += moveOrderingScore(board, move, color) * 0.35;
+        if (givesOpponentImmediateDen(board, move, color)) score -= 75000;
+        score += moveOrderingScore(board, move, color) * 0.45;
         return score;
     };
 
@@ -528,6 +677,10 @@
             const block = findBestBlockingMove(board, color, moves);
             if (block) return block;
         }
+
+        // 高價值棋被即時威脅時，先處理；例如鼠貼住象，Lv.15 不應企定等死。
+        const emergency = getEmergencyThreatMove(board, color);
+        if (emergency) return emergency;
 
         return null;
     };
@@ -1042,6 +1195,66 @@
       `;
     };
 
+
+    const getMatchRedName = (m) => {
+      if (!m) return '紅方';
+      if (m.redName) return m.redName;
+      if (m.isLive && gameState) return gameState.redName;
+      if (m.settings?.mode === 'PvE') {
+        const p1 = m.settings.player1Name?.trim() || 'YOU';
+        const p2 = '電腦';
+        return m.settings.playerColor === 'W' ? p2 : p1;
+      }
+      return m.settings?.player1Name?.trim() || 'P1';
+    };
+
+    const getMatchWhiteName = (m) => {
+      if (!m) return '白方';
+      if (m.whiteName) return m.whiteName;
+      if (m.isLive && gameState) return gameState.whiteName;
+      if (m.settings?.mode === 'PvE') {
+        const p1 = m.settings.player1Name?.trim() || 'YOU';
+        const p2 = '電腦';
+        return m.settings.playerColor === 'W' ? p1 : p2;
+      }
+      return m.settings?.player2Name?.trim() || 'P2';
+    };
+
+    const getMatchWinnerName = (m) => {
+      if (!m) return '平局';
+      if (m.winner === 'R') return getMatchRedName(m);
+      if (m.winner === 'W') return getMatchWhiteName(m);
+      if (m.winner === 'LIVE') return '當前賽局';
+      return '平局';
+    };
+
+    const getMatchWinnerClass = (m) => {
+      if (!m || m.winner === 'DRAW') return 'text-neutral-500';
+      return m.winner === 'R' ? 'text-c4-red' : 'text-white';
+    };
+
+    const getMatchRoundCount = (m) => Math.ceil((m?.gameLog?.length || 0) / 2);
+    const getMatchModeLabel = (m) => {
+      if (!m?.settings) return '';
+      return m.settings.mode === 'PvE' ? `PvE | LV.${m.settings.aiDifficulty}` : 'PVP';
+    };
+
+    const getMatchInfoCardHTML = (m) => `
+      <div class="bg-[#111] rounded-lg p-4 lg:p-5 border border-neutral-800 mb-4">
+        <div class="flex items-start justify-between gap-4 mb-3">
+          <div>
+            <div class="${getMatchWinnerClass(m)} text-[15px] lg:text-[18px] font-bold tracking-[0.12em] uppercase">${getMatchWinnerName(m)}${m.winner === 'R' || m.winner === 'W' ? ' 獲勝' : ''}</div>
+            <div class="text-[9px] lg:text-[11px] text-neutral-500 uppercase tracking-widest mt-1">${getMatchModeLabel(m)} | 回合 ${getMatchRoundCount(m)}</div>
+          </div>
+          <div class="text-[8px] lg:text-[10px] text-neutral-600 font-medium text-right shrink-0">${m.timestamp || (m.isLive ? 'LIVE' : '')}</div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="rounded-md bg-black/40 border border-neutral-800 px-3 py-2"><div class="text-[9px] text-c4-red tracking-[0.2em] uppercase mb-1">紅 RED</div><div class="text-[12px] lg:text-[14px] text-neutral-200 font-medium tracking-[0.08em] truncate">${getMatchRedName(m)}</div></div>
+          <div class="rounded-md bg-black/40 border border-neutral-800 px-3 py-2"><div class="text-[9px] text-white tracking-[0.2em] uppercase mb-1">白 WHITE</div><div class="text-[12px] lg:text-[14px] text-neutral-200 font-medium tracking-[0.08em] truncate">${getMatchWhiteName(m)}</div></div>
+        </div>
+      </div>
+    `;
+
     function render() {
       updateViewportMetrics();
       const appDiv = document.getElementById('app');
@@ -1054,9 +1267,13 @@
         if (!selectedHistoryMatch) {
           let historyListHTML = matchHistory.map(m => `
             <div onclick="window.viewMatchDetail(${m.id})" class="bg-[#111] rounded-lg p-5 border border-neutral-800 hover:border-neutral-600 transition-colors cursor-pointer group flex items-center justify-between">
-               <div class="flex flex-col gap-1">
-                  <div class="text-[12px] lg:text-[15px] font-bold ${m.winner === 'R' ? 'text-c4-red' : m.winner === 'W' ? 'text-white' : 'text-neutral-500'} tracking-wider">${m.winner === 'R' ? '紅方獲勝' : m.winner === 'W' ? '白方獲勝' : '平局'}</div>
-                  <div class="text-[9px] lg:text-[11px] text-neutral-500 uppercase tracking-widest">${m.settings.mode} | LV.${m.settings.aiDifficulty} | 回合: ${Math.ceil(m.gameLog.length / 2)}</div>
+               <div class="flex flex-col gap-2 min-w-0 flex-1">
+                  <div class="text-[12px] lg:text-[15px] font-bold ${getMatchWinnerClass(m)} tracking-wider truncate">${getMatchWinnerName(m)}${m.winner === 'DRAW' ? '' : ' 獲勝'}</div>
+                  <div class="grid grid-cols-2 gap-2 max-w-[360px]">
+                    <div class="text-[9px] lg:text-[11px] text-neutral-500 uppercase tracking-widest truncate"><span class="text-c4-red font-bold">紅</span> ${getMatchRedName(m)}</div>
+                    <div class="text-[9px] lg:text-[11px] text-neutral-500 uppercase tracking-widest truncate"><span class="text-white font-bold">白</span> ${getMatchWhiteName(m)}</div>
+                  </div>
+                  <div class="text-[9px] lg:text-[11px] text-neutral-500 uppercase tracking-widest">${getMatchModeLabel(m)} | 回合: ${getMatchRoundCount(m)}</div>
                   <div class="text-[8px] lg:text-[10px] text-neutral-600 font-medium">${m.timestamp}</div>
                </div>
                <img src="./assets/arrow.svg" alt="Detail" class="h-[10px] lg:h-[12px] opacity-20 group-hover:opacity-100 transition-opacity -rotate-90 icon-white" onerror="this.style.display='none'">
@@ -1067,7 +1284,7 @@
             <div onclick="window.viewMatchDetail('current')" class="bg-[#1a1a1a] rounded-lg p-5 border-2 border-dashed border-neutral-700 hover:border-white transition-colors cursor-pointer mb-4 flex items-center justify-between">
                <div class="flex flex-col gap-1">
                   <div class="text-[14px] lg:text-[17px] font-bold text-white tracking-wide">當前賽局</div>
-                  <div class="text-[9px] lg:text-[11px] text-neutral-400 uppercase tracking-widest">In Progress...</div>
+                  <div class="text-[9px] lg:text-[11px] text-neutral-400 uppercase tracking-widest"><span class="text-c4-red font-bold">紅</span> ${gameState.redName} <span class="mx-2 text-neutral-700">|</span> <span class="text-white font-bold">白</span> ${gameState.whiteName}</div>
                </div>
                <div class="w-2 h-2 bg-neutral-400 rounded-full animate-pulse"></div>
             </div>
@@ -1086,7 +1303,7 @@
           </div>
           `;
         } else {
-          let matchData = selectedHistoryMatch === 'current' ? { settings, gameLog: cloneState(gameState.gameLog), isLive: true } : selectedHistoryMatch;
+          let matchData = selectedHistoryMatch === 'current' ? { settings: cloneState(settings), gameLog: cloneState(gameState.gameLog), isLive: true, winner: gameState.winner || 'LIVE', redName: gameState.redName, whiteName: gameState.whiteName, timestamp: 'LIVE' } : selectedHistoryMatch;
           let logContent = matchData.gameLog.slice().reverse().map((log, idx) => {
               const actualIdx = matchData.gameLog.length - idx;
               const colorClass = log.turn === 'R' ? 'text-c4-red' : 'text-white';
@@ -1104,14 +1321,15 @@
           recordHTML = `
           <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-hidden animate-fade-in">
             <header class="flex-none pt-6 pb-4 px-5 lg:px-12 flex items-center justify-between z-30 w-full border-b border-neutral-800 shrink-0">
-               <button onclick="window.viewMatchDetail(null)" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white transition-colors pt-1 lg:pt-1.5 flex items-center gap-1.5 key-base"><img src="./assets/arrow.svg" alt="<" class="h-[8px] rotate-90 opacity-60 icon-white" onerror="this.outerHTML='<' "> BACK</button>
+               <button onclick="window.viewMatchDetail(null)" class="w-8 h-8 flex items-center justify-center text-neutral-400 hover:text-white transition-colors key-base"><img src="./assets/back.svg" alt="Back" class="h-[13px] lg:h-[16px] icon-white opacity-70" onerror="this.outerHTML='‹'"></button>
                <div class="flex flex-col items-center">
                  <span class="text-white font-black tracking-[0.2em] text-[12px] lg:text-[16px] uppercase pt-0.5">LOG DETAIL</span>
                  <span class="text-[8px] text-neutral-600 tracking-widest uppercase">${matchData.isLive ? 'LIVE' : 'PAST MATCH'}</span>
                </div>
-               <button onclick="window.toggleRecord()" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-white active:text-white transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white" onerror="this.outerHTML='✕'"></button>
+               <button onclick="window.toggleRecord()" class="w-8 h-8 flex items-center justify-center text-neutral-400 hover:text-white active:text-white transition-colors key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white" onerror="this.outerHTML='✕'"></button>
             </header>
             <div class="flex-1 overflow-y-auto hide-scrollbar flex flex-col pt-4 pb-10 px-5 max-w-[800px] w-full mx-auto">
+              ${getMatchInfoCardHTML(matchData)}
               <div class="bg-[#111] rounded-lg p-4 lg:p-6 border border-neutral-800 shadow-sm flex flex-col">${logContent || '<div class="text-neutral-600 text-center py-10 text-xs">暫無步數</div>'}</div>
             </div>
           </div>
@@ -1265,7 +1483,7 @@
               <button onclick="window.openMenu()" ${gameState.isThinking || gameState.isAnimating || gameState.isTossing ? 'disabled style="opacity:0.2"' : ''} class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/setting.svg" alt="SET" class="h-[14px] lg:h-[18px] object-contain icon-white" onerror="this.outerHTML='⚙'"></button>
             </div>
           </header>
-          <div class="px-4 lg:px-5 lg:absolute lg:top-[85px] lg:left-12 z-20 pointer-events-none mt-1 lg:mt-0">
+          <div class="px-4 lg:px-12 lg:absolute lg:top-[85px] lg:left-0 z-20 pointer-events-none mt-1 lg:mt-0">
             <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase">鬥獸棋<br>${modeDisplay}<br>${roundDisplay}</div>
           </div>
           <main class="flex-1 w-full max-w-md lg:max-w-[1200px] mx-auto flex flex-col lg:flex-row min-h-0 relative z-10 justify-start lg:justify-center">
