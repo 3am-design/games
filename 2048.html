@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Games - 2048</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&family=Noto+Sans+TC:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'board': '#0a0a0a',
+            'cell-empty': '#171717',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* 隱藏 Scrollbar 及防止橡皮筋滾動 */
+    html, body {
+      overscroll-behavior-y: none;
+      background-color: #000000;
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      color: #ffffff;
+      height: 100%;
+      height: -webkit-fill-available;
+      overflow: hidden;
+      margin: 0;
+      touch-action: manipulation;
+    }
+
+    .app-container { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    button { -webkit-tap-highlight-color: transparent; outline: none; touch-action: manipulation; }
+    .key-base { transition: opacity 0.2s ease-out; }
+    .key-base:active { opacity: 0.5; transition: none; }
+    .icon-white { filter: brightness(0) invert(1); }
+
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+    
+    @keyframes popIn { 
+      0% { transform: scale(0.5); opacity: 0; } 
+      80% { transform: scale(1.1); opacity: 1; } 
+      100% { transform: scale(1); opacity: 1; } 
+    }
+    .anim-pop { animation: popIn 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+    
+    @keyframes mergePop {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.2); filter: brightness(1.5); box-shadow: 0 0 20px rgba(255,255,255,0.5); }
+      100% { transform: scale(1); }
+    }
+    .anim-merge { animation: mergePop 0.2s ease-out forwards; }
+
+    @keyframes explode {
+      0% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.5) rotate(15deg); opacity: 0.8; filter: brightness(2); }
+      100% { transform: scale(0); opacity: 0; }
+    }
+    .anim-explode { animation: explode 0.5s ease-out forwards; }
+
+    /* 數字顏色設定 - 霓虹科幻風格 (高對比、不同色) */
+    .tile-base { border-width: 2px; border-style: solid; background-color: rgba(10, 10, 10, 0.8); backdrop-filter: blur(4px); color: #fff; }
+    .tile-2 { border-color: #00e5ff; color: #00e5ff; box-shadow: 0 0 12px rgba(0,229,255,0.15) inset; }
+    .tile-4 { border-color: #d500f9; color: #d500f9; box-shadow: 0 0 12px rgba(213,0,249,0.15) inset; }
+    .tile-8 { border-color: #76ff03; color: #76ff03; box-shadow: 0 0 12px rgba(118,255,3,0.15) inset; }
+    .tile-16 { border-color: #f50057; color: #f50057; box-shadow: 0 0 15px rgba(245,0,87,0.2) inset; text-shadow: 0 0 4px rgba(245,0,87,0.5); }
+    .tile-32 { border-color: #ff9100; color: #ff9100; box-shadow: 0 0 15px rgba(255,145,0,0.2) inset; text-shadow: 0 0 4px rgba(255,145,0,0.5); }
+    .tile-64 { border-color: #2979ff; color: #2979ff; box-shadow: 0 0 15px rgba(41,121,255,0.2) inset; text-shadow: 0 0 4px rgba(41,121,255,0.5); }
+    .tile-128 { border-color: #ffea00; color: #ffea00; box-shadow: 0 0 20px rgba(255,234,0,0.25) inset; text-shadow: 0 0 6px rgba(255,234,0,0.6); }
+    .tile-256 { border-color: #00bfa5; color: #00bfa5; box-shadow: 0 0 20px rgba(0,191,165,0.3) inset; text-shadow: 0 0 8px rgba(0,191,165,0.6); }
+    .tile-512 { border-color: #ff1744; color: #ff1744; box-shadow: 0 0 25px rgba(255,23,68,0.35) inset; text-shadow: 0 0 10px rgba(255,23,68,0.7); }
+    .tile-1024 { border-color: #651fff; color: #651fff; box-shadow: 0 0 30px rgba(101,31,255,0.4) inset, 0 0 10px rgba(101,31,255,0.2); text-shadow: 0 0 12px rgba(101,31,255,0.8); }
+    .tile-2048 { border-color: #ffffff; color: #ffffff; box-shadow: 0 0 30px rgba(255,255,255,0.5) inset, 0 0 15px rgba(255,255,255,0.3); text-shadow: 0 0 15px rgba(255,255,255,1); }
+    .tile-super { border-color: #ffd700; color: #ffd700; box-shadow: 0 0 35px rgba(255,215,0,0.6) inset, 0 0 20px rgba(255,215,0,0.4); text-shadow: 0 0 20px rgba(255,215,0,1); }
+    
+    .tile-stone { 
+      border-color: #6b7280; 
+      background: linear-gradient(45deg, #1f2937 25%, #374151 25%, #374151 50%, #1f2937 50%, #1f2937 75%, #374151 75%, #374151 100%);
+      background-size: 10px 10px;
+      box-shadow: inset 0 0 15px rgba(0,0,0,0.8);
+    }
+    
+    /* Board & Grid 系統重構 - 支援 CSS Transition 滑動 */
+    .game-board-container {
+      background: transparent;
+      border: 2px solid #334155;
+      border-radius: 12px;
+      padding: 8px;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      cursor: grab;
+    }
+    .game-board-container:active { cursor: grabbing; }
+    .grid-bg {
+      display: grid;
+      gap: 8px;
+      width: 100%;
+      height: 100%;
+      grid-template-columns: repeat(var(--size), 1fr);
+      grid-template-rows: repeat(var(--size), 1fr);
+    }
+    .grid-cell {
+      background: #171717;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+    }
+    .tile-container {
+      position: absolute;
+      top: 8px; left: 8px; right: 8px; bottom: 8px;
+      pointer-events: none;
+    }
+    .tile {
+      position: absolute;
+      /* 精準計算大小與位置，支援任意 size 的棋盤 */
+      width: calc((100% - (var(--size) - 1) * 8px) / var(--size));
+      height: calc((100% - (var(--size) - 1) * 8px) / var(--size));
+      left: calc(var(--c) * ((100% - (var(--size) - 1) * 8px) / var(--size)) + var(--c) * 8px);
+      top: calc(var(--r) * ((100% - (var(--size) - 1) * 8px) / var(--size)) + var(--r) * 8px);
+      /* 物理滑動過渡動畫 */
+      transition: left 0.15s ease-in-out, top 0.15s ease-in-out;
+      z-index: 10;
+    }
+    .tile-inner {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border-radius: 8px;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body class="bg-black selection:bg-white/30">
+
+  <div id="app" class="app-container"></div>
+
+  <script>
+    // --- 遊戲設定與狀態管理 ---
+    const MODES = {
+      'EASY': { size: 5, label: '新手 EASY', desc: '5x5 容錯極高，合體爽快', hasStones: false },
+      'NORMAL': { size: 4, label: '經典 NORMAL', desc: '4x4 原汁原味', hasStones: false },
+      'HARD': { size: 3, label: '地獄 HARD', desc: '3x3 空間極少，考驗大腦', hasStones: false },
+      'EXTREME': { size: 4, label: '極限 EXTREME', desc: '4x4 每10步跌石頭，砌出2048炸石', hasStones: true }
+    };
+
+    let state = {
+      isMenuOpen: true,
+      mode: 'NORMAL',
+      pendingMode: 'NORMAL',
+      tiles: [], // 存放所有獨立的棋子物件
+      score: 0,
+      bestScore: 0,
+      moveCount: 0,
+      isGameOver: false,
+      isGameWon: false,
+      hasContinued: false
+    };
+    
+    let tileIdCounter = 0;
+    let isAnimating = false; // 鎖定動畫期間的輸入
+
+    const getBestScoreKey = (mode = state.mode) => `2048_bestScore_${mode}`;
+
+    const loadBestScore = (mode = state.mode) => {
+      try {
+        const savedBest = localStorage.getItem(getBestScoreKey(mode));
+        state.bestScore = savedBest ? parseInt(savedBest, 10) : 0;
+      } catch(e) { state.bestScore = 0; }
+    };
+
+    const saveBestScore = () => {
+      try { localStorage.setItem(getBestScoreKey(state.mode), String(state.bestScore)); } catch(e) {}
+    };
+
+    loadBestScore(state.mode);
+
+    // --- 核心邏輯 ---
+    
+    window.initGame = (selectedMode = state.pendingMode) => {
+      state.mode = selectedMode;
+      state.pendingMode = selectedMode;
+      state.isMenuOpen = false;
+      loadBestScore(state.mode);
+      state.tiles = [];
+      state.score = 0;
+      state.moveCount = 0;
+      state.isGameOver = false;
+      state.isGameWon = false;
+      state.hasContinued = false;
+      isAnimating = false;
+      
+      renderApp(); // 構建基本介面框架
+      
+      spawnTile();
+      spawnTile();
+      
+      renderTiles(); // 渲染棋子
+    };
+
+    // 取得當前網格狀態
+    const getBoardState = () => {
+      const size = MODES[state.mode].size;
+      const grid = Array(size).fill().map(() => Array(size).fill(null));
+      state.tiles.forEach(t => {
+        if (!t.isDeleted && !t.isExploding) {
+          grid[t.r][t.c] = t;
+        }
+      });
+      return grid;
+    };
+
+    // 生成新數字或石頭
+    const spawnTile = (isStone = false) => {
+      const grid = getBoardState();
+      const empty = [];
+      const size = MODES[state.mode].size;
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          if (!grid[r][c]) empty.push({r, c});
+        }
+      }
+      if (empty.length === 0) return;
+      const {r, c} = empty[Math.floor(Math.random() * empty.length)];
+      const val = isStone ? 'S' : (Math.random() < 0.9 ? 2 : 4);
+      
+      state.tiles.push({
+        id: 't_' + tileIdCounter++,
+        r, c, val,
+        isNew: true,
+        isMerged: false,
+        isDeleted: false,
+        isExploding: false
+      });
+    };
+
+    // 坐標轉換工具 (處理四個方向)
+    const getCoord = (i, j, dir, size) => {
+      let r = (dir === 'LEFT' || dir === 'RIGHT') ? i : (dir === 'UP' ? j : size - 1 - j);
+      let c = (dir === 'UP' || dir === 'DOWN') ? i : (dir === 'LEFT' ? j : size - 1 - j);
+      return {r, c};
+    };
+
+    // 處理移動 
+    window.move = (direction) => {
+      if (state.isGameOver || (state.isGameWon && !state.hasContinued) || isAnimating) return;
+      
+      const size = MODES[state.mode].size;
+      const grid = getBoardState();
+      let boardChanged = false;
+      let scoreGainThisTurn = 0;
+      
+      // 清除上一回合的動畫標記
+      state.tiles.forEach(t => { t.isNew = false; t.isMerged = false; t.isExploding = false; });
+
+      for (let i = 0; i < size; i++) {
+        let line = [];
+        for (let j = 0; j < size; j++) {
+          let {r, c} = getCoord(i, j, direction, size);
+          if (grid[r][c]) line.push(grid[r][c]);
+        }
+
+        let targetJ = 0;
+        let j = 0;
+        while (j < line.length) {
+          let t1 = line[j];
+          if (j < line.length - 1 && t1.val === line[j+1].val && t1.val !== 'S') {
+            // 合併邏輯
+            let t2 = line[j+1];
+            const targetCoord = getCoord(i, targetJ, direction, size);
+
+            if (t1.r !== targetCoord.r || t1.c !== targetCoord.c) boardChanged = true;
+            if (t2.r !== targetCoord.r || t2.c !== targetCoord.c) boardChanged = true;
+
+            // 兩粒棋子移動去同一個目標位
+            t1.r = targetCoord.r; t1.c = targetCoord.c;
+            t2.r = targetCoord.r; t2.c = targetCoord.c;
+            t1.isDeleted = true; // 標記為刪除，播完滑動動畫後清除
+            t2.isDeleted = true;
+
+            let newVal = t1.val * 2;
+            scoreGainThisTurn += newVal;
+            
+            // 產生合併後的新棋子
+            state.tiles.push({
+              id: 't_' + tileIdCounter++,
+              val: newVal,
+              r: targetCoord.r, c: targetCoord.c,
+              isNew: false,
+              isMerged: true,
+              isDeleted: false,
+              isExploding: false
+            });
+
+            targetJ++;
+            j += 2;
+          } else {
+            // 正常移動
+            const targetCoord = getCoord(i, targetJ, direction, size);
+            if (t1.r !== targetCoord.r || t1.c !== targetCoord.c) boardChanged = true;
+            t1.r = targetCoord.r; t1.c = targetCoord.c;
+            targetJ++;
+            j++;
+          }
+        }
+      }
+
+      if (boardChanged) {
+        isAnimating = true;
+        state.score += scoreGainThisTurn;
+        if (state.score > state.bestScore) {
+          state.bestScore = state.score;
+          saveBestScore();
+        }
+        state.moveCount++;
+
+        let formed2048 = false;
+        state.tiles.forEach(t => {
+          if (t.val === 2048 && t.isMerged && !t.isDeleted) {
+            if (!state.isGameWon && !state.hasContinued) state.isGameWon = true;
+            formed2048 = true;
+          }
+        });
+
+        // 1. 立即渲染 DOM 以觸發 CSS 物理滑動動畫
+        renderTiles();
+
+        // 2. 等待滑動完成 (150ms) 後，執行彈出動畫與生成新棋
+        setTimeout(() => {
+          // 清理已標記刪除的舊棋子
+          state.tiles = state.tiles.filter(t => !t.isDeleted); 
+
+          if (formed2048 && MODES[state.mode].hasStones) {
+            // 極限模式：炸石
+            state.tiles.forEach(t => { if (t.val === 'S') t.isExploding = true; });
+            const explodedCount = state.tiles.filter(t => t.isExploding).length;
+            state.score += explodedCount * 1000;
+            renderTiles();
+
+            setTimeout(() => {
+              state.tiles = state.tiles.filter(t => !t.isExploding);
+              spawnTile();
+              checkGameOver();
+              renderTiles();
+              isAnimating = false;
+            }, 500); // 炸石動畫時間
+          } else {
+            spawnTile();
+            if (MODES[state.mode].hasStones && state.moveCount % 10 === 0) {
+              spawnTile(true);
+            }
+            checkGameOver();
+            renderTiles();
+            isAnimating = false;
+          }
+        }, 150); // 對應 CSS 的 transition 0.15s
+      }
+    };
+
+    const checkGameOver = () => {
+      const size = MODES[state.mode].size;
+      const grid = getBoardState();
+      
+      // 仲有吉位
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          if (!grid[r][c]) return; 
+        }
+      }
+      
+      // 相鄰有無相同數字
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          const current = grid[r][c].val;
+          if (current === 'S') continue; 
+          if (c < size - 1 && grid[r][c+1].val === current) return; 
+          if (r < size - 1 && grid[r+1][c].val === current) return; 
+        }
+      }
+      state.isGameOver = true;
+    };
+
+    window.continueGame = () => {
+        state.isGameWon = false;
+        state.hasContinued = true;
+        renderTiles();
+    };
+
+    // --- UI 控制 ---
+    window.openMenu = () => { state.pendingMode = state.mode; state.isMenuOpen = true; renderApp(); };
+    window.closeMenu = () => { state.isMenuOpen = false; renderApp(); };
+    window.setMode = (mode) => {
+      state.pendingMode = mode;
+      updateModeMenuDOM();
+    }; 
+
+    const updateModeMenuDOM = () => {
+      Object.keys(MODES).forEach(key => {
+        const btn = document.getElementById(`btn-mode-${key}`);
+        const desc = document.getElementById(`mode-desc-${key}`);
+        if (!btn) return;
+        const isSelected = state.pendingMode === key;
+        btn.className = `w-full text-left p-4 lg:p-5 rounded-xl key-base ${isSelected ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900'} flex flex-col gap-1`;
+        if (desc) desc.className = `${isSelected ? 'text-neutral-600' : 'text-neutral-500'} text-[11px] lg:text-[13px]`;
+      });
+    }; 
+
+    // --- Drag / Swipe / Keyboard 控制 ---
+    let dragStartX = 0;
+    let dragStartY = 0;
+    let isDraggingPointer = false;
+    const DRAG_THRESHOLD = 26;
+
+    const resolveDragDirection = (dx, dy) => {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < DRAG_THRESHOLD) return null;
+      if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? 'RIGHT' : 'LEFT';
+      return dy > 0 ? 'DOWN' : 'UP';
+    };
+
+    const getClientPoint = (e) => {
+      if (e.changedTouches && e.changedTouches[0]) {
+        return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+      }
+      return { x: e.clientX, y: e.clientY };
+    };
+
+    const handleDragStart = (e) => {
+      if (state.isMenuOpen || state.isGameOver || (state.isGameWon && !state.hasContinued)) return;
+      const board = e.target.closest && e.target.closest('.game-board-container');
+      if (!board) return;
+      const p = getClientPoint(e);
+      dragStartX = p.x;
+      dragStartY = p.y;
+      isDraggingPointer = true;
+      if (e.cancelable) e.preventDefault();
+    };
+
+    const handleDragEnd = (e) => {
+      if (!isDraggingPointer) return;
+      isDraggingPointer = false;
+      const p = getClientPoint(e);
+      const direction = resolveDragDirection(p.x - dragStartX, p.y - dragStartY);
+      if (direction) move(direction);
+      if (e.cancelable) e.preventDefault();
+    };
+
+    const handleDragCancel = () => {
+      isDraggingPointer = false;
+    };
+
+    // Pointer events cover desktop mouse drag, stylus, and most modern mobile browsers.
+    if (window.PointerEvent) {
+      document.addEventListener('pointerdown', handleDragStart, { passive: false });
+      document.addEventListener('pointerup', handleDragEnd, { passive: false });
+      document.addEventListener('pointercancel', handleDragCancel, { passive: true });
+    } else {
+      // Fallback for older iOS Safari versions.
+      document.addEventListener('touchstart', handleDragStart, { passive: false });
+      document.addEventListener('touchend', handleDragEnd, { passive: false });
+      document.addEventListener('touchcancel', handleDragCancel, { passive: true });
+    }
+
+    document.addEventListener('touchmove', function(e) {
+      if (!state.isMenuOpen && e.target.closest && e.target.closest('.game-board-container')) e.preventDefault();
+    }, { passive: false });
+
+    document.addEventListener('keydown', e => {
+      if (state.isMenuOpen) return;
+      const key = e.key.toLowerCase();
+      const keyMap = {
+        arrowup: 'UP', w: 'UP', k: 'UP',
+        arrowdown: 'DOWN', s: 'DOWN', j: 'DOWN',
+        arrowleft: 'LEFT', a: 'LEFT', h: 'LEFT',
+        arrowright: 'RIGHT', d: 'RIGHT', l: 'RIGHT'
+      };
+      if (keyMap[key]) {
+        e.preventDefault();
+        move(keyMap[key]);
+      }
+      if (key === 'r') {
+        e.preventDefault();
+        window.initGame(state.mode);
+      }
+    });
+
+    // --- 畫面渲染 ---
+    
+    const getMenuHTML = () => {
+      const inProgress = state.tiles.length > 0;
+      const backToLobbyHTML = `<a href="index.html" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] hover:text-white transition-colors pt-1 lg:pt-1.5 flex items-center gap-1.5 key-base" style="text-decoration: none;"><img src="./assets/gamehub.svg" alt="Hub" class="h-[12px] opacity-70 icon-white" onerror="this.style.display='none'"> 返回遊戲大堂</a>`;
+      const closeBtnHTML = inProgress 
+        ? `<button onclick="window.closeMenu()" class="text-white text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-neutral-300 transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white" onerror="this.outerHTML='✕'"></button>`
+        : `<div class="h-[12px] lg:h-[15px] pt-1 lg:pt-1.5"></div>`;
+
+      let modesHTML = '';
+      Object.keys(MODES).forEach(key => {
+        const m = MODES[key];
+        const isSelected = state.pendingMode === key;
+        const bgClass = isSelected ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900';
+        let extraTag = key === 'EXTREME' ? '<span class="text-[10px] ml-2 text-red-500 font-bold border border-red-500/50 rounded px-1">石</span>' : '';
+        
+        modesHTML += `
+          <button id="btn-mode-${key}" onclick="window.setMode('${key}')" class="w-full text-left p-4 lg:p-5 rounded-xl key-base ${bgClass} flex flex-col gap-1">
+             <div class="text-[14px] lg:text-[16px] tracking-[0.1em] uppercase flex items-center">${m.label} ${extraTag}</div>
+             <div id="mode-desc-${key}" class="${isSelected ? 'text-neutral-600' : 'text-neutral-500'} text-[11px] lg:text-[13px]">${m.desc}</div>
+          </button>
+        `;
+      });
+
+      return `
+        <div id="menu-layer" class="fixed inset-0 z-50 bg-black flex flex-col overflow-y-auto animate-fade-in">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+            ${backToLobbyHTML}
+            ${closeBtnHTML}
+          </header>
+          <div class="flex-1 flex flex-col items-center justify-center gap-6 pb-10 px-6 w-full mt-4 lg:mt-0 max-w-[400px] mx-auto">
+            <div class="flex flex-col items-center justify-center gap-3 mb-4">
+               <img src="./assets/Logo.svg" alt="LOGO" class="h-[22px] lg:h-[28px] object-contain opacity-90 icon-white" onerror="this.style.display='none'">
+               <div class="text-white tracking-[0.4em] text-[15px] lg:text-[18px] font-light opacity-60">2048</div>
+            </div>
+            <div class="w-full flex flex-col gap-3">
+              <div class="text-neutral-500 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase text-center mb-2">MODE 模式選擇</div>
+              ${modesHTML}
+            </div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] mt-6">
+              <button onclick="window.initGame(state.pendingMode)" class="w-full bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black py-4 lg:py-5 rounded-lg font-bold tracking-[0.15em] text-[13px] lg:text-[16px] uppercase transition-colors key-base">${inProgress ? "RESTART 重新開始" : "開始新遊戲 START"}</button>
+            </div>
+          </div>
+        </div>
+      `;
+    };
+
+    // 初始化整個 UI 框架 (只在 init 或切換 menu 時執行，防止背景閃爍)
+    function renderApp() {
+      const appDiv = document.getElementById('app');
+      
+      if (state.isMenuOpen) {
+        appDiv.innerHTML = getMenuHTML();
+        return;
+      }
+
+      const size = MODES[state.mode].size;
+      const emptyGridCells = Array(size * size).fill('<div class="grid-cell"></div>').join('');
+
+      appDiv.innerHTML = `
+        <div class="w-full h-full bg-black flex flex-col overflow-hidden relative">
+          
+          <header class="flex-none pt-4 lg:pt-6 pb-2 px-4 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+            <div class="flex items-center"><img src="./assets/Logo.svg" alt="LOGO" class="h-[19px] lg:h-[25px] object-contain opacity-90 icon-white" onerror="this.style.display='none'"></div>
+            <div class="flex items-center gap-4 lg:gap-6">
+              <button onclick="window.initGame(state.mode)" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/back.svg" alt="RESTART" class="h-[14px] lg:h-[18px] object-contain icon-white" onerror="this.outerHTML='↶'"></button>
+              <button onclick="window.openMenu()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/setting.svg" alt="SET" class="h-[14px] lg:h-[18px] object-contain icon-white" onerror="this.outerHTML='⚙'"></button>
+            </div>
+          </header>
+
+          <div class="px-4 lg:px-12 z-20 pointer-events-none mt-7 lg:mt-10 flex flex-col items-start w-full">
+            <div class="text-[13px] lg:text-[15px] text-neutral-400 font-medium tracking-[0.22em] leading-[1.65] uppercase">
+              2048<br>
+              <span class="text-white font-bold tracking-[0.18em]">${MODES[state.mode].label}</span><br>
+              <span class="text-neutral-500">BEST</span> <span id="best-display" class="text-white font-mono tracking-[0.08em]">${state.bestScore}</span>
+            </div>
+            <div class="mt-8 lg:mt-10 pointer-events-auto">
+              <div class="text-neutral-500 text-[14px] lg:text-[16px] uppercase tracking-[0.22em] font-sans mb-2">SCORE</div>
+              <div id="score-display" class="text-white font-mono text-[40px] lg:text-[56px] tracking-widest leading-none">${state.score}</div>
+            </div>
+          </div>
+
+          <main class="flex-1 w-full max-w-[500px] mx-auto flex flex-col items-center justify-center relative z-10 px-6 pb-8 lg:pb-0 pt-4 lg:pt-0">
+            <div class="w-full relative mt-4 lg:mt-0 game-board-container aspect-square" style="--size: ${size};" tabindex="0" aria-label="2048 game board. Drag, swipe, or use arrow keys to move tiles.">
+              <!-- 固定的背景網格 -->
+              <div class="grid-bg">
+                ${emptyGridCells}
+              </div>
+              <!-- 獨立管理的棋子層 -->
+              <div id="tiles-layer" class="tile-container"></div>
+              <!-- 遊戲結束/勝利的遮罩層 -->
+              <div id="overlay-layer"></div>
+            </div>
+            <div class="mt-4 text-[10px] lg:text-[12px] text-neutral-600 tracking-[0.18em] uppercase text-center select-none">
+              Drag / Swipe / Arrow Keys
+            </div>
+          </main>
+        </div>
+      `;
+      
+      if (!state.isMenuOpen) renderTiles();
+    }
+
+    // 只更新必要 DOM 的獨立渲染函數，支援 CSS Transition
+    function renderTiles() {
+      if (state.isMenuOpen) return;
+
+      document.getElementById('score-display').innerText = state.score;
+      document.getElementById('best-display').innerText = state.bestScore;
+
+      const tilesLayer = document.getElementById('tiles-layer');
+      if (!tilesLayer) return;
+
+      let size = MODES[state.mode].size;
+      let textSizeClass = size === 5 ? 'text-2xl lg:text-3xl' : 'text-3xl lg:text-4xl';
+
+      // 1. 移除已經不存在 state.tiles 中的 DOM
+      const currentIds = state.tiles.map(t => t.id);
+      Array.from(tilesLayer.children).forEach(child => {
+        if (!currentIds.includes(child.id)) {
+          tilesLayer.removeChild(child);
+        }
+      });
+
+      // 2. 更新或創建現有 DOM
+      state.tiles.forEach(t => {
+        let el = document.getElementById(t.id);
+        let isNewElement = false;
+
+        if (!el) {
+          el = document.createElement('div');
+          el.id = t.id;
+          tilesLayer.appendChild(el);
+          isNewElement = true;
+        }
+
+        // 更新精準坐標以觸發 CSS 過渡
+        el.style.setProperty('--r', t.r);
+        el.style.setProperty('--c', t.c);
+        // z-index 排序：準備被移除的墊底，合併產生的放最頂層
+        el.style.zIndex = t.isDeleted ? 1 : (t.isMerged ? 3 : 2);
+
+        // 如果是新產生或剛合併，套用彈出動畫
+        if (isNewElement || t.isExploding) {
+          let cellClass = '';
+          let content = '';
+          let animClass = '';
+
+          if (t.isNew) animClass = 'anim-pop';
+          if (t.isMerged) animClass = 'anim-merge';
+          if (t.isExploding) animClass = 'anim-explode';
+
+          if (t.val === 'S') {
+            cellClass = 'tile-stone tile-base text-3xl';
+            content = ''; 
+          } else {
+            let valClass = t.val >= 4096 ? 'tile-super' : `tile-${t.val}`;
+            cellClass = `${valClass} tile-base ${textSizeClass}`;
+            content = t.val;
+          }
+
+          el.className = `tile`;
+          el.innerHTML = `<div class="tile-inner ${cellClass} ${animClass}">${content}</div>`;
+        }
+      });
+
+      // 處理 Overlay (還原為最初原版設定)
+      const overlayLayer = document.getElementById('overlay-layer');
+      if (state.isGameWon && !state.hasContinued) {
+        overlayLayer.innerHTML = `
+          <div class="absolute inset-0 z-40 bg-white/10 backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in rounded-xl">
+             <div class="text-4xl lg:text-5xl font-black text-white tracking-widest mb-2 drop-shadow-lg">YOU WIN!</div>
+             <div class="text-blue-200 tracking-widest uppercase mb-8 font-medium">達成了 2048 🎉</div>
+             <button onclick="window.continueGame()" class="px-8 py-3 mb-3 bg-white text-black font-bold tracking-[0.1em] rounded-full hover:bg-neutral-200 transition-colors shadow-xl">繼續挑戰 (Endless)</button>
+             <button onclick="window.initGame(state.mode)" class="px-8 py-3 bg-blue-600 text-white font-bold tracking-[0.1em] rounded-full hover:bg-blue-700 transition-colors shadow-xl">重新開始</button>
+          </div>
+        `;
+      } else if (state.isGameOver) {
+        overlayLayer.innerHTML = `
+          <div class="absolute inset-0 z-40 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in rounded-xl">
+             <div class="text-4xl lg:text-5xl font-black text-white tracking-widest mb-2">GAME OVER</div>
+             <div class="text-neutral-400 tracking-widest uppercase mb-8 text-sm">無路可走啦 💀</div>
+             <button onclick="window.initGame(state.mode)" class="px-8 py-3 bg-white text-black font-bold tracking-[0.1em] rounded-full hover:bg-neutral-200 transition-colors shadow-xl">再玩一次 TRY AGAIN</button>
+          </div>
+        `;
+      } else {
+        overlayLayer.innerHTML = '';
+      }
+    }
+
+    window.onload = () => { renderApp(); };
+  </script>
+</body>
+</html>

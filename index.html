@@ -34,10 +34,14 @@
     
     .animate-fade-in { animation: fadeIn 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
     
+    /* Karina 新增：更多 stagger 延遲，令 9 格卡片出場更順暢 */
     .stagger-1 { animation-delay: 0.1s; }
     .stagger-2 { animation-delay: 0.2s; }
     .stagger-3 { animation-delay: 0.3s; }
     .stagger-4 { animation-delay: 0.4s; }
+    .stagger-5 { animation-delay: 0.5s; }
+    .stagger-6 { animation-delay: 0.6s; }
+    .stagger-7 { animation-delay: 0.7s; }
 
     html, body { 
       background-color: #000000; 
@@ -60,7 +64,8 @@
       transition: opacity 0.3s ease;
       pointer-events: none;
     }
-    .game-card:hover::before { opacity: 1; }
+    /* 加入 :not(.disabled) 防止開發中卡片有光效 */
+    .game-card:not(.disabled):hover::before { opacity: 1; }
     .font-tc { font-family: 'Noto Sans TC', sans-serif; }
   </style>
 </head>
@@ -82,7 +87,6 @@
         <a href="chess.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-1 overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             
-            <!-- Karina 優化：線框風格象棋 Icon -->
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-red-900/40 rounded-xl overflow-hidden">
                 <!-- 九宮格線 -->
                 <div class="absolute inset-0 flex flex-col justify-evenly py-1 lg:py-2"><div class="w-full h-[1px] bg-red-900/30"></div><div class="w-full h-[1px] bg-red-900/30"></div></div>
@@ -106,7 +110,6 @@
         <a href="reversi.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-2 overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             
-            <!-- Karina 優化：線框風格黑白棋 Icon -->
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-neutral-700/50 rounded-xl overflow-hidden">
                 <!-- 棋盤格線 -->
                 <div class="absolute inset-0 flex flex-col justify-evenly py-1 lg:py-2"><div class="w-full h-[1px] bg-neutral-800"></div><div class="w-full h-[1px] bg-neutral-800"></div><div class="w-full h-[1px] bg-neutral-800"></div></div>
@@ -195,7 +198,7 @@
         </a>
 
         <!-- Game 6: 數獨 (Sudoku) -->
-        <a href="sudoku.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-4 overflow-hidden">
+        <a href="sudoku.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-5 overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-purple-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-purple-900/40 rounded-xl overflow-hidden">
@@ -215,10 +218,91 @@
             </div>
         </a>
 
+        <!-- Karina 新增 Game 7: 2048 -->
+        <a href="2048.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-5 overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-pink-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            
+            <!-- 2048 Icon (Karina 優化：還原真實 4x4 棋盤與滑動合併玩法) -->
+            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-pink-900/40 rounded-xl p-[8px] lg:p-[10px]">
+                <div class="w-full h-full relative">
+                    <!-- Background Grid (4x4 空白格) -->
+                    <div class="absolute inset-0 grid grid-cols-4 grid-rows-4 gap-[2px]">
+                        <div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div>
+                        <div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div>
+                        <div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div>
+                        <div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div>
+                    </div>
+
+                    <!-- Row 0: Sliding 2s (向右滑動合併) -->
+                    <!-- 被撞擊的 2 (合併後變色) -->
+                    <div class="absolute top-0 left-[calc(25%+0.5px)] w-[calc(25%-1.5px)] h-[calc(25%-1.5px)] bg-pink-950 border border-pink-700/50 rounded-[2px] flex items-center justify-center z-10 transition-colors duration-300 group-hover:bg-pink-700 group-hover:border-pink-400">
+                        <span class="text-pink-400 font-inter text-[8px] lg:text-[10px] font-bold group-hover:text-pink-100 transition-colors duration-300">2</span>
+                    </div>
+                    <!-- 負責滑動的 2 -->
+                    <div class="absolute top-0 left-0 group-hover:left-[calc(25%+0.5px)] group-hover:opacity-0 w-[calc(25%-1.5px)] h-[calc(25%-1.5px)] bg-pink-900 border border-pink-500 rounded-[2px] flex items-center justify-center z-20 transition-all duration-500 shadow-[0_0_5px_rgba(244,114,182,0.3)]">
+                        <span class="text-pink-200 font-inter text-[8px] lg:text-[10px] font-bold">2</span>
+                    </div>
+
+                    <!-- Row 2&3: Sliding 8s (向上滑動合併) -->
+                    <!-- 被撞擊的 8 -->
+                    <div class="absolute top-[calc(50%+1px)] left-[calc(50%+1px)] w-[calc(25%-1.5px)] h-[calc(25%-1.5px)] bg-pink-800 border border-pink-400 rounded-[2px] flex items-center justify-center z-10 transition-colors duration-300 group-hover:bg-pink-600 group-hover:border-pink-300 group-hover:shadow-[0_0_8px_rgba(236,72,153,0.5)] delay-100">
+                        <span class="text-pink-200 font-inter text-[8px] lg:text-[10px] font-bold group-hover:text-white transition-colors duration-300 delay-100">8</span>
+                    </div>
+                    <!-- 負責滑動的 8 -->
+                    <div class="absolute top-[calc(75%+1.5px)] group-hover:top-[calc(50%+1px)] left-[calc(50%+1px)] group-hover:opacity-0 w-[calc(25%-1.5px)] h-[calc(25%-1.5px)] bg-pink-800 border border-pink-400 rounded-[2px] flex items-center justify-center z-20 transition-all duration-500 delay-100">
+                        <span class="text-pink-200 font-inter text-[8px] lg:text-[10px] font-bold">8</span>
+                    </div>
+
+                    <!-- 靜態點綴磚塊 -->
+                    <div class="absolute top-[calc(25%+0.5px)] left-[calc(75%+1.5px)] w-[calc(25%-1.5px)] h-[calc(25%-1.5px)] bg-pink-900 border border-pink-700/50 rounded-[2px] flex items-center justify-center z-10">
+                        <span class="text-pink-500 font-inter text-[8px] lg:text-[10px] font-bold">4</span>
+                    </div>
+
+                    <!-- 終極 2048 磚塊 -->
+                    <div class="absolute top-[calc(75%+1.5px)] left-[calc(75%+1.5px)] w-[calc(25%-1.5px)] h-[calc(25%-1.5px)] bg-pink-500 rounded-[2px] flex items-center justify-center z-10 shadow-[0_0_10px_rgba(236,72,153,0.8)] group-hover:scale-[1.15] transition-transform duration-300 delay-200 origin-center">
+                        <span class="text-white font-inter text-[5px] lg:text-[6px] font-black tracking-tighter">2048</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex flex-col items-center mt-2">
+                <span class="text-white font-tc font-bold text-[16px] lg:text-[18px] tracking-wider">2048</span>
+                <span class="text-neutral-500 text-[9px] lg:text-[11px] tracking-[0.2em] uppercase mt-1">Number Puzzle</span>
+            </div>
+        </a>
+
+        <!-- Karina 新增 Game 8: 開發中 -->
+        <div class="game-card disabled relative bg-[#0a0a0a] border border-neutral-800/50 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 animate-fade-in stagger-6 overflow-hidden opacity-60">
+            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center bg-[#111] border-2 border-neutral-800 rounded-xl overflow-hidden">
+                <!-- 虛線外框代表建設中 -->
+                <div class="absolute inset-2 border border-dashed border-neutral-600 rounded-lg"></div>
+                <span class="text-neutral-500 font-inter text-[20px] lg:text-[24px] font-bold tracking-widest translate-y-[-2px]">...</span>
+            </div>
+            
+            <div class="flex flex-col items-center mt-2">
+                <span class="text-neutral-400 font-tc font-bold text-[16px] lg:text-[18px] tracking-wider">開發中</span>
+                <span class="text-neutral-600 text-[9px] lg:text-[11px] tracking-[0.2em] uppercase mt-1">Coming Soon</span>
+            </div>
+        </div>
+
+        <!-- Karina 新增 Game 9: 開發中 -->
+        <div class="game-card disabled relative bg-[#0a0a0a] border border-neutral-800/50 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 animate-fade-in stagger-7 overflow-hidden opacity-60">
+            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center bg-[#111] border-2 border-neutral-800 rounded-xl overflow-hidden">
+                <!-- 虛線外框代表建設中 -->
+                <div class="absolute inset-2 border border-dashed border-neutral-600 rounded-lg"></div>
+                <span class="text-neutral-500 font-inter text-[20px] lg:text-[24px] font-bold tracking-widest translate-y-[-2px]">...</span>
+            </div>
+            
+            <div class="flex flex-col items-center mt-2">
+                <span class="text-neutral-400 font-tc font-bold text-[16px] lg:text-[18px] tracking-wider">開發中</span>
+                <span class="text-neutral-600 text-[9px] lg:text-[11px] tracking-[0.2em] uppercase mt-1">Coming Soon</span>
+            </div>
+        </div>
+
     </div>
   </main>
 
-  <footer class="flex-none w-full py-6 text-center text-neutral-600 text-[10px] tracking-[0.15em] uppercase z-10 animate-fade-in stagger-4 relative">
+  <footer class="flex-none w-full py-6 text-center text-neutral-600 text-[10px] tracking-[0.15em] uppercase z-10 animate-fade-in stagger-7 relative">
     © 2026 Board Games Hub. All rights reserved.
   </footer>
 
