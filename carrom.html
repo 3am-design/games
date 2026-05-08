@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Games - 康樂棋</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Noto+Sans+TC:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { future: { hoverOnlyWhenSupported: true } };
+  </script>
+  <style>
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.28s ease-out; }
+    @keyframes pulse-fast { 0%, 100% { opacity: 1; } 50% { opacity: 0.42; } }
+    .animate-thinking { animation: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    @keyframes fadeInDelayed { 0%, 75% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
+    .anim-fade-in-delayed { animation: fadeInDelayed 2.2s ease-out forwards; }
+    .coin-scene { perspective: 800px; width: 100px; height: 100px; }
+    @media (min-width: 1024px) { .coin-scene { width: 120px; height: 120px; } }
+    .coin-wrapper { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; }
+    .coin-face { position: absolute; width: 100%; height: 100%; border-radius: 50%; backface-visibility: hidden; display: flex; align-items: center; justify-content: center; font-weight: 900; font-family: 'Inter', sans-serif; font-size: 1.95rem; border: 4px solid; background: #111; }
+    .coin-p1 { color: #fff; border-color: #fff; transform: rotateY(0deg); }
+    .coin-ai { color: #ef4444; border-color: #ef4444; transform: rotateY(180deg); }
+    @keyframes flipToP1 { 0% { transform: rotateY(0deg) scale(1); } 50% { transform: rotateY(1800deg) scale(1.4); } 100% { transform: rotateY(3600deg) scale(1); } }
+    @keyframes flipToAI { 0% { transform: rotateY(0deg) scale(1); } 50% { transform: rotateY(1890deg) scale(1.4); } 100% { transform: rotateY(3780deg) scale(1); } }
+    .anim-flip-p1 { animation: flipToP1 2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+    .anim-flip-ai { animation: flipToAI 2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+
+    html, body {
+      overscroll-behavior-y: none;
+      background-color: #000;
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      color: #fff;
+      height: 100%;
+      height: -webkit-fill-available;
+      overflow: hidden;
+      margin: 0;
+      touch-action: none;
+    }
+    .app-container { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    button, canvas { -webkit-tap-highlight-color: transparent; outline: none; touch-action: none; }
+    .key-base { transition: background-color 0.2s ease-out, color 0.2s ease-out, border-color 0.2s, opacity 0.2s; }
+    .key-base:active { opacity: 0.5; transition: none; }
+    .icon-white { filter: brightness(0) invert(1); }
+    .icon-hint-active { filter: brightness(0) saturate(100%) invert(48%) sepia(90%) saturate(3362%) hue-rotate(206deg) brightness(102%) contrast(94%); }
+
+    .game-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .info-panel { flex: 0 0 auto; }
+    .board-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; width: 100%; padding: 10px 16px 18px; }
+    .board-frame { width: min(88vw, 58vh, 520px); max-width: 520px; position: relative; }
+    .board-frame::before { display: none; }
+    .strike-board {
+      width: 100%; aspect-ratio: 1 / 1; display: block;
+      background: transparent; border: 0; border-radius: 0;
+      box-shadow: 0 0 40px rgba(0,0,0,0.85); cursor: crosshair;
+      position: relative; z-index: 2;
+    }
+    .game-meta {
+      position: fixed; top: 60px; left: 20px; z-index: 20; pointer-events: none;
+      text-align: left;
+    }
+    .meta-score { margin-top: 18px; }
+    .score-panel { pointer-events: none; }
+    .score-row { display: inline-grid; grid-template-columns: max-content 1px max-content; column-gap: 18px; align-items: start; }
+    .score-divider { width: 1px; height: 48px; background: rgba(255,255,255,0.22); align-self: start; margin-top: 1px; }
+    .score-pill { border: 0; background: transparent; border-radius: 0; padding: 0; min-width: 46px; }
+    .score-label { font-size: 10px; letter-spacing: 0.12em; margin-bottom: 5px; line-height: 1.1; }
+    .score-number { font-family: 'Inter', sans-serif; font-weight: 300; letter-spacing: -0.04em; display:block; }
+    @keyframes pocketScoreFloat { 0% { opacity: 0; transform: translate(-50%, 10px) scale(.9); } 18% { opacity: 1; transform: translate(-50%, 0) scale(1); } 72% { opacity: 1; transform: translate(-50%, -18px) scale(1); } 100% { opacity: 0; transform: translate(-50%, -30px) scale(.96); } }
+    .pocket-score-pop { position: absolute; z-index: 5; left: var(--x); top: var(--y); transform: translate(-50%, 0); font-family: 'Inter', sans-serif; font-weight: 900; letter-spacing: -0.04em; font-size: 18px; line-height: 1; pointer-events: none; animation: pocketScoreFloat .85s ease-out forwards; text-shadow: 0 0 12px rgba(255,255,255,.45); }
+    @media (min-width: 1024px) {
+      .game-stage { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(420px, 560px) minmax(260px, 1fr); align-items: center; }
+      .info-panel { grid-column: 1; align-self: start; justify-self: start; }
+      .game-meta { top: 85px; left: 48px; }
+      .meta-score { margin-top: 20px; }
+      .score-panel { position: static; grid-column: 1; align-self: center; justify-self: start; padding-left: 0; }
+      .score-row { column-gap: 22px; }
+      .score-divider { height: 56px; }
+      .score-label { font-size: 11px; font-weight: 400; }
+      .board-stage { grid-column: 2; padding: 0; align-self: center; justify-self: center; }
+      .board-frame { width: min(560px, 67vh, 36vw); max-width: 560px; }
+      .side-panel { display: flex; }
+    }
+    @media (max-width: 1023px) {
+      .info-panel { margin-top: 18px; align-items: flex-start !important; text-align: left; padding-left: 20px; padding-right: 18px; }
+      .game-meta { top: 60px; left: 20px; right: 20px; display: grid; grid-template-columns: max-content 1fr; align-items: end; width: auto; }
+      .meta-score { margin-top: 0; grid-column: 2; justify-self: end; align-self: end; }
+      .score-panel { position: static; text-align: left; align-items: flex-start !important; padding: 0; z-index: 21; }
+      .score-row { justify-content: flex-start; align-items: start; column-gap: 14px; }
+      .score-divider { height: 40px; }
+      .score-label { font-size: 9px; margin-bottom: 4px; }
+      .board-stage { transform: translateY(-1vh); }
+      .board-frame { width: min(92vw, 54vh, 480px); }
+    }
+    @media (max-width: 1023px) and (max-height: 760px) {
+      .info-panel { margin-top: 10px; }
+      .board-frame { width: min(86vw, 46vh, 420px); }
+      .board-stage { transform: translateY(-0.5vh); padding-bottom: 10px; }
+      .score-pill { padding: 0; }
+    }
+  </style>
+</head>
+<body class="bg-black selection:bg-white/30">
+  <div id="app" class="app-container"></div>
+
+  <script>
+    const cloneState = (state) => JSON.parse(JSON.stringify(state));
+    const LOGICAL_SIZE = 800;
+    const BOARD_MARGIN = 50;
+    const POCKET_RADIUS = 40;
+    const WALL_MARGIN = 12;
+    const MAX_DRAG_DIST = 178;
+    const POWER_MULTIPLIER = 0.155;
+    const PENALTY_SCORE = 20;
+    const TARGET_SCORE = 360;
+    const MIN_SPEED = 0.085;
+    const SLEEP_SPEED = 0.13;
+    const AI_NAMES = ['呂布', '趙雲', '關羽', '張飛', '諸葛亮', '曹操', '司馬懿', '周瑜', '孫權', '馬超', '黃忠', '典韋', '夏侯惇', '張遼', '甘寧', '太史慈', '董卓', '陸遜'];
+
+    const LEVEL_CONFIG = {
+      1: { name: 'EASY', diff: 3, aiError: 0.125, aiNoise: 96, aiDelay: 360, aiPower: 0.88, friction: 0.976, bounce: 0.68, collision: 0.78 },
+      2: { name: 'NORMAL', diff: 5, aiError: 0.082, aiNoise: 62, aiDelay: 420, aiPower: 0.95, friction: 0.977, bounce: 0.70, collision: 0.82 },
+      3: { name: 'HARD', diff: 8, aiError: 0.042, aiNoise: 30, aiDelay: 500, aiPower: 1.02, friction: 0.978, bounce: 0.72, collision: 0.86 },
+      4: { name: 'MASTER', diff: 11, aiError: 0.018, aiNoise: 12, aiDelay: 560, aiPower: 1.08, friction: 0.979, bounce: 0.74, collision: 0.90 }
+    };
+    const getLevelConfig = () => LEVEL_CONFIG[settings.aiDifficulty] || LEVEL_CONFIG[2];
+    const DIFF_MAP = { 1: 3, 2: 5, 3: 8, 4: 11 };
+    const OBSTACLES_MAP = {
+      1: [],
+      2: [
+        { x: 400, y: 282, radius: 22 },
+        { x: 400, y: 518, radius: 22 }
+      ],
+      3: [
+        { x: 255, y: 255, radius: 26 },
+        { x: 545, y: 255, radius: 26 },
+        { x: 255, y: 545, radius: 26 },
+        { x: 545, y: 545, radius: 26 }
+      ],
+      4: [
+        { x: 235, y: 235, radius: 28 },
+        { x: 565, y: 235, radius: 28 },
+        { x: 235, y: 565, radius: 28 },
+        { x: 565, y: 565, radius: 28 },
+        { x: 400, y: 240, radius: 22 },
+        { x: 400, y: 560, radius: 22 },
+        { x: 240, y: 400, radius: 22 },
+        { x: 560, y: 400, radius: 22 }
+      ]
+    };
+
+    const PIECE_CONFIG = {
+      10:  { fill: '#7C7F8A', border: '#A4A8B5', text: '#080808', shadow: 'rgba(124,127,138,0.24)', radius: 15, mass: 1.0, fontPx: 12 },
+      20:  { fill: '#D94678', border: '#F06C99', text: '#090909', shadow: 'rgba(217,70,120,0.26)', radius: 20, mass: 1.5, fontPx: 14 },
+      50:  { fill: '#D8902D', border: '#F0AD4E', text: '#080808', shadow: 'rgba(216,144,45,0.28)', radius: 26, mass: 2.5, fontPx: 16 },
+      100: { fill: '#C9D64A', border: '#E3EE72', text: '#080808', shadow: 'rgba(201,214,74,0.30)', radius: 34, mass: 4.0, fontPx: 18 }
+    };
+    const pockets = [
+      { x: BOARD_MARGIN, y: BOARD_MARGIN },
+      { x: LOGICAL_SIZE - BOARD_MARGIN, y: BOARD_MARGIN },
+      { x: BOARD_MARGIN, y: LOGICAL_SIZE - BOARD_MARGIN },
+      { x: LOGICAL_SIZE - BOARD_MARGIN, y: LOGICAL_SIZE - BOARD_MARGIN }
+    ];
+
+    let settings = { mode: '1P', aiDifficulty: 2, firstMove: 'PLAYER', player1Name: '', player2Name: '' };
+    let pendingSettings = cloneState(settings);
+    let gameState = null;
+    let isMenuOpen = true;
+    let isRecordOpen = false;
+    let selectedHistoryMatch = null;
+    let matchHistory = [];
+    let menuJustOpened = true;
+    let canvasScale = 1;
+    let animationFrameId = null;
+    let scorePopups = [];
+    let lastFrame = 0;
+    let drag = { isDragging: false, startX: 0, startY: 0, currentX: 0, currentY: 0 };
+
+    class Piece {
+      constructor(x, y, value, type) {
+        this.x = x; this.y = y; this.value = value; this.type = type;
+        if (type === 'striker') { this.radius = 24; this.mass = 2.1; }
+        else { const cfg = PIECE_CONFIG[value]; this.radius = cfg.radius; this.mass = cfg.mass; }
+        this.vx = 0; this.vy = 0; this.isPocketed = false;
+      }
+      update(dt) {
+        if (this.isPocketed) return;
+        this.x += this.vx * dt; this.y += this.vy * dt;
+        const cfg = getLevelConfig();
+        const friction = Math.pow(cfg.friction, dt);
+        this.vx *= friction; this.vy *= friction;
+        const speed = Math.hypot(this.vx, this.vy);
+        if (speed < MIN_SPEED || (gameState.isMoving && speed < SLEEP_SPEED)) { this.vx = 0; this.vy = 0; }
+        const min = WALL_MARGIN + this.radius;
+        const max = LOGICAL_SIZE - WALL_MARGIN - this.radius;
+        if (this.x < min) { this.x = min; this.vx *= -cfg.bounce; }
+        if (this.x > max) { this.x = max; this.vx *= -cfg.bounce; }
+        if (this.y < min) { this.y = min; this.vy *= -cfg.bounce; }
+        if (this.y > max) { this.y = max; this.vy *= -cfg.bounce; }
+        handleObstacleBounce(this);
+        for (let p of pockets) {
+          const fallDist = this.type === 'striker' ? 36 : Math.max(11, POCKET_RADIUS - this.radius + 15);
+          if (Math.hypot(this.x - p.x, this.y - p.y) < fallDist) { this.handlePocket(p); break; }
+        }
+      }
+      handlePocket(pocket) {
+        if (this.isPocketed || !gameState) return;
+        this.isPocketed = true; this.vx = 0; this.vy = 0;
+        if (this.type === 'target') {
+          gameState.scores[gameState.turn] += this.value;
+          gameState.currentShot.pocketed.push(this.value);
+          addScorePopup(this.value, pocket, false);
+        } else {
+          gameState.scores[gameState.turn] = Math.max(0, gameState.scores[gameState.turn] - PENALTY_SCORE);
+          gameState.currentShot.penalty += PENALTY_SCORE;
+          addScorePopup(PENALTY_SCORE, pocket, true);
+        }
+        updateStatusDOM();
+      }
+      draw(ctx) {
+        if (this.isPocketed) return;
+        ctx.save(); ctx.translate(this.x, this.y);
+        ctx.beginPath(); ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        if (this.type === 'target') {
+          const style = PIECE_CONFIG[this.value];
+          ctx.fillStyle = style.fill || '#070707';
+          ctx.fill();
+        } else {
+          ctx.fillStyle = '#070707';
+          ctx.fill();
+        }
+        ctx.lineWidth = this.type === 'striker' ? 2.5 : 2;
+        if (this.type === 'striker') {
+          const color = gameState.turn === 'P1' ? '#f8fafc' : (gameState.isAI ? '#ef4444' : '#38bdf8');
+          ctx.strokeStyle = color; ctx.shadowBlur = 12; ctx.shadowColor = color; ctx.stroke();
+          ctx.shadowBlur = 0; ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill();
+        } else {
+          const style = PIECE_CONFIG[this.value];
+          ctx.strokeStyle = style.border; ctx.shadowBlur = 6; ctx.shadowColor = style.shadow; ctx.stroke();
+          ctx.shadowBlur = 0; ctx.fillStyle = style.text;
+          const displayFont = style.fontPx || Math.round(this.radius * 0.82);
+          const logicalFont = Math.max(10, displayFont / Math.max(canvasScale, 0.1));
+          ctx.font = `700 ${logicalFont}px Inter, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(this.value, 0, 1.2);
+        }
+        ctx.restore();
+      }
+    }
+
+    const handleObstacleBounce = (piece) => {
+      if (!gameState || !gameState.obstacles || piece.isPocketed) return;
+      for (const obs of gameState.obstacles) {
+        const dx = piece.x - obs.x;
+        const dy = piece.y - obs.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const minDist = piece.radius + obs.radius;
+        if (dist < minDist) {
+          const nx = dx / dist, ny = dy / dist;
+          piece.x += nx * (minDist - dist);
+          piece.y += ny * (minDist - dist);
+          const velAlong = piece.vx * nx + piece.vy * ny;
+          if (velAlong < 0) {
+            const bounce = 0.8;
+            piece.vx -= (1 + bounce) * velAlong * nx;
+            piece.vy -= (1 + bounce) * velAlong * ny;
+          }
+        }
+      }
+    };
+
+    const loadHistory = () => {
+      try { const saved = localStorage.getItem('neon_strike_history'); if (saved) { const parsed = JSON.parse(saved); if (Array.isArray(parsed)) matchHistory = parsed; } } catch (e) { matchHistory = []; }
+    };
+    const saveHistory = () => { try { localStorage.setItem('neon_strike_history', JSON.stringify(matchHistory)); } catch (e) {} };
+
+    const getPlayerName = () => settings.player1Name.trim() || 'YOU';
+    const getAIName = () => gameState?.aiName || 'AI';
+
+    const addScorePopup = (value, pocket, isPenalty = false) => {
+      if (!pocket) return;
+      const popup = { id: Date.now() + Math.random(), value, x: pocket.x, y: pocket.y, isPenalty };
+      scorePopups.push(popup);
+      renderScorePopups();
+      setTimeout(() => { scorePopups = scorePopups.filter(p => p.id !== popup.id); renderScorePopups(); }, 900);
+    };
+
+    const renderScorePopups = () => {
+      const layer = document.getElementById('score-pop-layer');
+      if (!layer) return;
+      layer.innerHTML = scorePopups.map(p => {
+        const color = p.isPenalty ? '#ef4444' : (PIECE_CONFIG[p.value]?.text || '#fff');
+        const prefix = p.isPenalty ? '-' : '+';
+        return `<div class="pocket-score-pop" style="--x:${p.x / LOGICAL_SIZE * 100}%; --y:${p.y / LOGICAL_SIZE * 100}%; color:${color};">${prefix}${p.value}</div>`;
+      }).join('');
+    };
+
+    const recordFinishedGame = () => {
+      if (!gameState || !gameState.winner || gameState.hasRecorded) return;
+      gameState.hasRecorded = true;
+      const p1Name = gameState.p1Name;
+      const aiName = gameState.aiName;
+      const winnerName = gameState.winner === 'DRAW' ? '和局' : (gameState.winner === 'P1' ? p1Name : aiName);
+      const rec = {
+        id: Date.now(), timestamp: new Date().toLocaleString(), settings: cloneState(settings),
+        winner: gameState.winner, winnerName, p1Name, aiName,
+        scores: cloneState(gameState.scores), turnCount: gameState.turnCount, gameLog: cloneState(gameState.gameLog)
+      };
+      matchHistory.unshift(rec); if (matchHistory.length > 50) matchHistory.pop(); saveHistory();
+    };
+
+    const resetStrikerForTurn = (forceReset = true) => {
+      const s = gameState.striker;
+      s.isPocketed = false; s.vx = 0; s.vy = 0;
+      if (forceReset) {
+        s.x = LOGICAL_SIZE / 2;
+        s.y = gameState.turn === 'P1' ? LOGICAL_SIZE - 150 : 150;
+      }
+      gameState.showTurnHint = true;
+      gameState.currentShot = { turn: gameState.turn, before: cloneState(gameState.scores), pocketed: [], penalty: 0 };
+    };
+
+    const makePieces = () => {
+      const arr = [];
+      const cx = LOGICAL_SIZE / 2, cy = LOGICAL_SIZE / 2;
+      arr.push(new Piece(cx, cy, 100, 'target'));
+      for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; arr.push(new Piece(cx + Math.cos(a) * 78, cy + Math.sin(a) * 78, 50, 'target')); }
+      for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; arr.push(new Piece(cx + Math.cos(a) * 132, cy + Math.sin(a) * 132, 20, 'target')); }
+      for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + Math.PI / 8; arr.push(new Piece(cx + Math.cos(a) * 178, cy + Math.sin(a) * 178, 10, 'target')); }
+      const striker = new Piece(cx, LOGICAL_SIZE - 150, 0, 'striker'); striker.isPocketed = true; arr.push(striker);
+      return { arr, striker };
+    };
+
+    window.initGame = () => {
+      isMenuOpen = false; isRecordOpen = false; selectedHistoryMatch = null; settings = cloneState(pendingSettings);
+      scorePopups = [];
+      const isAI = settings.mode === '1P';
+      const aiName = isAI ? AI_NAMES[Math.floor(Math.random() * AI_NAMES.length)] : (settings.player2Name.trim() || 'PLAYER 2');
+      const p1Name = settings.player1Name.trim() || '玩家';
+      const pieces = makePieces();
+      gameState = {
+        turn: 'P1', winner: null, isThinking: false, isTossing: false, isMoving: false,
+        turnCount: 1, pieces: pieces.arr, striker: pieces.striker, scores: { P1: 0, AI: 0 }, showTurnHint: true,
+        gameLog: [], currentShot: null, hasRecorded: false, p1Name, aiName,
+        obstacles: OBSTACLES_MAP[settings.aiDifficulty] || [], isAI
+      };
+      if (settings.firstMove === 'RANDOM') {
+        gameState.isTossing = true; gameState.turn = Math.random() > 0.5 ? 'P1' : 'AI'; render();
+        setTimeout(() => { gameState.isTossing = false; resetStrikerForTurn(true); render(); if (gameState.turn === 'AI' && gameState.isAI) triggerAIWithMinimumDelay(); }, 3500);
+      } else {
+        gameState.turn = settings.firstMove === 'AI' ? 'AI' : 'P1'; resetStrikerForTurn(true); render(); if (gameState.turn === 'AI' && gameState.isAI) triggerAIWithMinimumDelay();
+      }
+      if (animationFrameId) cancelAnimationFrame(animationFrameId); lastFrame = performance.now(); gameLoop(lastFrame);
+    };
+
+    const resolveCollisions = () => {
+      if (!gameState) return;
+      const pieces = gameState.pieces;
+      for (let i = 0; i < pieces.length; i++) {
+        for (let j = i + 1; j < pieces.length; j++) {
+          const a = pieces[i], b = pieces[j]; if (a.isPocketed || b.isPocketed) continue;
+          let dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy), minDist = a.radius + b.radius;
+          if (dist < minDist) {
+            if (dist === 0) { dx = 1; dy = 0; dist = 1; }
+            const nx = dx / dist, ny = dy / dist, overlap = minDist - dist;
+            const ratioA = b.mass / (a.mass + b.mass), ratioB = a.mass / (a.mass + b.mass);
+            a.x -= nx * overlap * ratioA; a.y -= ny * overlap * ratioA; b.x += nx * overlap * ratioB; b.y += ny * overlap * ratioB;
+            const velAlongNormal = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+            if (velAlongNormal > 0) continue;
+            const impulse = -(1 + getLevelConfig().collision) * velAlongNormal / (1 / a.mass + 1 / b.mass);
+            a.vx -= (nx * impulse) / a.mass; a.vy -= (ny * impulse) / a.mass; b.vx += (nx * impulse) / b.mass; b.vy += (ny * impulse) / b.mass;
+          }
+        }
+      }
+    };
+
+    const endTurnCheck = () => {
+      const activeTargets = gameState.pieces.filter(p => !p.isPocketed && p.type === 'target').length;
+      let anyMoving = false;
+      for (let p of gameState.pieces) if (!p.isPocketed && Math.hypot(p.vx, p.vy) > 0) anyMoving = true;
+      if (gameState.isMoving && !anyMoving) {
+        gameState.isMoving = false;
+        finishShotLog();
+        if (activeTargets === 0) {
+          if (gameState.scores.P1 === gameState.scores.AI) gameState.winner = 'DRAW';
+          else gameState.winner = gameState.scores.P1 > gameState.scores.AI ? 'P1' : 'AI';
+          recordFinishedGame(); updateStatusDOM(); render(); return;
+        }
+        gameState.turn = gameState.turn === 'P1' ? 'AI' : 'P1';
+        if (gameState.turn === 'P1') gameState.turnCount++;
+        const cs = gameState.currentShot || { pocketed: [], penalty: 0 };
+        const needsReset = (cs.pocketed && cs.pocketed.length > 0) || (cs.penalty && cs.penalty > 0);
+        resetStrikerForTurn(needsReset); updateStatusDOM();
+        if (gameState.turn === 'AI' && gameState.isAI) triggerAIWithMinimumDelay();
+      } else if (anyMoving) gameState.isMoving = true;
+    };
+
+    const finishShotLog = () => {
+      if (!gameState.currentShot) return;
+      const shot = gameState.currentShot;
+      const after = cloneState(gameState.scores);
+      const gain = after[shot.turn] - shot.before[shot.turn];
+      gameState.gameLog.push({ turn: shot.turn, pocketed: shot.pocketed.slice(), penalty: shot.penalty, gain, scores: after, turnCount: gameState.turnCount });
+    };
+
+    const predictSimpleShotScore = (target, pocket) => {
+      const dx = pocket.x - target.x, dy = pocket.y - target.y, dist = Math.hypot(dx, dy) || 1;
+      const nx = dx / dist, ny = dy / dist;
+      const ix = target.x - nx * (target.radius + gameState.striker.radius + 2);
+      const iy = target.y - ny * (target.radius + gameState.striker.radius + 2);
+      const sdx = ix - gameState.striker.x, sdy = iy - gameState.striker.y, sdist = Math.hypot(sdx, sdy) || 1;
+      const cfg = getLevelConfig();
+      const diff = cfg.diff;
+      const radiusPenalty = target.radius * (13 - diff) * 0.8;
+      return { score: target.value * 7 - dist * 0.5 - sdist * 0.45 - radiusPenalty, ix, iy, sdist };
+    };
+
+    const calculateAIShot = () => {
+      const targets = gameState.pieces.filter(p => !p.isPocketed && p.type === 'target');
+      let best = null;
+      for (const t of targets) {
+        for (const pocket of pockets) {
+          const data = predictSimpleShotScore(t, pocket);
+          const cfg = getLevelConfig();
+          const noise = (Math.random() * 2 - 1) * cfg.aiNoise;
+          const total = data.score + noise;
+          if (!best || total > best.score) best = { score: total, target: t, pocket, ...data };
+        }
+      }
+      if (!best) return { vx: (Math.random() - 0.5) * 16, vy: (Math.random() - 0.5) * 16 };
+      let dx = best.ix - gameState.striker.x, dy = best.iy - gameState.striker.y, dist = Math.hypot(dx, dy) || 1;
+      const cfg = getLevelConfig();
+      const aimError = cfg.aiError;
+      const angle = Math.atan2(dy, dx) + (Math.random() * 2 - 1) * aimError;
+      const power = Math.min(27, 11.5 + dist * 0.050 + best.target.mass * 0.95) * cfg.aiPower;
+      return { vx: Math.cos(angle) * power, vy: Math.sin(angle) * power };
+    };
+
+    const getAIDelay = () => getLevelConfig().aiDelay;
+    const triggerAIWithMinimumDelay = () => {
+      gameState.isThinking = true; render();
+      requestAnimationFrame(() => {
+        const start = performance.now(); const shot = calculateAIShot(); const elapsed = performance.now() - start; const wait = Math.max(0, getAIDelay() - elapsed);
+        setTimeout(() => {
+          if (!gameState || gameState.winner || gameState.turn !== 'AI') return;
+          gameState.striker.vx = shot.vx; gameState.striker.vy = shot.vy; gameState.isThinking = false; gameState.isMoving = true; updateStatusDOM();
+        }, wait);
+      });
+    };
+
+    const gameLoop = (time) => {
+      const dt = Math.min(2, (time - lastFrame) / 16.67 || 1); lastFrame = time;
+      if (gameState && !gameState.winner && !gameState.isTossing) {
+        gameState.pieces.forEach(p => p.update(dt));
+        for (let i = 0; i < 3; i++) resolveCollisions();
+        endTurnCheck();
+      }
+      drawCanvas();
+      animationFrameId = requestAnimationFrame(gameLoop);
+    };
+
+    const roundedRectPath = (ctx, x, y, w, h, r) => {
+      const radius = Math.min(r, w / 2, h / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + w - radius, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+      ctx.lineTo(x + w, y + h - radius);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+      ctx.lineTo(x + radius, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+    };
+
+    const drawBoard = (ctx) => {
+      const r = 40 / Math.max(canvasScale, 0.1);
+      const inset = 1.5 / Math.max(canvasScale, 0.1);
+      ctx.save();
+      roundedRectPath(ctx, inset, inset, LOGICAL_SIZE - inset * 2, LOGICAL_SIZE - inset * 2, r);
+      ctx.fillStyle = '#050505';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.24)';
+      ctx.lineWidth = 1.6 / Math.max(canvasScale, 0.1);
+      ctx.stroke();
+      ctx.restore();
+
+      pockets.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, POCKET_RADIUS, 0, Math.PI * 2);
+        ctx.fillStyle = '#202020';
+        ctx.fill();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+        ctx.stroke();
+      });
+      if (gameState && gameState.obstacles) {
+        for (const obs of gameState.obstacles) {
+          ctx.beginPath();
+          ctx.arc(obs.x, obs.y, obs.radius, 0, Math.PI * 2);
+          ctx.fillStyle = '#272a30';
+          ctx.fill();
+          ctx.lineWidth = 1.2;
+          ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(obs.x, obs.y, Math.max(7, obs.radius * 0.32), 0, Math.PI * 2);
+          ctx.fillStyle = 'rgba(255,255,255,0.08)';
+          ctx.fill();
+        }
+      }
+    };
+
+    const drawTurnHint = (ctx) => {
+      if (!gameState || !gameState.showTurnHint || gameState.isMoving || gameState.winner || gameState.isTossing) return;
+      const s = gameState.striker;
+      if (!s || s.isPocketed) return;
+      const label = gameState.turn === 'P1' ? (gameState.isAI ? 'YOUR TURN' : 'P1 TURN') : (gameState.isAI ? (gameState.isThinking ? 'AI THINKING' : 'AI TURN') : 'P2 TURN');
+      const color = gameState.turn === 'P1' ? '#f8fafc' : (gameState.isAI ? '#ef4444' : '#38bdf8');
+      ctx.save();
+      const fade = 0.48 + Math.sin(performance.now() / 420) * 0.24;
+      ctx.font = '300 13px Inter, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillStyle = color; ctx.globalAlpha = fade;
+      ctx.shadowBlur = 3; ctx.shadowColor = color;
+      ctx.fillText(label, s.x, s.y - s.radius - 13);
+      ctx.restore();
+    };
+
+    const drawDragIndicator = (ctx) => {
+      if (!drag.isDragging || !gameState || !gameState.striker || gameState.striker.isPocketed) return;
+      const s = gameState.striker, dx = drag.currentX - drag.startX, dy = drag.currentY - drag.startY;
+      const rawDist = Math.hypot(dx, dy);
+      const dist = Math.min(rawDist, MAX_DRAG_DIST); if (dist < 5) return;
+      const angle = Math.atan2(dy, dx);
+      const powerRatio = dist / MAX_DRAG_DIST;
+      const guideLen = 128 + powerRatio * 260;
+      const aimDx = -Math.cos(angle) * guideLen, aimDy = -Math.sin(angle) * guideLen;
+      ctx.save();
+      ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x + aimDx, s.y + aimDy); ctx.setLineDash([8, 11]); ctx.lineCap = 'round'; ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.54)'; ctx.stroke(); ctx.setLineDash([]);
+      for (let i = 1; i <= 3; i++) {
+        const t = i / 4;
+        ctx.beginPath(); ctx.arc(s.x + aimDx * t, s.y + aimDy * t, 2.4 + i * 0.8, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${0.26 + powerRatio * 0.22})`; ctx.fill();
+      }
+      ctx.beginPath(); ctx.arc(s.x + aimDx, s.y + aimDy, 5, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.shadowBlur = 8; ctx.shadowColor = '#fff'; ctx.fill(); ctx.shadowBlur = 0;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.radius + 8 + powerRatio * 24, 0, Math.PI * 2); ctx.lineWidth = 2; ctx.strokeStyle = `rgba(255,255,255,${0.16 + powerRatio * 0.44})`; ctx.stroke();
+      ctx.restore();
+    };
+
+    const drawCanvas = () => {
+      const canvas = document.getElementById('gameCanvas'); if (!canvas || !gameState) return;
+      const ctx = canvas.getContext('2d'); const dpr = window.devicePixelRatio || 1;
+      ctx.save(); ctx.setTransform(dpr * canvasScale, 0, 0, dpr * canvasScale, 0, 0); ctx.clearRect(0, 0, LOGICAL_SIZE, LOGICAL_SIZE);
+      drawBoard(ctx); gameState.pieces.forEach(p => p.draw(ctx)); drawTurnHint(ctx); drawDragIndicator(ctx); ctx.restore();
+    };
+
+    const getPointerPos = (e, canvas) => {
+      const rect = canvas.getBoundingClientRect();
+      const cx = e.clientX ?? (e.touches && e.touches[0]?.clientX); const cy = e.clientY ?? (e.touches && e.touches[0]?.clientY);
+      return { x: (cx - rect.left) / canvasScale, y: (cy - rect.top) / canvasScale };
+    };
+    const setupCanvasEvents = () => {
+      const canvas = document.getElementById('gameCanvas'); if (!canvas || canvas.dataset.ready === '1') return; canvas.dataset.ready = '1';
+      const onDown = e => {
+        if (!gameState || gameState.isMoving || gameState.isThinking || gameState.winner || gameState.isTossing) return;
+        if (gameState.isAI && gameState.turn !== 'P1') return;
+        const pos = getPointerPos(e, canvas); const s = gameState.striker;
+        if (s && !s.isPocketed && Math.hypot(pos.x - s.x, pos.y - s.y) <= s.radius * 3.4) { gameState.showTurnHint = false; drag.isDragging = true; drag.startX = s.x; drag.startY = s.y; drag.currentX = pos.x; drag.currentY = pos.y; if (e.cancelable) e.preventDefault(); }
+      };
+      const onMove = e => { if (!drag.isDragging) return; if (e.cancelable) e.preventDefault(); const pos = getPointerPos(e, canvas); drag.currentX = pos.x; drag.currentY = pos.y; };
+      const onUp = e => {
+        if (!drag.isDragging) return; drag.isDragging = false;
+        const dx = drag.currentX - drag.startX, dy = drag.currentY - drag.startY, dist = Math.hypot(dx, dy);
+        if (dist > 9) { const clamped = Math.min(dist, MAX_DRAG_DIST), angle = Math.atan2(dy, dx); const curvedPower = Math.pow(clamped / MAX_DRAG_DIST, 1.18) * MAX_DRAG_DIST * POWER_MULTIPLIER; gameState.striker.vx = -Math.cos(angle) * curvedPower; gameState.striker.vy = -Math.sin(angle) * curvedPower; gameState.isMoving = true; updateStatusDOM(); }
+      };
+      canvas.addEventListener('pointerdown', onDown, { passive: false }); window.addEventListener('pointermove', onMove, { passive: false }); window.addEventListener('pointerup', onUp, { passive: true }); window.addEventListener('pointercancel', onUp, { passive: true });
+    };
+
+    window.openMenu = () => { drag.isDragging = false; pendingSettings = cloneState(settings); isMenuOpen = true; isRecordOpen = false; selectedHistoryMatch = null; render(); };
+    window.cancelMenu = () => { isMenuOpen = false; render(); };
+    window.toggleRecord = () => { isRecordOpen = !isRecordOpen; selectedHistoryMatch = null; render(); };
+    window.viewMatchDetail = (id) => { selectedHistoryMatch = matchHistory.find(m => m.id === id); render(); };
+    window.clearRecords = () => { if (!confirm('清除所有對戰紀錄？')) return; matchHistory = []; saveHistory(); render(); };
+    window.setSetting = (key, value) => { pendingSettings[key] = value; if (key === 'mode') { render(); } else { updateMenuDOM(); } };
+    window.setDifficulty = (val) => { pendingSettings.aiDifficulty = val; updateMenuDOM(); };
+    window.setPlayerName = (key, value) => { pendingSettings[key] = value; };
+
+    const updateMenuDOM = () => {
+      ['PLAYER','AI','RANDOM'].forEach(v => { const el = document.getElementById(`btn-fm-${v}`); if (el) el.className = `flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === v ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}`; });
+      for (let i = 1; i <= 4; i++) { const btn = document.getElementById(`btn-diff-${i}`); if (btn) btn.className = `flex items-center justify-center py-2 lg:py-2.5 rounded text-[12px] lg:text-[14px] transition-colors key-base ${i === pendingSettings.aiDifficulty ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900 hover:text-white'}`; }
+      ['1P','2P'].forEach(v => { const el = document.getElementById(`btn-mode-${v}`); if (el) el.className = `flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.mode === v ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}`; });
+      const diffLabel = document.getElementById('ai-diff-label'); if (diffLabel) diffLabel.innerText = `LV.${pendingSettings.aiDifficulty}`;
+    };
+
+    const getMenuHTML = () => {
+      if (!isMenuOpen) return '';
+      const closeBtn = gameState ? `<button onclick="window.cancelMenu()" class="text-white text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-neutral-300 transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white" onerror="this.outerHTML='✕'"></button>` : `<div class="h-[12px] lg:h-[15px] pt-1 lg:pt-1.5"></div>`;
+      let diffGrid = '<div class="grid grid-cols-4 gap-1.5 lg:gap-2 w-full mt-1">';
+      for (let i = 1; i <= 4; i++) diffGrid += `<button id="btn-diff-${i}" onclick="window.setDifficulty(${i})" class="flex items-center justify-center py-2 lg:py-2.5 rounded text-[12px] lg:text-[14px] transition-colors key-base ${i === pendingSettings.aiDifficulty ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900 hover:text-white'}">${i}</button>`;
+      diffGrid += '</div>';
+      const singlePlayer = pendingSettings.mode === '1P';
+      const nameInputs = singlePlayer
+        ? `<input type="text" value="${pendingSettings.player1Name}" oninput="window.setPlayerName('player1Name', this.value)" placeholder="你的名字" class="w-full bg-[#111] border border-neutral-800 rounded-lg py-3.5 px-4 text-[12px] lg:text-[14px] text-white text-center focus:outline-none focus:border-neutral-500 transition-colors placeholder-neutral-600 font-medium tracking-widest">`
+        : `<input type="text" value="${pendingSettings.player1Name}" oninput="window.setPlayerName('player1Name', this.value)" placeholder="玩家一" class="flex-1 min-w-0 bg-[#111] border border-neutral-800 rounded-lg py-3.5 px-4 text-[12px] lg:text-[14px] text-white text-center focus:outline-none focus:border-neutral-500 transition-colors placeholder-neutral-600 font-medium tracking-widest"><input type="text" value="${pendingSettings.player2Name}" oninput="window.setPlayerName('player2Name', this.value)" placeholder="玩家二" class="flex-1 min-w-0 bg-[#111] border border-neutral-800 rounded-lg py-3.5 px-4 text-[12px] lg:text-[14px] text-white text-center focus:outline-none focus:border-neutral-500 transition-colors placeholder-neutral-600 font-medium tracking-widest">`;
+      return `
+        <div id="menu-layer" class="fixed inset-0 z-50 bg-black flex flex-col overflow-y-auto ${menuJustOpened ? 'animate-fade-in' : ''}">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+            <a href="index.html" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] hover:text-white transition-colors pt-1 lg:pt-1.5 flex items-center gap-1.5 key-base" style="text-decoration:none;"><img src="./assets/gamehub.svg" alt="Hub" class="h-[12px] opacity-70 icon-white" onerror="this.style.display='none'"> 返回遊戲大堂</a>
+            ${closeBtn}
+          </header>
+          <div class="flex-1 flex flex-col items-center justify-center gap-6 pb-10 px-6 w-full mt-4 lg:mt-0">
+            <div class="flex flex-col items-center justify-center gap-3 mb-2">
+              <img src="./assets/Logo.svg" alt="LOGO" class="h-[22px] lg:h-[28px] object-contain opacity-90 icon-white" onerror="this.style.display='none'">
+              <div class="text-white tracking-[0.4em] text-[15px] lg:text-[18px] font-light opacity-60">康樂棋</div>
+            </div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase w-full flex justify-between"><span>AI DIFFICULTY</span><span id="ai-diff-label" class="text-white font-bold">LV.${pendingSettings.aiDifficulty}</span></div>
+              ${diffGrid}
+            </div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase w-full text-center">GAME MODE</div>
+              <div class="flex w-full gap-2">
+                <button id="btn-mode-1P" onclick="window.setSetting('mode','1P')" class="flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.mode === '1P' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">單人</button>
+                <button id="btn-mode-2P" onclick="window.setSetting('mode','2P')" class="flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.mode === '2P' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">雙人</button>
+              </div>
+            </div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase w-full text-center">${singlePlayer ? 'PLAYER NAME' : 'PLAYER NAMES'}</div>
+              <div class="flex w-full gap-2">${nameInputs}</div>
+            </div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3 mt-1">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase">FIRST MOVE</div>
+              <div class="flex w-full gap-2">
+                <button id="btn-fm-PLAYER" onclick="window.setSetting('firstMove','PLAYER')" class="flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === 'PLAYER' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">先攻</button>
+                <button id="btn-fm-AI" onclick="window.setSetting('firstMove','AI')" class="flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === 'AI' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">後攻</button>
+                <button id="btn-fm-RANDOM" onclick="window.setSetting('firstMove','RANDOM')" class="flex-1 py-3.5 lg:py-4 rounded-lg text-[11px] lg:text-[14px] tracking-[0.15em] uppercase key-base ${pendingSettings.firstMove === 'RANDOM' ? 'bg-white text-black font-bold' : 'bg-black text-white font-medium border border-neutral-800 hover:bg-neutral-900'}">隨機</button>
+              </div>
+            </div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] mt-2"><button onclick="window.initGame()" class="w-full bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black py-4 lg:py-5 rounded-lg font-bold tracking-[0.15em] text-[12px] lg:text-[16px] uppercase key-base">${gameState ? 'RESTART 重新開始' : '開始新局'}</button></div>
+          </div>
+        </div>`;
+    };
+
+    const getRecordHTML = () => {
+      if (!isRecordOpen) return '';
+      const closeBtn = `<button onclick="window.toggleRecord()" class="p-2"><img src="./assets/close.svg" class="h-[13px] icon-white" onerror="this.outerHTML='✕'"></button>`;
+      if (selectedHistoryMatch) {
+        const m = selectedHistoryMatch;
+        const rows = (m.gameLog || []).map((log, i) => {
+          const name = log.turn === 'P1' ? m.p1Name : m.aiName;
+          const pocket = log.pocketed?.length ? log.pocketed.join(' + ') : '—';
+          const penalty = log.penalty ? ` / 罰 ${log.penalty}` : '';
+          return `<div class="py-3 border-b border-neutral-900 text-[12px] lg:text-[13px] text-neutral-300 flex justify-between gap-4"><span>${i + 1}. ${name}</span><span class="text-right">入袋 ${pocket}${penalty}<br><span class="text-neutral-500">${m.p1Name} ${log.scores.P1} : ${log.scores.AI} ${m.aiName}</span></span></div>`;
+        }).join('') || `<div class="text-neutral-500 text-center py-10">沒有詳細記錄</div>`;
+        return `<div class="fixed inset-0 z-[60] bg-black/95 flex flex-col animate-fade-in"><header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex justify-between items-center"><button onclick="selectedHistoryMatch=null; render()" class="p-2"><img src="./assets/back.svg" class="h-[15px] icon-white" onerror="this.outerHTML='←'"></button>${closeBtn}</header><main class="flex-1 overflow-y-auto px-6 pb-10 max-w-[620px] w-full mx-auto hide-scrollbar"><div class="border border-neutral-800 bg-[#111] rounded-xl p-5 mb-5"><div class="text-white font-bold text-lg tracking-widest mb-3">${m.winnerName} ${m.winner === 'DRAW' ? '' : '獲勝'}</div><div class="text-neutral-400 text-sm leading-7"><span class="text-white">${m.p1Name}</span> ${m.scores.P1} : ${m.scores.AI} <span class="text-red-400">${m.aiName}</span><br>LV.${m.settings?.aiDifficulty || 5}　回合 ${m.turnCount || 1}<br>${m.timestamp}</div></div>${rows}</main></div>`;
+      }
+      const list = matchHistory.map(m => `<button onclick="window.viewMatchDetail(${m.id})" class="w-full text-left border border-neutral-800 bg-[#111] rounded-xl p-4 key-base hover:border-neutral-600"><div class="flex justify-between gap-4"><div><div class="text-white font-bold tracking-widest">${m.winnerName} ${m.winner === 'DRAW' ? '' : '獲勝'}</div><div class="text-neutral-500 text-xs mt-1">${m.p1Name} ${m.scores.P1} : ${m.scores.AI} ${m.aiName}</div></div><div class="text-neutral-600 text-xs text-right">LV.${m.settings?.aiDifficulty || 5}<br>${m.turnCount || 1} 回合</div></div></button>`).join('') || `<div class="text-neutral-500 text-center py-16">暫時未有對戰記錄</div>`;
+      return `<div class="fixed inset-0 z-[60] bg-black/95 flex flex-col animate-fade-in"><header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex justify-between items-center"><div class="text-white font-bold tracking-[0.25em]">MATCH RECORD</div>${closeBtn}</header><main class="flex-1 overflow-y-auto px-6 pb-10 max-w-[620px] w-full mx-auto hide-scrollbar"><div class="flex flex-col gap-3">${list}</div></main></div>`;
+    };
+
+    const updateStatusDOM = () => {
+      if (!gameState) return;
+      const p1 = document.getElementById('score-p1'), ai = document.getElementById('score-ai'), turn = document.getElementById('turn-indicator');
+      if (p1) p1.innerText = gameState.scores.P1; if (ai) ai.innerText = gameState.scores.AI;
+      if (turn && !gameState.winner) {
+        if (gameState.turn === 'P1') turn.innerHTML = `<span class="text-white font-bold tracking-widest">${gameState.isAI ? 'YOU TURN' : 'PLAYER 1 TURN'}</span>`;
+        else if (gameState.isAI) turn.innerHTML = gameState.isThinking ? `<span class="text-red-400 font-bold tracking-widest animate-thinking">AI THINKING</span>` : `<span class="text-red-400 font-bold tracking-widest">AI TURN</span>`;
+        else turn.innerHTML = `<span class="text-sky-400 font-bold tracking-widest">PLAYER 2 TURN</span>`;
+      }
+    };
+
+    const render = () => {
+      const app = document.getElementById('app');
+      if (!gameState) { app.innerHTML = getMenuHTML(); menuJustOpened = false; return; }
+      const coinLabelP1 = gameState.isAI ? 'YOU' : 'P1';
+      const coinLabelP2 = gameState.isAI ? 'AI' : 'P2';
+      const firstLabel = gameState.turn === 'P1' ? (gameState.isAI ? 'PLAYER FIRST' : 'PLAYER 1 FIRST') : (gameState.isAI ? 'AI FIRST' : 'PLAYER 2 FIRST');
+      const tossHTML = gameState.isTossing ? `<div class="fixed inset-0 z-[70] bg-black/95 flex flex-col items-center justify-center"><div class="coin-scene mb-12"><div class="coin-wrapper ${gameState.turn === 'P1' ? 'anim-flip-p1' : 'anim-flip-ai'}"><div class="coin-face coin-p1">${coinLabelP1}</div><div class="coin-face coin-ai">${coinLabelP2}</div></div></div><div class="text-white font-bold tracking-[0.3em] text-[18px] opacity-0 anim-fade-in-delayed uppercase">${firstLabel}</div></div>` : '';
+      const winnerLabel = gameState.winner === 'DRAW' ? 'DRAW' : (gameState.winner === 'P1' ? (gameState.isAI ? 'YOU WIN' : 'PLAYER 1 WIN') : (gameState.isAI ? 'AI WINS' : 'PLAYER 2 WIN'));
+      const winnerColor = gameState.winner === 'AI' ? (gameState.isAI ? 'text-red-400' : 'text-sky-400') : 'text-white';
+      const overlay = gameState.winner ? `<div class="absolute inset-0 z-40 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center animate-fade-in rounded-xl"><div class="text-4xl font-black tracking-widest mb-2 ${winnerColor}">${winnerLabel}</div><div class="text-neutral-400 tracking-widest mb-8">${gameState.p1Name} ${gameState.scores.P1} : ${gameState.scores.AI} ${gameState.aiName}</div><button onclick="window.initGame()" class="px-8 py-3 bg-white text-black font-bold tracking-[0.1em] rounded-full hover:bg-neutral-200 transition-colors">再玩一次</button></div>` : '';
+      const p1Label = gameState.p1Name || '玩家';
+      const oppClass = gameState.isAI ? 'text-red-400' : 'text-sky-400';
+      app.innerHTML = `
+        ${getMenuHTML()}${getRecordHTML()}${tossHTML}
+        <div class="w-full h-full bg-black flex flex-col overflow-hidden relative">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0"><div class="flex items-center"><img src="./assets/Logo.svg" alt="LOGO" class="h-[19px] lg:h-[25px] object-contain opacity-90 icon-white" onerror="this.style.display='none'"></div><div class="flex items-center gap-4 lg:gap-6"><button onclick="window.initGame()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/back.svg" alt="RESTART" class="h-[14px] lg:h-[18px] icon-white" onerror="this.outerHTML='↶'"></button><button onclick="window.toggleRecord()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/record.svg" alt="REC" class="h-[16px] lg:h-[22px] icon-white" onerror="this.outerHTML='◷'"></button><button onclick="window.openMenu()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/setting.svg" alt="SET" class="h-[14px] lg:h-[18px] icon-white" onerror="this.outerHTML='⚙'"></button></div></header>
+          <div class="game-stage relative z-10">
+            <div class="game-meta">
+              <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase">
+                康樂棋<br>
+                ${gameState.turn === 'P1' ? (gameState.isAI ? '先攻' : '玩家一') : (gameState.isAI ? '後攻' : '玩家二')}<br>
+                <span class="text-white font-bold">LV.${settings.aiDifficulty}</span> <span class="mx-2 opacity-50">|</span> 回合 ${gameState.turnCount}
+              </div>
+              <section class="score-panel meta-score flex flex-col items-start">
+                <div class="score-row pointer-events-auto">
+                  <div class="score-pill"><div class="score-label text-white font-normal">${p1Label}</div><div id="score-p1" class="text-white score-number text-[21px] lg:text-[34px] leading-none font-light">${gameState.scores.P1}</div></div>
+                  <div class="score-divider" aria-hidden="true"></div>
+                  <div class="score-pill"><div class="score-label text-white font-normal">${gameState.aiName}</div><div id="score-ai" class="text-white score-number text-[21px] lg:text-[34px] leading-none font-light">${gameState.scores.AI}</div></div>
+                </div>
+                <div id="turn-indicator" class="hidden"></div>
+              </section>
+            </div>
+            <main class="board-stage"><div class="board-frame"><canvas id="gameCanvas" class="strike-board"></canvas><div id="score-pop-layer" class="absolute inset-0 pointer-events-none z-[4]"></div>${overlay}<div class="mt-6 text-[9px] lg:text-[10px] text-neutral-500 tracking-[0.34em] uppercase text-center select-none">Drag to aim. Release to shoot</div></div></main>
+            <aside class="side-panel hidden flex-col justify-center pr-12 pointer-events-none"><div class="text-neutral-500 font-bold tracking-[0.2em] text-sm mb-5">TARGETS</div><div class="flex flex-col gap-4 text-sm"><div class="text-[#C9D64A]">100 PTS — largest, hardest</div><div class="text-[#D8902D]">50 PTS — heavy</div><div class="text-[#D94678]">20 PTS — medium</div><div class="text-[#A4A8B5]">10 PTS — easiest</div><div class="text-neutral-500 mt-3">Trap pocket: -${PENALTY_SCORE}</div><div class="text-red-900">Obstacle — solid block</div></div></aside>
+          </div>
+        </div>`;
+      updateStatusDOM(); setupCanvasSize(); setupCanvasEvents(); renderScorePopups(); menuJustOpened = false;
+    };
+
+    const setupCanvasSize = () => {
+      const canvas = document.getElementById('gameCanvas'); if (!canvas) return;
+      const rect = canvas.getBoundingClientRect(); const size = Math.min(rect.width, rect.height); const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(size * dpr); canvas.height = Math.round(size * dpr); canvasScale = size / LOGICAL_SIZE; drawCanvas();
+    };
+
+    window.onload = () => { loadHistory(); render(); };
+    window.addEventListener('resize', () => { if (gameState) setupCanvasSize(); });
+  </script>
+</body>
+</html>

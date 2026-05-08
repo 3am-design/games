@@ -94,9 +94,9 @@
                 <div class="absolute w-[150%] h-[1px] bg-red-900/30 rotate-45"></div>
                 <div class="absolute w-[150%] h-[1px] bg-red-900/30 -rotate-45"></div>
                 
-                <!-- 線框棋子 -->
+                <!-- 線框棋子 (帥字再上移) -->
                 <div class="absolute w-[36px] h-[36px] lg:w-[46px] lg:h-[46px] bg-[#111] rounded-full border-[2px] border-red-500 flex items-center justify-center shadow-[0_0_12px_rgba(239,68,68,0.4)] z-10">
-                    <span class="text-red-500 font-tc text-[18px] lg:text-[22px] font-bold drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] leading-none mt-[2px]">帥</span>
+                    <span class="text-red-500 font-tc text-[18px] lg:text-[22px] font-bold drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] leading-none -mt-[1px]">帥</span>
                 </div>
             </div>
             
@@ -122,10 +122,11 @@
             
             <div class="flex flex-col items-center mt-2">
                 <span class="text-white font-tc font-bold text-[16px] lg:text-[18px] tracking-wider">黑白棋</span>
-                <span class="text-neutral-500 text-[9px] lg:text-[11px] tracking-[0.2em] uppercase mt-1">Reversi / Othello</span>
+                <span class="text-neutral-500 text-[9px] lg:text-[11px] tracking-[0.2em] uppercase mt-1">Reversi</span>
             </div>
         </a>
 
+        <!-- Game 3: 五子棋 (Gomoku) -->
         <!-- Game 3: 五子棋 (Gomoku) -->
         <a href="gomoku.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-3 overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
@@ -153,18 +154,34 @@
         <a href="four.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-4 overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             
-            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-blue-900/50 rounded-xl overflow-hidden">
-                <!-- 四子棋支架線條 -->
-                <div class="absolute inset-0 flex justify-evenly px-1"><div class="h-full w-[1px] bg-blue-600/30"></div><div class="h-full w-[1px] bg-blue-600/30"></div><div class="h-full w-[1px] bg-blue-600/30"></div></div>
-                <!-- 棋子 (雙色線圈連線) -->
-                <div class="absolute w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] bg-transparent rounded-full border-2 border-red-500 translate-x-[-15px] translate-y-[15px]"></div>
-                <div class="absolute w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] bg-transparent rounded-full border-2 border-yellow-400 translate-x-[0px] translate-y-[15px]"></div>
-                <div class="absolute w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] bg-transparent rounded-full border-2 border-red-500 translate-x-[15px] translate-y-[15px] shadow-[0_0_8px_rgba(239,68,68,0.4)]"></div>
+            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-end justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-blue-900/50 rounded-xl overflow-hidden pb-[4px] lg:pb-[6px]">
+                <!-- 直向支架線 -->
+                <div class="absolute inset-0 flex justify-evenly px-1">
+                    <div class="h-full w-[1px] bg-blue-600/30"></div>
+                    <div class="h-full w-[1px] bg-blue-600/30"></div>
+                    <div class="h-full w-[1px] bg-blue-600/30"></div>
+                </div>
                 
-                <div class="absolute w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] bg-transparent rounded-full border-2 border-yellow-400 translate-x-[-15px] translate-y-[0px]"></div>
-                <div class="absolute w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] bg-transparent rounded-full border-2 border-red-500 translate-x-[0px] translate-y-[0px]"></div>
-                
-                <div class="absolute w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] bg-transparent rounded-full border-2 border-yellow-400 translate-x-[-15px] translate-y-[-15px]"></div>
+                <!-- 獨立圓形棋子排版 (無框中框) -->
+                <div class="grid grid-cols-4 gap-[3px] lg:gap-1 w-[80%] relative z-10">
+                    <!-- 頂層空白格 -->
+                    <div class="w-full aspect-square"></div>
+                    <div class="w-full aspect-square"></div>
+                    <div class="w-full aspect-square"></div>
+                    <div class="w-full aspect-square"></div>
+                    
+                    <!-- 中層 -->
+                    <div class="w-full aspect-square"></div>
+                    <div class="w-full aspect-square bg-yellow-400 rounded-full shadow-[0_0_5px_rgba(250,204,21,0.5)]"></div>
+                    <div class="w-full aspect-square bg-red-500 rounded-full shadow-[0_0_5px_rgba(239,68,68,0.5)]"></div>
+                    <div class="w-full aspect-square"></div>
+                    
+                    <!-- 底層 -->
+                    <div class="w-full aspect-square bg-yellow-400 rounded-full shadow-[0_0_5px_rgba(250,204,21,0.5)]"></div>
+                    <div class="w-full aspect-square bg-red-500 rounded-full shadow-[0_0_5px_rgba(239,68,68,0.5)]"></div>
+                    <div class="w-full aspect-square bg-red-500 rounded-full shadow-[0_0_5px_rgba(239,68,68,0.5)]"></div>
+                    <div class="w-full aspect-square bg-yellow-400 rounded-full shadow-[0_0_5px_rgba(250,204,21,0.5)]"></div>
+                </div>
             </div>
             
             <div class="flex flex-col items-center mt-2">
@@ -186,8 +203,8 @@
                 <div class="absolute w-[14px] h-[22px] lg:w-[18px] lg:h-[28px] bg-cyan-900/40 border border-cyan-800/60 translate-x-[-14px] lg:translate-x-[-18px] rounded-sm"></div>
                 <div class="absolute w-[14px] h-[22px] lg:w-[18px] lg:h-[28px] bg-cyan-900/40 border border-cyan-800/60 translate-x-[14px] lg:translate-x-[18px] rounded-sm"></div>
                 
-                <!-- 棋子 (猛獸對峙) -->
-                <div class="absolute w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] bg-[#111] border-[2px] border-emerald-500 rounded-full translate-x-[-14px] translate-y-[-20px] lg:translate-x-[-18px] lg:translate-y-[-26px] shadow-[0_0_10px_rgba(16,185,129,0.5)] z-10"></div>
+                <!-- 棋子 (猛獸對峙) - 將綠圈改為白圈 -->
+                <div class="absolute w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] bg-[#111] border-[2px] border-white rounded-full translate-x-[-14px] translate-y-[-20px] lg:translate-x-[-18px] lg:translate-y-[-26px] shadow-[0_0_10px_rgba(255,255,255,0.5)] z-10"></div>
                 <div class="absolute w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] bg-[#111] border-[2px] border-rose-500 rounded-full translate-x-[14px] translate-y-[20px] lg:translate-x-[18px] lg:translate-y-[26px] shadow-[0_0_10px_rgba(244,63,94,0.5)] z-10"></div>
             </div>
             
@@ -271,19 +288,35 @@
             </div>
         </a>
 
-        <!-- Karina 新增 Game 8: 開發中 -->
-        <div class="game-card disabled relative bg-[#0a0a0a] border border-neutral-800/50 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 animate-fade-in stagger-6 overflow-hidden opacity-60">
-            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center bg-[#111] border-2 border-neutral-800 rounded-xl overflow-hidden">
-                <!-- 虛線外框代表建設中 -->
-                <div class="absolute inset-2 border border-dashed border-neutral-600 rounded-lg"></div>
-                <span class="text-neutral-500 font-inter text-[20px] lg:text-[24px] font-bold tracking-widest translate-y-[-2px]">...</span>
+        <!-- Karina 新增 Game 8: 分數狙擊 (Carrom Zoom-in 版) -->
+        <a href="carrom.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-6 overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#322EFF] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            
+            <!-- 分數狙擊 Icon (Karina 優化：Zoom In 視角，聚焦角落入洞瞬間) -->
+            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-[#322EFF]/40 rounded-xl overflow-hidden">
+                
+                <!-- Zoom-in 棋盤角落線條 (斜線點綴) -->
+                <div class="absolute top-[15%] right-[-15%] w-[130%] h-[1px] bg-[#322EFF]/30 rotate-45"></div>
+                <div class="absolute top-[25%] right-[-15%] w-[130%] h-[1px] bg-[#322EFF]/10 rotate-45"></div>
+                
+                <!-- 右上角特寫球洞 (Pocket) -->
+                <div class="absolute top-[-8px] right-[-8px] w-[28px] h-[28px] lg:w-[36px] lg:h-[36px] bg-[#050505] rounded-full border-[2px] border-[#322EFF]/60 shadow-[inset_0_4px_8px_rgba(0,0,0,0.8)] z-0"></div>
+
+                <!-- 靜態干擾棋子 (增加真實感) -->
+                <div class="absolute w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] bg-neutral-600 rounded-full bottom-[20%] right-[25%] border border-neutral-500"></div>
+
+                <!-- 目標紅棋 (被擊中後入右上角洞) -->
+                <div class="absolute w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] bg-rose-500 rounded-full border border-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.6)] top-[35%] right-[35%] z-10 transition-all duration-300 group-hover:top-[2px] group-hover:right-[2px] group-hover:scale-50 group-hover:opacity-0 delay-100"></div>
+
+                <!-- 擊球母子 (Striker，向右上角滑動擊波) -->
+                <div class="absolute w-[14px] h-[14px] lg:w-[20px] lg:h-[20px] bg-[#322EFF] rounded-full border-[2px] border-white/60 shadow-[0_0_10px_rgba(50,46,255,0.8)] bottom-[15%] left-[15%] z-20 transition-all duration-300 group-hover:bottom-[50%] group-hover:left-[50%] group-hover:-translate-x-[2px] group-hover:translate-y-[2px]"></div>
             </div>
             
             <div class="flex flex-col items-center mt-2">
-                <span class="text-neutral-400 font-tc font-bold text-[16px] lg:text-[18px] tracking-wider">開發中</span>
-                <span class="text-neutral-600 text-[9px] lg:text-[11px] tracking-[0.2em] uppercase mt-1">Coming Soon</span>
+                <span class="text-white font-tc font-bold text-[16px] lg:text-[18px] tracking-wider">分數狙擊</span>
+                <span class="text-neutral-500 text-[9px] lg:text-[11px] tracking-[0.2em] uppercase mt-1">Carrom</span>
             </div>
-        </div>
+        </a>
 
         <!-- Karina 新增 Game 9: 開發中 -->
         <div class="game-card disabled relative bg-[#0a0a0a] border border-neutral-800/50 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 animate-fade-in stagger-7 overflow-hidden opacity-60">
