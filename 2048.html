@@ -198,19 +198,34 @@
     }
 
     @media (max-width: 1023px) {
-      .game-info-panel { margin-top: 28px; }
+      .game-info-panel {
+        margin-top: 28px;
+        flex-direction: row !important;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+      }
+      .score-block {
+        margin-top: 0 !important;
+        text-align: right;
+        flex: 0 0 auto;
+      }
+      .score-label { font-size: 12px !important; margin-bottom: 6px !important; }
+      .score-value { font-size: 46px !important; letter-spacing: 0.08em !important; }
       .game-board-stage {
         /* Mobile: center the board against the visible play area, not just the leftover space under the score panel. */
         padding: 0 24px 18px;
-        transform: translateY(-7vh);
+        transform: translateY(-4vh);
       }
-      .game-board-frame { width: min(86vw, 46vh, 440px); }
+      .game-board-frame { width: min(86vw, 50vh, 440px); }
     }
 
     @media (max-width: 1023px) and (max-height: 760px) {
       .game-info-panel { margin-top: 14px; }
-      .game-board-stage { transform: translateY(-4vh); }
-      .game-board-frame { width: min(82vw, 42vh, 400px); }
+      .score-label { font-size: 11px !important; }
+      .score-value { font-size: 40px !important; }
+      .game-board-stage { transform: translateY(-2vh); }
+      .game-board-frame { width: min(84vw, 44vh, 400px); }
     }
 
   </style>
@@ -645,9 +660,9 @@
                 <span class="text-white font-bold tracking-[0.18em]">${MODES[state.mode].label}</span><br>
                 <span class="text-neutral-500">BEST</span> <span id="best-display" class="text-white font-mono tracking-[0.08em]">${state.bestScore}</span>
               </div>
-              <div class="mt-8 lg:mt-10 pointer-events-auto">
-                <div class="text-neutral-500 text-[14px] lg:text-[16px] uppercase tracking-[0.22em] font-sans mb-2">SCORE</div>
-                <div id="score-display" class="text-white font-mono text-[40px] lg:text-[56px] tracking-widest leading-none">${state.score}</div>
+              <div class="score-block mt-8 lg:mt-10 pointer-events-auto">
+                <div class="score-label text-neutral-500 text-[14px] lg:text-[16px] uppercase tracking-[0.22em] font-sans mb-2">SCORE</div>
+                <div id="score-display" class="score-value text-white font-mono text-[40px] lg:text-[56px] tracking-widest leading-none">${state.score}</div>
               </div>
             </section>
 
