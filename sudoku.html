@@ -44,7 +44,29 @@
       touch-action: manipulation;
     }
     
-    .app-container { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    :root { --app-height: 100dvh; --sudoku-board-size: min(calc(100vw - 32px), 440px); }
+    .app-container { height: var(--app-height); display: flex; flex-direction: column; overflow: hidden; }
+
+    .sudoku-board-wrap { width: var(--sudoku-board-size); max-width: 500px; }
+    .sudoku-controls { width: var(--sudoku-board-size); max-width: 400px; }
+
+    @media (min-width: 1024px) {
+      :root { --sudoku-board-size: 500px; }
+      .sudoku-board-wrap { width: 500px; }
+      .sudoku-controls { width: 360px; }
+    }
+
+    @media (max-width: 1023px) {
+      .sudoku-info-wrap { min-height: 58px; }
+      .sudoku-main { gap: 16px; padding-top: 4px; padding-bottom: 10px; }
+      .sudoku-tools { margin-bottom: 10px; }
+    }
+
+    @media (max-width: 1023px) and (max-height: 720px) {
+      .sudoku-main { gap: 12px; padding-bottom: 6px; }
+      .sudoku-info-wrap { min-height: 50px; }
+      .sudoku-tools button { min-height: 44px !important; padding-top: 10px !important; padding-bottom: 10px !important; }
+    }
     button { -webkit-tap-highlight-color: transparent; outline: none; touch-action: manipulation; }
 
     .key-base { transition: background-color 0.2s ease-out, color 0.2s ease-out, border-color 0.2s, opacity 0.2s; }
@@ -77,6 +99,47 @@
     // 遊戲設定
     let settings = { difficulty: 'NORMAL' };
     let pendingSettings = cloneState(settings);
+
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+    const updateSudokuViewport = () => {
+        const vv = window.visualViewport;
+        const vh = Math.floor((vv && vv.height) || window.innerHeight || document.documentElement.clientHeight || 800);
+        document.documentElement.style.setProperty('--app-height', `${vh}px`);
+        return vh;
+    };
+
+    const fitSudokuMobileBoard = () => {
+        const vv = window.visualViewport;
+        const vw = Math.floor((vv && vv.width) || window.innerWidth || document.documentElement.clientWidth || 390);
+        const vh = updateSudokuViewport();
+
+        if (vw >= 1024) {
+            document.documentElement.style.setProperty('--sudoku-board-size', '500px');
+            return;
+        }
+
+        const header = document.querySelector('.sudoku-header');
+        const info = document.querySelector('.sudoku-info-wrap');
+        const tools = document.querySelector('.sudoku-tools');
+        const numpad = document.querySelector('.sudoku-numpad');
+
+        const headerH = header ? header.getBoundingClientRect().height : 54;
+        const infoH = info ? info.getBoundingClientRect().height : 58;
+        const toolsH = tools ? tools.getBoundingClientRect().height : 58;
+        const numpadH = numpad ? numpad.getBoundingClientRect().height : 142;
+
+        // Real available height after actual controls are measured.
+        // 28px covers gaps / breathing room / browser rounding errors.
+        const availableByHeight = vh - headerH - infoH - toolsH - numpadH - 28;
+        const availableByWidth = vw - 32;
+        const nextSize = clamp(Math.floor(Math.min(availableByWidth, availableByHeight, 440)), 230, 440);
+        document.documentElement.style.setProperty('--sudoku-board-size', `${nextSize}px`);
+    };
+
+    window.addEventListener('resize', () => requestAnimationFrame(fitSudokuMobileBoard));
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', () => requestAnimationFrame(fitSudokuMobileBoard));
+    window.addEventListener('orientationchange', () => setTimeout(fitSudokuMobileBoard, 120));
 
     // --- 數獨生成演算法 ---
     // 難度以「空格數」控制，再配合唯一解檢查，避免出現多解題。
@@ -637,7 +700,7 @@
       }
 
       // 控制面板 NumPad
-      let numPadHTML = `<div class="grid grid-cols-5 gap-2 lg:gap-3 w-full max-w-[400px]">`;
+      let numPadHTML = `<div class="sudoku-numpad grid grid-cols-5 gap-2 lg:gap-3 w-full">`;
       for (let i = 1; i <= 9; i++) {
           const isSelectedNum = gameState.selectedNumber === i;
           const btnClass = isSelectedNum 
@@ -653,7 +716,7 @@
       const modeStr = gameState.isNotesMode ? "bg-blue-600/20 border-blue-500/50 text-blue-400 shadow-[0_0_10px_rgba(59,130,246,0.18)]" : "bg-[#111] border-neutral-800 hover:bg-[#1a1a1a] hover:border-neutral-600 text-neutral-400";
       
       const toolsHTML = `
-      <div class="grid grid-cols-3 gap-2 lg:gap-3 w-full max-w-[400px] mb-3 lg:mb-4">
+      <div class="sudoku-tools grid grid-cols-3 gap-2 lg:gap-3 w-full mb-3 lg:mb-4">
           <button onclick="window.useHint()" class="min-h-[48px] lg:min-h-[52px] py-3.5 lg:py-4 flex items-center justify-center rounded-lg bg-[#111] border border-neutral-800 hover:bg-[#1a1a1a] hover:border-neutral-600 transition-colors text-neutral-300 gap-1.5 lg:gap-2 text-[12px] lg:text-[13px] font-medium tracking-[0.12em] uppercase">
              <img src="./assets/ai.svg" alt="HINT" class="h-[16px] lg:h-[18px] object-contain opacity-80 icon-white" onerror="this.outerHTML='💡'"> Hint
           </button>
@@ -671,7 +734,7 @@
         ${getRuleHTML()}
         
         <div class="w-full h-full bg-black relative flex flex-col overflow-hidden">
-          <header class="flex-none pt-4 lg:pt-6 pb-2 px-4 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+          <header class="sudoku-header flex-none pt-4 lg:pt-6 pb-2 px-4 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
             <div class="flex items-center"><img src="./assets/Logo.svg" alt="LOGO" class="h-[19px] lg:h-[25px] object-contain opacity-90 icon-white" onerror="this.style.display='none'"></div>
             <div class="flex items-center gap-4 lg:gap-6">
               <button onclick="window.toggleRule()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base text-white text-[13px] lg:text-[15px] font-medium tracking-[0.1em]">玩法</button>
@@ -680,24 +743,24 @@
             </div>
           </header>
           
-          <div class="px-4 lg:px-12 lg:absolute lg:top-[85px] lg:left-0 z-20 pointer-events-none mt-1 lg:mt-0 flex flex-col items-start w-full lg:w-auto">
+          <div class="sudoku-info-wrap px-4 lg:px-12 lg:absolute lg:top-[85px] lg:left-0 z-20 pointer-events-none mt-1 lg:mt-0 flex flex-row lg:flex-col items-end lg:items-start justify-between w-full lg:w-auto">
             <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase text-left">
               數獨<br>
               難度 <span class="text-white">${DIFFICULTY_CONFIG[settings.difficulty]?.label || settings.difficulty}</span><br>空格 <span class="text-white">${gameState.blanksMade}</span>
             </div>
-            <div id="timer-display" class="text-white font-mono text-[14px] lg:text-[20px] mt-2 tracking-widest text-left">${gameState.elapsedStr}</div>
+            <div id="timer-display" class="text-white font-mono text-[14px] lg:text-[20px] lg:mt-2 tracking-widest text-right ml-auto lg:ml-0 leading-none self-end lg:self-start">${gameState.elapsedStr}</div>
           </div>
 
-          <main class="flex-1 w-full max-w-md lg:max-w-[1000px] mx-auto flex flex-col lg:flex-row items-center justify-center lg:justify-between min-h-0 relative z-10 px-4 pt-2 pb-6 lg:pb-0 gap-6 lg:gap-12">
+          <main class="sudoku-main flex-1 w-full max-w-md lg:max-w-[1000px] mx-auto flex flex-col lg:flex-row items-center justify-center lg:justify-between min-h-0 relative z-10 px-4 pt-1 pb-2 lg:pb-0 gap-4 lg:gap-12">
             
             <!-- 左邊 Board -->
-            <div class="w-full max-w-[440px] lg:max-w-[500px] relative">
+            <div class="sudoku-board-wrap relative flex-none">
               ${boardHTML}
               ${winBanner}
             </div>
 
             <!-- 右邊 Controls -->
-            <div class="w-full lg:w-[360px] flex flex-col items-center">
+            <div class="sudoku-controls flex flex-col items-center flex-none">
                ${toolsHTML}
                ${numPadHTML}
             </div>
@@ -705,9 +768,14 @@
           </main>
         </div>
       `;
+
+      requestAnimationFrame(() => {
+        fitSudokuMobileBoard();
+        requestAnimationFrame(fitSudokuMobileBoard);
+      });
     }
 
-    window.onload = () => { render(); };
+    window.onload = () => { updateSudokuViewport(); render(); };
   </script>
 </body>
 </html>
