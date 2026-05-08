@@ -170,7 +170,7 @@
       if (vw < 1024) {
         const headerH = 54;
         const infoH = 70;
-        const controlH = 218;
+        const controlH = 238;
         const verticalGap = 12;
         const availableBoardH = Math.max(260, vh - headerH - infoH - controlH - verticalGap);
         const widthByHeight = Math.floor(availableBoardH * (COLS / ROWS));
@@ -588,17 +588,40 @@
         return score;
     };
 
+    // Per-thinking cache: stores exact minimax scores for identical board states.
+    // It is cleared before every AI move / hint calculation, so it never leaks stale results across turns.
+    let transpositionTable = new Map();
+
+    const getBoardCacheKey = (board, depth, isMax, color, oppColor, maxMoves) => {
+        let key = `${depth}|${isMax ? 1 : 0}|${color}|${oppColor}|${maxMoves}|`;
+        for (let y = 0; y < ROWS; y++) {
+            for (let x = 0; x < COLS; x++) {
+                const p = board[y][x];
+                key += p ? `${p.owner}${p.rank}` : '..';
+            }
+        }
+        return key;
+    };
+
     const minimax = (board, depth, alpha, beta, isMax, color, oppColor, maxMoves = 18) => {
         const winner = getWinnerOnBoard(board);
         if (winner) return winner === color ? 100000 + depth : -100000 - depth;
         if (depth === 0) return evaluateBoard(board, color);
 
+        const cacheKey = getBoardCacheKey(board, depth, isMax, color, oppColor, maxMoves);
+        if (transpositionTable.has(cacheKey)) return transpositionTable.get(cacheKey);
+
         const currentTurnColor = isMax ? color : oppColor;
         let moves = getAllValidMoves(board, currentTurnColor);
-        if (moves.length === 0) return currentTurnColor === color ? -90000 - depth : 90000 + depth;
+        if (moves.length === 0) {
+            const value = currentTurnColor === color ? -90000 - depth : 90000 + depth;
+            transpositionTable.set(cacheKey, value);
+            return value;
+        }
 
         moves = sortMovesForAI(board, moves, currentTurnColor).slice(0, maxMoves);
 
+        let result;
         if (isMax) {
             let maxEval = -Infinity;
             for (let m of moves) {
@@ -609,7 +632,7 @@
                 alpha = Math.max(alpha, ev);
                 if (beta <= alpha) break;
             }
-            return maxEval;
+            result = maxEval;
         } else {
             let minEval = Infinity;
             for (let m of moves) {
@@ -620,17 +643,25 @@
                 beta = Math.min(beta, ev);
                 if (beta <= alpha) break;
             }
-            return minEval;
+            result = minEval;
         }
+
+        if (transpositionTable.size < 60000) transpositionTable.set(cacheKey, result);
+        return result;
     };
 
     const getAIConfig = () => {
         const diff = settings.aiDifficulty;
-        if (diff <= 3) return { depth: 2, random: 0.22, topN: 12, poolRatio: 0.35 };
-        if (diff <= 6) return { depth: 3, random: 0.10, topN: 16, poolRatio: 0.25 };
-        if (diff <= 10) return { depth: 4, random: 0.02, topN: 20, poolRatio: 0.18 };
-        if (diff <= 13) return { depth: 5, random: 0, topN: 24, poolRatio: 0.12 };
-        return { depth: 6, random: 0, topN: 28, poolRatio: 0.1 };
+        // delay = minimum thinking time only. AI starts calculating immediately;
+        // if calculation takes longer than this, it moves immediately after finishing.
+        // rootTopN controls how many first moves are seriously considered;
+        // searchTopN controls branching inside minimax, keeping high LV responsive.
+        if (diff <= 3) return { depth: 2, random: 0.22, topN: 8,  searchTopN: 8,  poolRatio: 0.35, delay: 650 };
+        if (diff <= 6) return { depth: diff <= 4 ? 2 : 3, random: 0.10, topN: 10, searchTopN: 9,  poolRatio: 0.25, delay: 700 };
+        if (diff <= 10) return { depth: 3, random: 0.03, topN: 12, searchTopN: 10, poolRatio: 0.18, delay: 750 };
+        if (diff <= 13) return { depth: 4, random: 0,    topN: 14, searchTopN: 11, poolRatio: 0.12, delay: 850 };
+        if (diff === 14) return { depth: 5, random: 0,   topN: 16, searchTopN: 12, poolRatio: 0.08, delay: 900 };
+        return { depth: 5, random: 0,                   topN: 20, searchTopN: 14, poolRatio: 0.06, delay: 950 };
     };
 
     const evaluateMoveForColor = (board, move, color, depth, topN = 18) => {
@@ -695,6 +726,7 @@
     };
 
     const calculateAIMove = () => {
+        transpositionTable.clear();
         const color = gameState.turn;
         const oppColor = getOpponentColor(color);
         let validMoves = getAllValidMoves(gameState.board, color);
@@ -704,11 +736,13 @@
         if (tactical) return tactical;
 
         const cfg = getAIConfig();
-        validMoves = sortMovesForAI(gameState.board, validMoves, color).slice(0, cfg.topN);
+        const rootTopN = cfg.topN;
+        const searchTopN = cfg.searchTopN || cfg.topN;
+        validMoves = sortMovesForAI(gameState.board, validMoves, color).slice(0, rootTopN);
 
         let evaluatedMoves = [];
         for (let m of validMoves) {
-            const score = evaluateMoveForColor(gameState.board, m, color, cfg.depth, cfg.topN);
+            const score = evaluateMoveForColor(gameState.board, m, color, cfg.depth, searchTopN);
             evaluatedMoves.push({ move: m, score });
         }
 
@@ -730,6 +764,7 @@
         if (settings.mode === 'PvE' && gameState.turn !== settings.playerColor) return;
 
         const color = gameState.turn;
+        transpositionTable.clear();
         const tactical = getTacticalMove(gameState.board, color);
         if (tactical) {
             currentHints = [tactical];
@@ -743,8 +778,7 @@
         if (currentHints.length === 0) currentHints = evaluated.slice(0, 2).map(e => e.move);
     };
 
-    const triggerAI = () => {
-       const move = calculateAIMove();
+    const finishAIMove = (move) => {
        if (move !== null) {
           gameState.isThinking = false;
           executeMove(move.fx, move.fy, move.tx, move.ty);
@@ -753,6 +787,25 @@
            recordFinishedGame();
            render();
        }
+    };
+
+    const triggerAI = () => {
+       const cfg = getAIConfig();
+       const minDelay = cfg.delay || 650;
+       const start = performance.now();
+       const move = calculateAIMove();
+       const elapsed = performance.now() - start;
+       const remainingDelay = Math.max(0, minDelay - elapsed);
+
+       setTimeout(() => finishAIMove(move), remainingDelay);
+    };
+
+    const scheduleAIThinking = () => {
+       // Let the browser paint the THINKING state first, then start the heavy AI search.
+       // This fixes the high-LV case where the UI looked unchanged while the main thread was calculating.
+       const run = () => requestAnimationFrame(() => requestAnimationFrame(triggerAI));
+       if (typeof requestAnimationFrame === 'function') run();
+       else setTimeout(triggerAI, 32);
     };
 
     const checkWinCondition = () => {
@@ -837,7 +890,7 @@
                 currentHints = [];
                 gameState.isThinking = true;
                 render();
-                setTimeout(triggerAI, 600);
+                scheduleAIThinking();
             } else {
                 if (isHintMode) updateHintsLogic();
                 else currentHints = [];
@@ -954,13 +1007,13 @@
                   gameState.isTossing = false;
                   render();
                   if (gameState.turn !== settings.playerColor) { 
-                      gameState.isThinking = true; render(); setTimeout(triggerAI, 800);
+                      gameState.isThinking = true; render(); scheduleAIThinking();
                   } else { if (isHintMode) updateHintsLogic(); render(); }
               }, 3500); 
               return;
           } else {
               if (gameState.turn !== settings.playerColor) {
-                  gameState.isThinking = true; setTimeout(() => { render(); setTimeout(triggerAI, 800); }, 0);
+                  gameState.isThinking = true; setTimeout(() => { render(); scheduleAIThinking(); }, 0);
               }
           }
       }
@@ -1448,6 +1501,9 @@
                 <svg viewBox="0 0 24 24" class="w-[18px] h-[18px]"><circle cx="12" cy="12" r="8" fill="#a3a3a3" fill-opacity="0.1" stroke="#a3a3a3" stroke-width="2" stroke-dasharray="4"/></svg>
                 獸穴 DEN
             </div>
+        </div>
+        <div class="mt-2 px-4 text-center text-[10px] lg:text-[12px] text-neutral-400 font-medium tracking-[0.1em] leading-relaxed uppercase opacity-80">
+            食棋順序：鼠 &gt; 象 &gt; 獅 &gt; 虎 &gt; 豹 &gt; 狼 &gt; 狗 &gt; 貓 &gt; 鼠
         </div>
       `;
 
