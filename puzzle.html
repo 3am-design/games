@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="zh-HK">
 <head>
@@ -29,14 +30,25 @@
       touch-action: none;
     }
     .app-container { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
-    button, canvas, input { -webkit-tap-highlight-color: transparent; outline: none; touch-action: manipulation; }
+    
+    button, input { -webkit-tap-highlight-color: transparent; outline: none; touch-action: manipulation; }
+    canvas { -webkit-tap-highlight-color: transparent; outline: none; touch-action: none; }
+    
     .key-base { transition: background-color 0.2s ease-out, color 0.2s ease-out, border-color 0.2s, opacity 0.2s; }
     .key-base:active { opacity: 0.5; transition: none; }
     .icon-white { filter: brightness(0) invert(1); }
 
-    .game-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-    .board-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; padding: 10px 16px 18px; }
-    .board-frame { width: min(88vw, 65vh, 480px); max-width: 480px; position: relative; }
+    .game-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; width: 100%; }
+    
+    .game-meta { pointer-events: none; text-align: left; z-index: 20; flex: none; width: 100%; }
+    .score-row { display: inline-grid; grid-template-columns: max-content 1px max-content; column-gap: 20px; align-items: start; }
+    .score-divider { width: 1px; height: 44px; background: rgba(255,255,255,0.22); align-self: start; margin-top: 4px; }
+    .score-pill { border: 0; background: transparent; border-radius: 0; padding: 0; min-width: 46px; }
+    .score-label { font-size: 10px; letter-spacing: 0.12em; margin-bottom: 5px; line-height: 1.1; }
+    .score-number { font-family: 'Inter', sans-serif; font-weight: 300; letter-spacing: -0.04em; display:block; }
+
+    .board-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; width: 100%; }
+    .board-frame { width: min(92vw, 62vh); max-width: 480px; position: relative; }
     
     .strike-board {
       width: 100%; aspect-ratio: 3 / 4; display: block;
@@ -44,52 +56,24 @@
       box-shadow: 0 0 40px rgba(0,0,0,0.85); cursor: crosshair;
       position: relative; z-index: 2;
     }
-    .game-meta {
-      position: fixed; top: 60px; left: 20px; z-index: 20; pointer-events: none; text-align: left;
-    }
-    .meta-score { margin-top: 18px; }
-    .score-panel { pointer-events: none; }
-    .score-row { display: inline-grid; grid-template-columns: max-content 1px max-content; column-gap: 18px; align-items: start; }
-    .score-divider { width: 1px; height: 48px; background: rgba(255,255,255,0.22); align-self: start; margin-top: 1px; }
-    .score-pill { border: 0; background: transparent; border-radius: 0; padding: 0; min-width: 46px; }
-    .score-label { font-size: 10px; letter-spacing: 0.12em; margin-bottom: 5px; line-height: 1.1; }
-    .score-number { font-family: 'Inter', sans-serif; font-weight: 300; letter-spacing: -0.04em; display:block; }
-    
-    /* Mobile Controls Overlay */
-    .mobile-controls {
-      display: none; 
-      width: 100%; max-width: 480px; margin-top: 15px; 
-      gap: 12px; justify-content: center;
-    }
-    .control-btn {
-      background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2);
-      color: white; border-radius: 8px; font-weight: bold; font-size: 20px;
-      display: flex; align-items: center; justify-content: center;
-      user-select: none;
-    }
-    .control-btn:active { background: rgba(255, 255, 255, 0.2); }
-    .btn-side { width: 60px; height: 50px; }
-    .btn-action { flex: 1; height: 50px; font-size: 16px; letter-spacing: 0.1em; }
 
     @media (min-width: 1024px) {
       .game-stage { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(420px, 560px) minmax(260px, 1fr); align-items: center; }
-      .game-meta { top: 85px; left: 48px; }
+      .game-meta { position: absolute; top: 20px; left: 48px; width: auto; }
       .meta-score { margin-top: 20px; }
-      .score-panel { position: static; grid-column: 1; align-self: center; justify-self: start; padding-left: 0; }
       .score-divider { height: 56px; }
       .score-label { font-size: 11px; font-weight: 400; }
-      .board-stage { grid-column: 2; padding: 0; align-self: center; justify-self: center; }
-      .board-frame { width: min(480px, 70vh); max-width: 480px; }
+      .board-stage { grid-column: 2; padding: 0; align-self: center; justify-self: center; justify-content: center; }
+      .board-frame { width: min(480px, 70vh); }
     }
+    
+    /* 完美還原手機版字體與分數靠左對齊 */
     @media (max-width: 1023px) {
-      .game-meta { top: 60px; left: 20px; right: 20px; display: grid; grid-template-columns: max-content 1fr; align-items: end; width: auto; }
-      .meta-score { margin-top: 0; grid-column: 2; justify-self: end; align-self: end; }
+      .game-meta { position: relative; padding: 12px 24px 0; display: flex; flex-direction: column; align-items: flex-start; }
+      .meta-score { margin-top: 14px; }
       .score-panel { position: static; text-align: left; align-items: flex-start !important; padding: 0; z-index: 21; }
-      .score-row { justify-content: flex-start; align-items: start; column-gap: 14px; }
-      .score-divider { height: 40px; }
       .score-label { font-size: 9px; margin-bottom: 4px; }
-      .board-stage { transform: translateY(-2vh); }
-      .board-frame { width: min(92vw, 60vh); }
+      .board-stage { padding: 14px 16px 20px; }
     }
   </style>
 </head>
@@ -141,6 +125,12 @@
     // Inputs
     const keys = { left: false, right: false, space: false };
     let hasTouch = false;
+    
+    // Drag & Shoot Variables
+    let isAiming = false;
+    let dragStartX = 0;
+    let initialAngle = 0;
+    const DRAG_SENSITIVITY = 0.0075; // 拖曳敏感度：數字越大轉得越快
 
     // --- Record Logic ---
     const loadHistory = () => {
@@ -175,7 +165,6 @@
         this.difficulty = settings.difficulty;
         this.cfg = DIFF_CONFIG[this.difficulty];
         
-        // 根據難度設定顏色池數量
         let colorCount = 4; // LV1, LV2
         if (this.difficulty === 3) colorCount = 5; // LV3
         if (this.difficulty === 4) colorCount = 6; // LV4
@@ -189,7 +178,6 @@
         this.shotsSinceLastDrop = 0; 
         this.spawnTimer = 0; 
         
-        // Stats
         this.shotsFired = 0;
         this.bubblesPopped = 0;
         this.gameOver = false;
@@ -197,10 +185,8 @@
         this.hasRecorded = false;
         this.particles = [];
         
-        // 必須先 initGrid，因為 getRandomColor 會從場上抽取現有顏色
         this.initGrid();
         
-        // 預先準備 3 粒 NEXT 氣泡
         this.nextColors = [this.getRandomColor(), this.getRandomColor(), this.getRandomColor()];
         this.currentColor = this.getRandomColor();
       }
@@ -307,10 +293,12 @@
       update(dt) {
         if (this.gameOver || this.victory) return;
 
+        // 鍵盤操控保留，確保電腦端可以使用
         const angleSpeed = 0.85; 
         if (keys.left) this.shooterAngle -= angleSpeed * dt;
         if (keys.right) this.shooterAngle += angleSpeed * dt;
         
+        // 限制發射角度防止向後射
         const minA = -Math.PI + 0.18;
         const maxA = -0.18;
         if (this.shooterAngle < minA) this.shooterAngle = minA;
@@ -502,7 +490,8 @@
         ctx.fillText('DANGER ZONE', LOGICAL_WIDTH - 12, DANGER_Y - 10);
         ctx.restore();
 
-        if (!this.movingBubble && !this.gameOver && !this.victory && this.currentColor) {
+        // 當正在 Aiming (按住螢幕)，顯示虛線預測
+        if (isAiming && !this.movingBubble && !this.gameOver && !this.victory && this.currentColor) {
           let aimX = LOGICAL_WIDTH / 2, aimY = LOGICAL_HEIGHT - BUBBLE_RADIUS;
           let vx = Math.cos(this.shooterAngle) * 8, vy = Math.sin(this.shooterAngle) * 8;
           ctx.save(); ctx.beginPath(); ctx.moveTo(aimX, aimY);
@@ -522,7 +511,7 @@
               if (hit) break;
             }
           }
-          ctx.lineTo(aimX, aimY); ctx.setLineDash([4, 6]); ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
+          ctx.lineTo(aimX, aimY); ctx.setLineDash([4, 6]); ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'; ctx.lineWidth = 2.5; ctx.stroke(); ctx.restore();
         }
 
         for (let r = 0; r < ROWS; r++) {
@@ -533,7 +522,6 @@
           }
         }
 
-        // Cyberpunk 方形粒子特效
         this.particles.forEach(p => {
           ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.life * 10);
           ctx.beginPath(); ctx.rect(-3, -3, 6, 6);
@@ -552,7 +540,6 @@
         ctx.font = '700 12px Inter'; ctx.fillStyle = rem <= 2 ? '#ef4444' : '#666'; ctx.textAlign = 'center';
         ctx.fillText('DROP IN', 0, -25); ctx.font = '900 22px Inter'; ctx.fillText(rem, 0, 0); ctx.restore();
 
-        // NEXT 排隊氣泡 (3粒)
         ctx.save(); 
         ctx.translate(LOGICAL_WIDTH / 2 - 120, LOGICAL_HEIGHT - BUBBLE_RADIUS + 5);
         ctx.font = '700 12px Inter'; ctx.fillStyle = '#666'; ctx.textAlign = 'center';
@@ -574,17 +561,14 @@
         const c = COLORS.find(col => col.id === colorId);
         ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
 
-        // 黑底 (遮蓋背後的線條)
         ctx.beginPath(); ctx.arc(0, 0, BUBBLE_RADIUS - 1, 0, Math.PI * 2); 
         ctx.fillStyle = '#050505'; ctx.fill();
 
-        // 粗身霓虹外框
         ctx.beginPath(); ctx.arc(0, 0, BUBBLE_RADIUS - 4, 0, Math.PI * 2); 
         ctx.lineWidth = 5; ctx.strokeStyle = c.hex;
         ctx.shadowBlur = 6; ctx.shadowColor = c.shadow; ctx.stroke();
-        ctx.shadowBlur = 0; // 重置陰影
+        ctx.shadowBlur = 0; 
 
-        // 中間細實心圓點
         ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2);
         ctx.fillStyle = c.hex; ctx.fill();
 
@@ -613,24 +597,85 @@
       animationFrameId = requestAnimationFrame(gameLoop);
     };
 
-    // --- Inputs ---
+    // --- 全局相對拖曳發射 (Relative Drag & Release Anywhere) ---
     const attachInputs = () => {
-      const canvas = document.getElementById('gameCanvas');
-      if (canvas.dataset.ready) return;
-      canvas.dataset.ready = 'true';
+      const stageArea = document.getElementById('game-stage-area');
+      if (!stageArea || stageArea.dataset.ready) return;
+      stageArea.dataset.ready = 'true';
 
+      const handleStart = (clientX) => {
+        if (!gameState || gameState.gameOver || gameState.victory || isMenuOpen || isRecordOpen) return false;
+        isAiming = true;
+        dragStartX = clientX;
+        initialAngle = gameState.shooterAngle;
+        return true;
+      };
+
+      const handleMove = (clientX) => {
+        if (!isAiming || !gameState || gameState.gameOver || gameState.victory) return;
+        // 計算手指移動的相對距離 (dx)
+        let dx = clientX - dragStartX;
+        
+        // 將移動距離轉換為旋轉角度 (DRAG_SENSITIVITY 可微調手感)
+        let newAngle = initialAngle + dx * DRAG_SENSITIVITY;
+        
+        // 限制角度，防止炮口指向下方
+        const minA = -Math.PI + 0.18;
+        const maxA = -0.18;
+        if (newAngle < minA) newAngle = minA;
+        if (newAngle > maxA) newAngle = maxA;
+        
+        gameState.shooterAngle = newAngle;
+      };
+
+      const handleEnd = () => {
+        if (!isAiming || !gameState || gameState.gameOver || gameState.victory) return;
+        isAiming = false;
+        gameState.shoot();
+      };
+
+      // --- Desktop Mouse 操控 ---
+      stageArea.addEventListener('mousedown', (e) => {
+        if (hasTouch) return;
+        if (e.target.closest('button')) return; 
+        handleStart(e.clientX);
+      });
+
+      // 綁定於 window 確保滑出畫布範圍依然可以繼續旋轉
       window.addEventListener('mousemove', (e) => {
-        if (!gameState || gameState.gameOver || gameState.victory || isMenuOpen || isRecordOpen || hasTouch) return;
-        const rect = canvas.getBoundingClientRect();
-        let dx = (e.clientX - rect.left) / canvasScale - (LOGICAL_WIDTH / 2);
-        let dy = (e.clientY - rect.top) / canvasScale - (LOGICAL_HEIGHT - BUBBLE_RADIUS);
-        gameState.shooterAngle = Math.atan2(dy, dx);
+        if (hasTouch) return;
+        handleMove(e.clientX);
       });
 
-      canvas.addEventListener('mousedown', (e) => {
-        if (!hasTouch && gameState && !isMenuOpen && !isRecordOpen) gameState.shoot();
+      window.addEventListener('mouseup', (e) => {
+        if (hasTouch) return;
+        handleEnd();
       });
 
+      // --- Mobile Touch 操控 ---
+      stageArea.addEventListener('touchstart', (e) => {
+        if (e.target.closest('button')) return; 
+        hasTouch = true;
+        handleStart(e.touches[0].clientX);
+      }, {passive: false});
+
+      stageArea.addEventListener('touchmove', (e) => {
+        if (!isAiming) return;
+        e.preventDefault(); // 防止螢幕上下滾動
+        handleMove(e.touches[0].clientX);
+      }, {passive: false});
+
+      stageArea.addEventListener('touchend', (e) => {
+        if (!isAiming) return;
+        e.preventDefault();
+        handleEnd();
+      }, {passive: false});
+
+      stageArea.addEventListener('touchcancel', (e) => {
+        isAiming = false;
+      }, {passive: false});
+
+      // --- 鍵盤操控保留 ---
       window.addEventListener('keydown', (e) => {
         if (e.code === 'ArrowLeft') keys.left = true;
         if (e.code === 'ArrowRight') keys.right = true;
@@ -640,25 +685,6 @@
         if (e.code === 'ArrowLeft') keys.left = false;
         if (e.code === 'ArrowRight') keys.right = false;
       });
-
-      window.addEventListener('touchstart', () => {
-        if (!hasTouch) {
-          hasTouch = true;
-          const ctrls = document.getElementById('mobile-controls');
-          if (ctrls) ctrls.style.display = 'flex';
-        }
-      }, {once: true});
-    };
-
-    const setupMobileButtons = () => {
-      const bindBtn = (id, keyName) => {
-        const btn = document.getElementById(id); if(!btn) return;
-        btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; }, {passive: false});
-        btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; }, {passive: false});
-      };
-      bindBtn('btn-left', 'left'); bindBtn('btn-right', 'right');
-      const fireBtn = document.getElementById('btn-fire');
-      if(fireBtn) fireBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (gameState && !isMenuOpen && !isRecordOpen) gameState.shoot(); }, {passive: false});
     };
 
     // --- UI/DOM ---
@@ -692,9 +718,8 @@
       
       if (scoreEl) scoreEl.innerText = gameState.score;
       if (highEl) highEl.innerText = Math.max(gameState.score, gameState.highScore);
-      if (shotsEl) shotsEl.innerText = gameState.shotsFired;
+      if (shotsEl) shotsEl.innerText = gameState.bubblesPopped; // 更新為擊破數量
 
-      // 獨立抽離 DOM 邏輯，保留純黑底與白色文字 (bg-black/85)
       const overlay = document.getElementById('game-overlay');
       if (overlay) {
         if (gameState.gameOver || gameState.victory) {
@@ -808,20 +833,25 @@
               <button onclick="window.openMenu()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/setting.svg" alt="SET" class="h-[14px] lg:h-[18px] icon-white" onerror="this.outerHTML='⚙'"></button>
             </div>
           </header>
-          <div class="game-stage relative z-10">
+          
+          <div id="game-stage-area" class="game-stage">
             <div class="game-meta">
-              <!-- 精準還原截圖文字排版 -->
-              <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase mb-3 lg:mb-5">
-                <div class="text-white font-bold tracking-[0.2em] text-[13px] lg:text-[16px] mb-1">泡泡拼圖</div>
-                <div class="mb-1"><span class="text-white font-bold">LV.${gameState.difficulty}</span> <span class="mx-2 opacity-50">|</span> 發射數：<span id="meta-shots">${gameState.shotsFired}</span></div>
-                <div class="text-neutral-500">${gameState.playerName}</div>
+              <div class="text-white font-bold tracking-[0.2em] text-[14px] lg:text-[18px] mb-1">${gameState.playerName}</div>
+              <div class="text-[11px] lg:text-[14px] text-neutral-400 font-medium tracking-[0.1em] leading-relaxed uppercase mb-4 lg:mb-6">
+                難度: LV.${gameState.difficulty} <span class="mx-2 opacity-50">|</span> 擊破: <span id="meta-shots">${gameState.bubblesPopped}</span>
               </div>
               
-              <section class="score-panel meta-score flex flex-col items-start">
+              <section class="score-panel meta-score flex flex-col items-start w-full">
                 <div class="score-row pointer-events-auto">
-                  <div class="score-pill"><div class="score-label text-neutral-400 font-normal">SCORE</div><div id="score-current" class="text-white score-number text-[21px] lg:text-[34px] leading-none font-light">${gameState.score}</div></div>
+                  <div class="score-pill">
+                    <div class="score-label text-neutral-400 font-normal">SCORE</div>
+                    <div id="score-current" class="text-white score-number text-[24px] lg:text-[34px] leading-none font-light">${gameState.score}</div>
+                  </div>
                   <div class="score-divider" aria-hidden="true"></div>
-                  <div class="score-pill"><div class="score-label text-neutral-400 font-normal">HIGH SCORE</div><div id="score-high" class="text-white score-number text-[21px] lg:text-[34px] leading-none font-light">${Math.max(gameState.score, gameState.highScore)}</div></div>
+                  <div class="score-pill">
+                    <div class="score-label text-neutral-400 font-normal">HIGH SCORE</div>
+                    <div id="score-high" class="text-white score-number text-[24px] lg:text-[34px] leading-none font-light">${Math.max(gameState.score, gameState.highScore)}</div>
+                  </div>
                 </div>
               </section>
             </div>
@@ -830,18 +860,11 @@
               <div class="board-frame">
                 <canvas id="gameCanvas" class="strike-board"></canvas>
                 
-                <!-- 獨立靜態黑底 Game Over 畫面 -->
-                <div id="game-overlay" class="absolute inset-0 z-40 bg-black/85 backdrop-blur-sm hidden flex-col items-center justify-center rounded-xl">
+                <div id="game-overlay" class="absolute inset-0 z-40 bg-black/85 backdrop-blur-sm hidden flex-col items-center justify-center rounded-xl pointer-events-none">
                   <div id="overlay-title" class="text-3xl lg:text-4xl font-black tracking-[0.3em] mb-2 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.6)]">GAME OVER</div>
                   <div id="overlay-score" class="text-neutral-300 font-bold tracking-widest mb-8">SCORE: 0</div>
                   <button onclick="window.initGame()" class="px-8 py-3 bg-white text-black font-bold tracking-[0.1em] rounded-full hover:bg-neutral-200 transition-colors pointer-events-auto shadow-[0_0_15px_rgba(255,255,255,0.2)]">再玩一次</button>
                 </div>
-                
-              </div>
-              <div id="mobile-controls" class="mobile-controls">
-                <button id="btn-left" class="control-btn btn-side">◀</button>
-                <button id="btn-fire" class="control-btn btn-action">SHOOT</button>
-                <button id="btn-right" class="control-btn btn-side">▶</button>
               </div>
             </main>
           </div>
@@ -850,12 +873,6 @@
       updateStatusDOM();
       setupCanvasSize();
       attachInputs();
-      setupMobileButtons();
-      
-      if(hasTouch) {
-        const ctrls = document.getElementById('mobile-controls');
-        if (ctrls) ctrls.style.display = 'flex';
-      }
       menuJustOpened = false;
     };
 
@@ -873,3 +890,6 @@
   </script>
 </body>
 </html>
+
+
+```
