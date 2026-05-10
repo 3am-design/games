@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Games - 泡泡拼圖</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Noto+Sans+TC:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { future: { hoverOnlyWhenSupported: true } };
+  </script>
+  <style>
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.28s ease-out; }
+    
+    html, body {
+      overscroll-behavior-y: none;
+      background-color: #000;
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      color: #fff;
+      height: 100%;
+      height: -webkit-fill-available;
+      overflow: hidden;
+      margin: 0;
+      touch-action: none;
+    }
+    .app-container { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    button, canvas, input { -webkit-tap-highlight-color: transparent; outline: none; touch-action: manipulation; }
+    .key-base { transition: background-color 0.2s ease-out, color 0.2s ease-out, border-color 0.2s, opacity 0.2s; }
+    .key-base:active { opacity: 0.5; transition: none; }
+    .icon-white { filter: brightness(0) invert(1); }
+
+    .game-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .board-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; padding: 10px 16px 18px; }
+    .board-frame { width: min(88vw, 65vh, 480px); max-width: 480px; position: relative; }
+    
+    .strike-board {
+      width: 100%; aspect-ratio: 3 / 4; display: block;
+      background: #050505; border: 1.5px solid rgba(255,255,255,0.24); border-radius: 12px;
+      box-shadow: 0 0 40px rgba(0,0,0,0.85); cursor: crosshair;
+      position: relative; z-index: 2;
+    }
+    .game-meta {
+      position: fixed; top: 60px; left: 20px; z-index: 20; pointer-events: none; text-align: left;
+    }
+    .meta-score { margin-top: 18px; }
+    .score-panel { pointer-events: none; }
+    .score-row { display: inline-grid; grid-template-columns: max-content 1px max-content; column-gap: 18px; align-items: start; }
+    .score-divider { width: 1px; height: 48px; background: rgba(255,255,255,0.22); align-self: start; margin-top: 1px; }
+    .score-pill { border: 0; background: transparent; border-radius: 0; padding: 0; min-width: 46px; }
+    .score-label { font-size: 10px; letter-spacing: 0.12em; margin-bottom: 5px; line-height: 1.1; }
+    .score-number { font-family: 'Inter', sans-serif; font-weight: 300; letter-spacing: -0.04em; display:block; }
+    
+    /* Mobile Controls Overlay */
+    .mobile-controls {
+      display: none; 
+      width: 100%; max-width: 480px; margin-top: 15px; 
+      gap: 12px; justify-content: center;
+    }
+    .control-btn {
+      background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2);
+      color: white; border-radius: 8px; font-weight: bold; font-size: 20px;
+      display: flex; align-items: center; justify-content: center;
+      user-select: none;
+    }
+    .control-btn:active { background: rgba(255, 255, 255, 0.2); }
+    .btn-side { width: 60px; height: 50px; }
+    .btn-action { flex: 1; height: 50px; font-size: 16px; letter-spacing: 0.1em; }
+
+    @media (min-width: 1024px) {
+      .game-stage { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(420px, 560px) minmax(260px, 1fr); align-items: center; }
+      .game-meta { top: 85px; left: 48px; }
+      .meta-score { margin-top: 20px; }
+      .score-panel { position: static; grid-column: 1; align-self: center; justify-self: start; padding-left: 0; }
+      .score-divider { height: 56px; }
+      .score-label { font-size: 11px; font-weight: 400; }
+      .board-stage { grid-column: 2; padding: 0; align-self: center; justify-self: center; }
+      .board-frame { width: min(480px, 70vh); max-width: 480px; }
+    }
+    @media (max-width: 1023px) {
+      .game-meta { top: 60px; left: 20px; right: 20px; display: grid; grid-template-columns: max-content 1fr; align-items: end; width: auto; }
+      .meta-score { margin-top: 0; grid-column: 2; justify-self: end; align-self: end; }
+      .score-panel { position: static; text-align: left; align-items: flex-start !important; padding: 0; z-index: 21; }
+      .score-row { justify-content: flex-start; align-items: start; column-gap: 14px; }
+      .score-divider { height: 40px; }
+      .score-label { font-size: 9px; margin-bottom: 4px; }
+      .board-stage { transform: translateY(-2vh); }
+      .board-frame { width: min(92vw, 60vh); }
+    }
+  </style>
+</head>
+<body class="bg-black selection:bg-white/30">
+  <div id="app" class="app-container"></div>
+
+  <script>
+    // --- Utils & State ---
+    const cloneState = (state) => JSON.parse(JSON.stringify(state));
+    const LOGICAL_WIDTH = 600;
+    const LOGICAL_HEIGHT = 800;
+    const BUBBLE_RADIUS = 24;
+    const ROW_HEIGHT = BUBBLE_RADIUS * Math.sqrt(3);
+    const BUBBLE_SPEED = 1400; // px per second
+    const COLS = 12;
+    const ROWS = 18;
+    const DANGER_Y = 660; 
+
+    // 指定配色：綠、藍、紅、黃、紫、灰
+    const COLORS = [
+      { id: 1, hex: '#22c55e', shadow: 'rgba(34, 197, 94, 0.6)' },   // 綠 Green
+      { id: 2, hex: '#3b82f6', shadow: 'rgba(59, 130, 246, 0.6)' },  // 藍 Blue
+      { id: 3, hex: '#ef4444', shadow: 'rgba(239, 68, 68, 0.6)' },   // 紅 Red
+      { id: 4, hex: '#facc15', shadow: 'rgba(250, 204, 21, 0.6)' },  // 黃 Yellow
+      { id: 5, hex: '#a855f7', shadow: 'rgba(168, 85, 247, 0.6)' },  // 紫 Purple
+      { id: 6, hex: '#9ca3af', shadow: 'rgba(156, 163, 175, 0.6)' }  // 灰 Grey
+    ];
+
+    const DIFF_CONFIG = {
+      1: { label: 'EASY', baseDrop: 8, step: 1000, minDrop: 4 },
+      2: { label: 'NORMAL', baseDrop: 6, step: 800, minDrop: 3 },
+      3: { label: 'HARD', baseDrop: 4, step: 600, minDrop: 2 },
+      4: { label: 'MASTER', baseDrop: 3, step: 500, minDrop: 1 }
+    };
+
+    let settings = { playerName: '', difficulty: 2 };
+    let pendingSettings = cloneState(settings);
+    
+    let gameState = null;
+    let canvasScale = 1;
+    let animationFrameId = null;
+    let lastFrame = 0;
+    
+    let isMenuOpen = true;
+    let isRecordOpen = false;
+    let menuJustOpened = true;
+    let matchHistory = [];
+
+    // Inputs
+    const keys = { left: false, right: false, space: false };
+    let hasTouch = false;
+
+    // --- Record Logic ---
+    const loadHistory = () => {
+      try { const saved = localStorage.getItem('pb_match_history'); if (saved) { matchHistory = JSON.parse(saved); } } catch (e) { matchHistory = []; }
+    };
+    const saveHistory = () => { try { localStorage.setItem('pb_match_history', JSON.stringify(matchHistory)); } catch (e) {} };
+
+    const recordFinishedGame = () => {
+      if (!gameState || (!gameState.gameOver && !gameState.victory) || gameState.hasRecorded) return;
+      gameState.hasRecorded = true;
+      const rec = {
+        id: Date.now(),
+        timestamp: new Date().toLocaleString(),
+        playerName: gameState.playerName,
+        score: gameState.score,
+        difficulty: gameState.difficulty,
+        status: gameState.victory ? 'STAGE CLEAR' : 'GAME OVER',
+        shotsFired: gameState.shotsFired,
+        bubblesPopped: gameState.bubblesPopped
+      };
+      matchHistory.unshift(rec);
+      if (matchHistory.length > 50) matchHistory.pop();
+      saveHistory();
+    };
+
+    // --- Game Logic ---
+    class GameState {
+      constructor() {
+        this.score = 0;
+        this.highScore = parseInt(localStorage.getItem('pb_high_score')) || 0;
+        this.playerName = settings.playerName.trim() || 'PLAYER 1';
+        this.difficulty = settings.difficulty;
+        this.cfg = DIFF_CONFIG[this.difficulty];
+        
+        // 根據難度設定顏色池數量
+        let colorCount = 4; // LV1, LV2
+        if (this.difficulty === 3) colorCount = 5; // LV3
+        if (this.difficulty === 4) colorCount = 6; // LV4
+        this.allowedColors = COLORS.slice(0, colorCount);
+
+        this.grid = Array(ROWS).fill(null).map(() => Array(COLS).fill(null));
+        this.movingBubble = null;
+        this.shooterAngle = -Math.PI / 2;
+        
+        this.rowShiftCount = 0; 
+        this.shotsSinceLastDrop = 0; 
+        this.spawnTimer = 0; 
+        
+        // Stats
+        this.shotsFired = 0;
+        this.bubblesPopped = 0;
+        this.gameOver = false;
+        this.victory = false;
+        this.hasRecorded = false;
+        this.particles = [];
+        
+        // 必須先 initGrid，因為 getRandomColor 會從場上抽取現有顏色
+        this.initGrid();
+        
+        // 預先準備 3 粒 NEXT 氣泡
+        this.nextColors = [this.getRandomColor(), this.getRandomColor(), this.getRandomColor()];
+        this.currentColor = this.getRandomColor();
+      }
+
+      getRandomColor() {
+        let activeColors = new Set();
+        for (let r = 0; r < ROWS; r++) {
+          let colsInRow = (r + this.rowShiftCount) % 2 === 0 ? COLS : COLS - 1;
+          for (let c = 0; c < colsInRow; c++) {
+            if (this.grid[r][c]) activeColors.add(this.grid[r][c].colorId);
+          }
+        }
+        let availableColors = this.allowedColors.filter(c => activeColors.has(c.id));
+        if (availableColors.length === 0) availableColors = this.allowedColors;
+        return availableColors[Math.floor(Math.random() * availableColors.length)];
+      }
+
+      initGrid() {
+        for (let r = 0; r < 5; r++) {
+          let colsInRow = (r + this.rowShiftCount) % 2 === 0 ? COLS : COLS - 1;
+          for (let c = 0; c < colsInRow; c++) {
+            this.grid[r][c] = { 
+              colorId: this.allowedColors[Math.floor(Math.random() * this.allowedColors.length)].id, 
+              ...this.getGridPos(r, c) 
+            };
+          }
+        }
+      }
+
+      getGridPos(r, c) {
+        let x = c * (BUBBLE_RADIUS * 2) + BUBBLE_RADIUS;
+        if ((r + this.rowShiftCount) % 2 !== 0) x += BUBBLE_RADIUS; 
+        let y = r * ROW_HEIGHT + BUBBLE_RADIUS;
+        return { x, y };
+      }
+
+      getDropThreshold() {
+        return Math.max(this.cfg.minDrop, this.cfg.baseDrop - Math.floor(this.score / this.cfg.step));
+      }
+
+      shoot() {
+        if (this.movingBubble || this.gameOver || this.victory || !this.currentColor) return;
+        this.movingBubble = {
+          x: LOGICAL_WIDTH / 2, y: LOGICAL_HEIGHT - BUBBLE_RADIUS,
+          vx: Math.cos(this.shooterAngle) * BUBBLE_SPEED, vy: Math.sin(this.shooterAngle) * BUBBLE_SPEED,
+          colorId: this.currentColor.id
+        };
+        this.currentColor = null;
+        this.shotsFired++;
+      }
+
+      checkGameOver() {
+        let crossed = false;
+        for (let r = 0; r < ROWS; r++) {
+          let colsInRow = (r + this.rowShiftCount) % 2 === 0 ? COLS : COLS - 1;
+          for (let c = 0; c < colsInRow; c++) {
+            if (this.grid[r][c]) {
+              if (this.grid[r][c].y + BUBBLE_RADIUS >= DANGER_Y - 2) {
+                crossed = true;
+              }
+            }
+          }
+        }
+        if (crossed && !this.gameOver) {
+          this.gameOver = true;
+          if (this.score > this.highScore) localStorage.setItem('pb_high_score', this.score);
+          recordFinishedGame();
+        }
+      }
+
+      dropRow() {
+        this.grid.pop();
+        let newRow = Array(COLS).fill(null);
+        this.rowShiftCount++;
+        
+        let colsInRow = this.rowShiftCount % 2 === 0 ? COLS : COLS - 1;
+        let activeColors = new Set();
+        for (let r = 0; r < ROWS - 1; r++) {
+          let cols = (r + this.rowShiftCount - 1) % 2 === 0 ? COLS : COLS - 1;
+          for (let c = 0; c < cols; c++) {
+            if (this.grid[r][c]) activeColors.add(this.grid[r][c].colorId);
+          }
+        }
+        let availableColors = this.allowedColors.filter(c => activeColors.has(c.id));
+        if (availableColors.length === 0) availableColors = this.allowedColors;
+
+        for (let c = 0; c < colsInRow; c++) {
+          newRow[c] = { colorId: availableColors[Math.floor(Math.random() * availableColors.length)].id, x: 0, y: 0 };
+        }
+        this.grid.unshift(newRow);
+        
+        for (let r = 0; r < ROWS; r++) {
+          let cols = (r + this.rowShiftCount) % 2 === 0 ? COLS : COLS - 1;
+          for (let c = 0; c < cols; c++) {
+            if (this.grid[r][c]) {
+              let pos = this.getGridPos(r, c);
+              this.grid[r][c].x = pos.x; this.grid[r][c].y = pos.y;
+            }
+          }
+        }
+        this.checkGameOver();
+      }
+
+      update(dt) {
+        if (this.gameOver || this.victory) return;
+
+        const angleSpeed = 0.85; 
+        if (keys.left) this.shooterAngle -= angleSpeed * dt;
+        if (keys.right) this.shooterAngle += angleSpeed * dt;
+        
+        const minA = -Math.PI + 0.18;
+        const maxA = -0.18;
+        if (this.shooterAngle < minA) this.shooterAngle = minA;
+        if (this.shooterAngle > maxA) this.shooterAngle = maxA;
+
+        this.particles.forEach(p => {
+          p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 600 * dt; p.life -= dt;
+        });
+        this.particles = this.particles.filter(p => p.life > 0);
+
+        if (!this.movingBubble && !this.currentColor && this.spawnTimer > 0) {
+          this.spawnTimer -= dt;
+          if (this.spawnTimer <= 0) {
+            this.currentColor = this.nextColors.shift();
+            this.nextColors.push(this.getRandomColor());
+          }
+        }
+
+        if (this.movingBubble) {
+          let mb = this.movingBubble;
+          mb.x += mb.vx * dt; mb.y += mb.vy * dt;
+
+          if (mb.x < BUBBLE_RADIUS) { mb.x = BUBBLE_RADIUS; mb.vx *= -1; }
+          if (mb.x > LOGICAL_WIDTH - BUBBLE_RADIUS) { mb.x = LOGICAL_WIDTH - BUBBLE_RADIUS; mb.vx *= -1; }
+
+          let collided = false;
+          if (mb.y <= BUBBLE_RADIUS) {
+            collided = true;
+          } else {
+            let rEstimate = Math.floor((mb.y - BUBBLE_RADIUS) / ROW_HEIGHT);
+            for(let r = Math.max(0, rEstimate - 1); r <= Math.min(ROWS - 1, rEstimate + 1); r++) {
+              let colsInRow = (r + this.rowShiftCount) % 2 === 0 ? COLS : COLS - 1;
+              for (let c = 0; c < colsInRow; c++) {
+                let cell = this.grid[r][c];
+                if (cell) {
+                  if (Math.hypot(mb.x - cell.x, mb.y - cell.y) < BUBBLE_RADIUS * 1.8) { collided = true; break; }
+                }
+              }
+              if (collided) break;
+            }
+          }
+
+          if (collided) this.snapBubble();
+        }
+      }
+
+      snapBubble() {
+        let mb = this.movingBubble;
+        let bestR = -1, bestC = -1, minDist = Infinity;
+
+        for (let r = 0; r < ROWS; r++) {
+          let colsInRow = (r + this.rowShiftCount) % 2 === 0 ? COLS : COLS - 1;
+          for (let c = 0; c < colsInRow; c++) {
+            if (!this.grid[r][c]) {
+              let pos = this.getGridPos(r, c);
+              let dist = Math.hypot(mb.x - pos.x, mb.y - pos.y);
+              if (dist < minDist) { minDist = dist; bestR = r; bestC = c; }
+            }
+          }
+        }
+
+        if (bestR >= 0 && bestC >= 0) {
+          this.grid[bestR][bestC] = { colorId: mb.colorId, ...this.getGridPos(bestR, bestC) };
+          this.movingBubble = null;
+
+          let matched = this.resolveMatches(bestR, bestC);
+          this.checkGameOver();
+          if (this.gameOver || this.victory) return;
+
+          this.spawnTimer = matched ? 0.45 : 0.15;
+          this.shotsSinceLastDrop++;
+          
+          if (this.shotsSinceLastDrop >= this.getDropThreshold()) {
+            this.dropRow();
+            this.shotsSinceLastDrop = 0;
+          }
+        } else {
+          this.movingBubble = null;
+        }
+      }
+
+      getNeighbors(r, c) {
+        let neighbors = [];
+        const isEven = (r + this.rowShiftCount) % 2 === 0;
+        const evenDirs = [[0,-1],[0,1],[-1,-1],[-1,0],[1,-1],[1,0]];
+        const oddDirs =  [[0,-1],[0,1],[-1,0],[-1,1],[1,0],[1,1]];
+        const dirs = isEven ? evenDirs : oddDirs;
+
+        for (let [dr, dc] of dirs) {
+          let nr = r + dr, nc = c + dc;
+          let colsInRow = (nr + this.rowShiftCount) % 2 === 0 ? COLS : COLS - 1;
+          if (nr >= 0 && nr < ROWS && nc >= 0 && nc < colsInRow) {
+            if (this.grid[nr][nc]) neighbors.push({r: nr, c: nc, cell: this.grid[nr][nc]});
+          }
+        }
+        return neighbors;
+      }
+
+      resolveMatches(startR, startC) {
+        let targetColor = this.grid[startR][startC].colorId;
+        let matchSet = new Set();
+        let queue = [{r: startR, c: startC}];
+        matchSet.add(`${startR},${startC}`);
+
+        while (queue.length > 0) {
+          let {r, c} = queue.shift();
+          let neighbors = this.getNeighbors(r, c);
+          for (let n of neighbors) {
+            if (n.cell.colorId === targetColor && !matchSet.has(`${n.r},${n.c}`)) {
+              matchSet.add(`${n.r},${n.c}`); queue.push({r: n.r, c: n.c});
+            }
+          }
+        }
+
+        if (matchSet.size >= 3) {
+          matchSet.forEach(key => {
+            let [r, c] = key.split(',').map(Number);
+            this.createExplosion(this.grid[r][c]);
+            this.grid[r][c] = null;
+          });
+          this.score += matchSet.size * 10;
+          this.bubblesPopped += matchSet.size;
+          this.removeFloating(); 
+          return true;
+        }
+        return false;
+      }
+
+      removeFloating() {
+        let visited = new Set();
+        let queue = [];
+
+        for (let c = 0; c < COLS; c++) {
+          if (this.grid[0][c]) { queue.push({r: 0, c}); visited.add(`0,${c}`); }
+        }
+
+        while (queue.length > 0) {
+          let {r, c} = queue.shift();
+          let neighbors = this.getNeighbors(r, c);
+          for (let n of neighbors) {
+            if (!visited.has(`${n.r},${n.c}`)) { visited.add(`${n.r},${n.c}`); queue.push({r: n.r, c: n.c}); }
+          }
+        }
+
+        let dropped = 0, remaining = 0;
+        for (let r = 0; r < ROWS; r++) {
+          let colsInRow = (r + this.rowShiftCount) % 2 === 0 ? COLS : COLS - 1;
+          for (let c = 0; c < colsInRow; c++) {
+            if (this.grid[r][c]) {
+              if (!visited.has(`${r},${c}`)) {
+                this.createExplosion(this.grid[r][c], true);
+                this.grid[r][c] = null;
+                dropped++;
+              } else {
+                remaining++;
+              }
+            }
+          }
+        }
+        
+        if (dropped > 0) {
+          this.score += Math.pow(2, dropped) * 10;
+          this.bubblesPopped += dropped;
+        }
+
+        if (remaining === 0) {
+          this.victory = true;
+          if (this.score > this.highScore) localStorage.setItem('pb_high_score', this.score);
+          recordFinishedGame();
+        }
+      }
+
+      createExplosion(cell, isDrop = false) {
+        const color = COLORS.find(c => c.id === cell.colorId);
+        for(let i=0; i<6; i++) {
+          this.particles.push({
+            x: cell.x, y: cell.y,
+            vx: (Math.random() - 0.5) * (isDrop ? 200 : 400), vy: (Math.random() - 0.5) * (isDrop ? 100 : 400) - (isDrop ? 0 : 100),
+            color: color.hex, life: Math.random() * 0.4 + 0.2
+          });
+        }
+      }
+
+      draw(ctx) {
+        ctx.save();
+        ctx.beginPath(); ctx.moveTo(0, DANGER_Y); ctx.lineTo(LOGICAL_WIDTH, DANGER_Y);
+        ctx.setLineDash([10, 10]); ctx.strokeStyle = 'rgba(239, 68, 68, 0.5)'; ctx.lineWidth = 3; ctx.stroke();
+        ctx.fillStyle = 'rgba(239, 68, 68, 0.8)'; ctx.font = '600 13px Inter'; ctx.textAlign = 'right';
+        ctx.fillText('DANGER ZONE', LOGICAL_WIDTH - 12, DANGER_Y - 10);
+        ctx.restore();
+
+        if (!this.movingBubble && !this.gameOver && !this.victory && this.currentColor) {
+          let aimX = LOGICAL_WIDTH / 2, aimY = LOGICAL_HEIGHT - BUBBLE_RADIUS;
+          let vx = Math.cos(this.shooterAngle) * 8, vy = Math.sin(this.shooterAngle) * 8;
+          ctx.save(); ctx.beginPath(); ctx.moveTo(aimX, aimY);
+          let hit = false;
+          for (let i = 0; i < 150 && !hit; i++) {
+            aimX += vx; aimY += vy;
+            if (aimX < BUBBLE_RADIUS) { aimX = BUBBLE_RADIUS; vx *= -1; ctx.lineTo(aimX, aimY); }
+            if (aimX > LOGICAL_WIDTH - BUBBLE_RADIUS) { aimX = LOGICAL_WIDTH - BUBBLE_RADIUS; vx *= -1; ctx.lineTo(aimX, aimY); }
+            if (aimY < BUBBLE_RADIUS) { hit = true; }
+            let rEstimate = Math.floor((aimY - BUBBLE_RADIUS) / ROW_HEIGHT);
+            for(let r = Math.max(0, rEstimate - 1); r <= Math.min(ROWS - 1, rEstimate + 1); r++) {
+              let colsInRow = (r + this.rowShiftCount) % 2 === 0 ? COLS : COLS - 1;
+              for (let c = 0; c < colsInRow; c++) {
+                let cell = this.grid[r][c];
+                if (cell && Math.hypot(aimX - cell.x, aimY - cell.y) < BUBBLE_RADIUS * 1.8) { hit = true; break; }
+              }
+              if (hit) break;
+            }
+          }
+          ctx.lineTo(aimX, aimY); ctx.setLineDash([4, 6]); ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
+        }
+
+        for (let r = 0; r < ROWS; r++) {
+          let colsInRow = (r + this.rowShiftCount) % 2 === 0 ? COLS : COLS - 1;
+          for (let c = 0; c < colsInRow; c++) {
+            let cell = this.grid[r][c];
+            if (cell) this.drawBubble(ctx, cell.x, cell.y, cell.colorId);
+          }
+        }
+
+        // Cyberpunk 方形粒子特效
+        this.particles.forEach(p => {
+          ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.life * 10);
+          ctx.beginPath(); ctx.rect(-3, -3, 6, 6);
+          ctx.strokeStyle = p.color; ctx.lineWidth = 1.5; ctx.globalAlpha = p.life * 2;
+          ctx.shadowBlur = 10; ctx.shadowColor = p.color; ctx.stroke(); ctx.restore();
+        });
+        ctx.globalAlpha = 1;
+
+        ctx.save(); ctx.translate(LOGICAL_WIDTH / 2, LOGICAL_HEIGHT - BUBBLE_RADIUS); ctx.rotate(this.shooterAngle + Math.PI/2);
+        ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(-15, 0); ctx.lineTo(-10, -60); ctx.lineTo(10, -60); ctx.lineTo(15, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, -80, 4, 0, Math.PI*2); ctx.fillStyle = '#fff'; ctx.fill(); ctx.restore();
+
+        let rem = this.getDropThreshold() - this.shotsSinceLastDrop;
+        ctx.save(); ctx.translate(LOGICAL_WIDTH / 2 + 100, LOGICAL_HEIGHT - BUBBLE_RADIUS + 5);
+        ctx.font = '700 12px Inter'; ctx.fillStyle = rem <= 2 ? '#ef4444' : '#666'; ctx.textAlign = 'center';
+        ctx.fillText('DROP IN', 0, -25); ctx.font = '900 22px Inter'; ctx.fillText(rem, 0, 0); ctx.restore();
+
+        // NEXT 排隊氣泡 (3粒)
+        ctx.save(); 
+        ctx.translate(LOGICAL_WIDTH / 2 - 120, LOGICAL_HEIGHT - BUBBLE_RADIUS + 5);
+        ctx.font = '700 12px Inter'; ctx.fillStyle = '#666'; ctx.textAlign = 'center';
+        ctx.fillText('NEXT', 0, -30); 
+        this.drawBubble(ctx, 0, -5, this.nextColors[0].id, 0.65);
+        this.drawBubble(ctx, -38, -5, this.nextColors[1].id, 0.45);
+        this.drawBubble(ctx, -70, -5, this.nextColors[2].id, 0.35);
+        ctx.restore();
+
+        if (this.movingBubble) {
+          this.drawBubble(ctx, this.movingBubble.x, this.movingBubble.y, this.movingBubble.colorId);
+        } else if (!this.gameOver && !this.victory && this.currentColor) {
+          this.drawBubble(ctx, LOGICAL_WIDTH / 2, LOGICAL_HEIGHT - BUBBLE_RADIUS, this.currentColor.id);
+        }
+      }
+
+      // 【極簡視覺】只保留外框與中間細實心圓
+      drawBubble(ctx, x, y, colorId, scale = 1) {
+        const c = COLORS.find(col => col.id === colorId);
+        ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
+
+        // 黑底 (遮蓋背後的線條)
+        ctx.beginPath(); ctx.arc(0, 0, BUBBLE_RADIUS - 1, 0, Math.PI * 2); 
+        ctx.fillStyle = '#050505'; ctx.fill();
+
+        // 粗身霓虹外框
+        ctx.beginPath(); ctx.arc(0, 0, BUBBLE_RADIUS - 4, 0, Math.PI * 2); 
+        ctx.lineWidth = 5; ctx.strokeStyle = c.hex;
+        ctx.shadowBlur = 6; ctx.shadowColor = c.shadow; ctx.stroke();
+        ctx.shadowBlur = 0; // 重置陰影
+
+        // 中間細實心圓點
+        ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2);
+        ctx.fillStyle = c.hex; ctx.fill();
+
+        ctx.restore();
+      }
+    }
+
+    const drawCanvas = () => {
+      const canvas = document.getElementById('gameCanvas'); if (!canvas || !gameState) return;
+      const ctx = canvas.getContext('2d'); const dpr = window.devicePixelRatio || 1;
+      ctx.save(); ctx.setTransform(dpr * canvasScale, 0, 0, dpr * canvasScale, 0, 0); ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+      gameState.draw(ctx); ctx.restore();
+    };
+
+    const gameLoop = (time) => {
+      if (!lastFrame) lastFrame = time;
+      const dt = Math.min(0.05, (time - lastFrame) / 1000);
+      lastFrame = time;
+
+      if (gameState && !isMenuOpen && !isRecordOpen) {
+        gameState.update(dt);
+        updateStatusDOM();
+      }
+      
+      drawCanvas();
+      animationFrameId = requestAnimationFrame(gameLoop);
+    };
+
+    // --- Inputs ---
+    const attachInputs = () => {
+      const canvas = document.getElementById('gameCanvas');
+      if (canvas.dataset.ready) return;
+      canvas.dataset.ready = 'true';
+
+      window.addEventListener('mousemove', (e) => {
+        if (!gameState || gameState.gameOver || gameState.victory || isMenuOpen || isRecordOpen || hasTouch) return;
+        const rect = canvas.getBoundingClientRect();
+        let dx = (e.clientX - rect.left) / canvasScale - (LOGICAL_WIDTH / 2);
+        let dy = (e.clientY - rect.top) / canvasScale - (LOGICAL_HEIGHT - BUBBLE_RADIUS);
+        gameState.shooterAngle = Math.atan2(dy, dx);
+      });
+
+      canvas.addEventListener('mousedown', (e) => {
+        if (!hasTouch && gameState && !isMenuOpen && !isRecordOpen) gameState.shoot();
+      });
+
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'ArrowLeft') keys.left = true;
+        if (e.code === 'ArrowRight') keys.right = true;
+        if (e.code === 'Space') { e.preventDefault(); if (gameState && !isMenuOpen && !isRecordOpen) gameState.shoot(); }
+      });
+      window.addEventListener('keyup', (e) => {
+        if (e.code === 'ArrowLeft') keys.left = false;
+        if (e.code === 'ArrowRight') keys.right = false;
+      });
+
+      window.addEventListener('touchstart', () => {
+        if (!hasTouch) {
+          hasTouch = true;
+          const ctrls = document.getElementById('mobile-controls');
+          if (ctrls) ctrls.style.display = 'flex';
+        }
+      }, {once: true});
+    };
+
+    const setupMobileButtons = () => {
+      const bindBtn = (id, keyName) => {
+        const btn = document.getElementById(id); if(!btn) return;
+        btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; }, {passive: false});
+        btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; }, {passive: false});
+      };
+      bindBtn('btn-left', 'left'); bindBtn('btn-right', 'right');
+      const fireBtn = document.getElementById('btn-fire');
+      if(fireBtn) fireBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (gameState && !isMenuOpen && !isRecordOpen) gameState.shoot(); }, {passive: false});
+    };
+
+    // --- UI/DOM ---
+    window.setSetting = (key, value) => { pendingSettings[key] = value; };
+    window.setDifficulty = (val) => { 
+      pendingSettings.difficulty = val; 
+      for(let i=1; i<=4; i++) {
+        let btn = document.getElementById(`btn-diff-${i}`);
+        if(btn) btn.className = `flex items-center justify-center py-2.5 lg:py-3 rounded text-[12px] lg:text-[14px] transition-colors key-base ${i === val ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900 hover:text-white'}`;
+      }
+    };
+    window.toggleRecord = () => { isRecordOpen = !isRecordOpen; render(); };
+
+    window.initGame = () => {
+      isMenuOpen = false; isRecordOpen = false;
+      settings = cloneState(pendingSettings);
+      gameState = new GameState();
+      lastFrame = 0;
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      render();
+      gameLoop(performance.now());
+    };
+
+    window.openMenu = () => { pendingSettings = cloneState(settings); isMenuOpen = true; isRecordOpen = false; render(); };
+
+    const updateStatusDOM = () => {
+      if (!gameState) return;
+      const scoreEl = document.getElementById('score-current');
+      const highEl = document.getElementById('score-high');
+      const shotsEl = document.getElementById('meta-shots');
+      
+      if (scoreEl) scoreEl.innerText = gameState.score;
+      if (highEl) highEl.innerText = Math.max(gameState.score, gameState.highScore);
+      if (shotsEl) shotsEl.innerText = gameState.shotsFired;
+
+      // 獨立抽離 DOM 邏輯，保留純黑底與白色文字 (bg-black/85)
+      const overlay = document.getElementById('game-overlay');
+      if (overlay) {
+        if (gameState.gameOver || gameState.victory) {
+          overlay.classList.remove('hidden');
+          overlay.classList.add('flex');
+          
+          const title = document.getElementById('overlay-title');
+          if (title) {
+            title.innerText = gameState.victory ? 'STAGE CLEAR' : 'GAME OVER';
+            title.className = gameState.victory 
+              ? 'text-3xl lg:text-4xl font-black tracking-[0.3em] mb-2 text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.6)]' 
+              : 'text-3xl lg:text-4xl font-black tracking-[0.3em] mb-2 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.6)]';
+          }
+          const score = document.getElementById('overlay-score');
+          if (score) score.innerText = `SCORE: ${gameState.score}`;
+        } else {
+          overlay.classList.add('hidden');
+          overlay.classList.remove('flex');
+        }
+      }
+    };
+
+    const getMenuHTML = () => {
+      if (!isMenuOpen) return '';
+      const closeBtn = gameState ? `<button onclick="window.openMenu=false; render();" class="text-white text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-neutral-300 transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white" onerror="this.outerHTML='✕'"></button>` : `<div class="h-[12px] lg:h-[15px] pt-1 lg:pt-1.5"></div>`;
+      
+      let diffGrid = '<div class="grid grid-cols-4 gap-1.5 lg:gap-2 w-full mt-1">';
+      for (let i = 1; i <= 4; i++) diffGrid += `<button id="btn-diff-${i}" onclick="window.setDifficulty(${i})" class="flex items-center justify-center py-2.5 lg:py-3 rounded text-[12px] lg:text-[14px] transition-colors key-base ${i === pendingSettings.difficulty ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900 hover:text-white'}">${i}</button>`;
+      diffGrid += '</div>';
+
+      return `
+        <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-y-auto ${menuJustOpened ? 'animate-fade-in' : ''}">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+            <a href="index.html" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] hover:text-white transition-colors pt-1 lg:pt-1.5 flex items-center gap-1.5 key-base" style="text-decoration:none;"><img src="./assets/gamehub.svg" alt="Hub" class="h-[12px] opacity-70 icon-white" onerror="this.style.display='none'"> 返回遊戲大堂</a>
+            ${closeBtn}
+          </header>
+          <div class="flex-1 flex flex-col items-center justify-center gap-6 pb-10 px-6 w-full mt-4 lg:mt-0">
+            <div class="flex flex-col items-center justify-center gap-3 mb-2">
+              <img src="./assets/Logo.svg" alt="LOGO" class="h-[22px] lg:h-[28px] object-contain opacity-90 icon-white" onerror="this.style.display='none'">
+              <div class="text-white tracking-[0.4em] text-[15px] lg:text-[18px] font-light opacity-60">泡泡拼圖</div>
+            </div>
+            
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3 mt-4">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase w-full text-center">PLAYER NAME</div>
+              <input type="text" value="${pendingSettings.playerName}" oninput="window.setSetting('playerName', this.value)" placeholder="你的名字" class="w-full bg-[#111] border border-neutral-800 rounded-lg py-3.5 px-4 text-[12px] lg:text-[14px] text-white text-center focus:outline-none focus:border-neutral-500 transition-colors placeholder-neutral-600 font-medium tracking-widest">
+            </div>
+
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3 mt-2">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase flex justify-between w-full"><span>DIFFICULTY 難度</span></div>
+              ${diffGrid}
+            </div>
+
+            <div class="w-full max-w-[340px] lg:max-w-[440px] mt-4">
+              <button onclick="window.initGame()" class="w-full bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black py-4 lg:py-5 rounded-lg font-bold tracking-[0.15em] text-[12px] lg:text-[16px] uppercase key-base">${gameState ? 'RESTART 重新開始' : '開始新局'}</button>
+            </div>
+          </div>
+        </div>`;
+    };
+
+    const getRecordHTML = () => {
+      if (!isRecordOpen) return '';
+      const closeBtn = `<button onclick="window.toggleRecord()" class="p-2"><img src="./assets/close.svg" class="h-[13px] icon-white" onerror="this.outerHTML='✕'"></button>`;
+      
+      const listHTML = matchHistory.map((m) => {
+        const isWin = m.status === 'STAGE CLEAR';
+        const colorTitle = isWin ? 'text-green-400' : 'text-red-500';
+        return `
+          <div class="w-full text-left border border-neutral-800 bg-[#111] rounded-xl p-4 key-base hover:border-neutral-600">
+            <div class="flex justify-between items-start gap-4">
+              <div>
+                <div class="text-white font-bold tracking-widest text-[14px] lg:text-[16px] mb-1">${m.playerName}</div>
+                <div class="${colorTitle} font-bold tracking-widest text-[12px]">${m.status}</div>
+                <div class="text-neutral-500 text-[11px] mt-2">${m.timestamp}</div>
+              </div>
+              <div class="text-right flex flex-col justify-between">
+                <div class="text-white font-light text-[22px] leading-none mb-2">${m.score}</div>
+                <div class="text-neutral-600 text-[10px] uppercase">
+                  LV.${m.difficulty} | 發射: ${m.shotsFired} | 擊破: ${m.bubblesPopped}
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('') || `<div class="text-neutral-500 text-center py-16 uppercase tracking-widest text-[11px]">暫無戰績記錄</div>`;
+      
+      return `
+        <div class="fixed inset-0 z-[60] bg-black/95 flex flex-col animate-fade-in">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex justify-between items-center">
+            <div class="text-white font-bold tracking-[0.25em] text-[12px] lg:text-[16px]">MATCH RECORD</div>
+            ${closeBtn}
+          </header>
+          <main class="flex-1 overflow-y-auto px-6 pb-10 max-w-[620px] w-full mx-auto hide-scrollbar mt-4">
+            <div class="flex flex-col gap-3">${listHTML}</div>
+          </main>
+        </div>
+      `;
+    };
+
+    const render = () => {
+      const app = document.getElementById('app');
+      if (!gameState && isMenuOpen) { app.innerHTML = getMenuHTML(); menuJustOpened = false; return; }
+      
+      app.innerHTML = `
+        ${getMenuHTML()}${getRecordHTML()}
+        <div class="w-full h-full bg-black flex flex-col overflow-hidden relative">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+            <div class="flex items-center"><img src="./assets/Logo.svg" alt="LOGO" class="h-[19px] lg:h-[25px] object-contain opacity-90 icon-white" onerror="this.style.display='none'"></div>
+            <div class="flex items-center gap-4 lg:gap-6">
+              <button onclick="window.initGame()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/back.svg" alt="RESTART" class="h-[14px] lg:h-[18px] icon-white" onerror="this.outerHTML='↶'"></button>
+              <button onclick="window.toggleRecord()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/record.svg" alt="REC" class="h-[16px] lg:h-[22px] icon-white" onerror="this.outerHTML='◷'"></button>
+              <button onclick="window.openMenu()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/setting.svg" alt="SET" class="h-[14px] lg:h-[18px] icon-white" onerror="this.outerHTML='⚙'"></button>
+            </div>
+          </header>
+          <div class="game-stage relative z-10">
+            <div class="game-meta">
+              <!-- 精準還原截圖文字排版 -->
+              <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase mb-3 lg:mb-5">
+                <div class="text-white font-bold tracking-[0.2em] text-[13px] lg:text-[16px] mb-1">泡泡拼圖</div>
+                <div class="mb-1"><span class="text-white font-bold">LV.${gameState.difficulty}</span> <span class="mx-2 opacity-50">|</span> 發射數：<span id="meta-shots">${gameState.shotsFired}</span></div>
+                <div class="text-neutral-500">${gameState.playerName}</div>
+              </div>
+              
+              <section class="score-panel meta-score flex flex-col items-start">
+                <div class="score-row pointer-events-auto">
+                  <div class="score-pill"><div class="score-label text-neutral-400 font-normal">SCORE</div><div id="score-current" class="text-white score-number text-[21px] lg:text-[34px] leading-none font-light">${gameState.score}</div></div>
+                  <div class="score-divider" aria-hidden="true"></div>
+                  <div class="score-pill"><div class="score-label text-neutral-400 font-normal">HIGH SCORE</div><div id="score-high" class="text-white score-number text-[21px] lg:text-[34px] leading-none font-light">${Math.max(gameState.score, gameState.highScore)}</div></div>
+                </div>
+              </section>
+            </div>
+            
+            <main class="board-stage">
+              <div class="board-frame">
+                <canvas id="gameCanvas" class="strike-board"></canvas>
+                
+                <!-- 獨立靜態黑底 Game Over 畫面 -->
+                <div id="game-overlay" class="absolute inset-0 z-40 bg-black/85 backdrop-blur-sm hidden flex-col items-center justify-center rounded-xl">
+                  <div id="overlay-title" class="text-3xl lg:text-4xl font-black tracking-[0.3em] mb-2 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.6)]">GAME OVER</div>
+                  <div id="overlay-score" class="text-neutral-300 font-bold tracking-widest mb-8">SCORE: 0</div>
+                  <button onclick="window.initGame()" class="px-8 py-3 bg-white text-black font-bold tracking-[0.1em] rounded-full hover:bg-neutral-200 transition-colors pointer-events-auto shadow-[0_0_15px_rgba(255,255,255,0.2)]">再玩一次</button>
+                </div>
+                
+              </div>
+              <div id="mobile-controls" class="mobile-controls">
+                <button id="btn-left" class="control-btn btn-side">◀</button>
+                <button id="btn-fire" class="control-btn btn-action">SHOOT</button>
+                <button id="btn-right" class="control-btn btn-side">▶</button>
+              </div>
+            </main>
+          </div>
+        </div>`;
+      
+      updateStatusDOM();
+      setupCanvasSize();
+      attachInputs();
+      setupMobileButtons();
+      
+      if(hasTouch) {
+        const ctrls = document.getElementById('mobile-controls');
+        if (ctrls) ctrls.style.display = 'flex';
+      }
+      menuJustOpened = false;
+    };
+
+    const setupCanvasSize = () => {
+      const canvas = document.getElementById('gameCanvas'); if (!canvas) return;
+      const rect = canvas.getBoundingClientRect(); 
+      canvasScale = rect.width / LOGICAL_WIDTH;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr); 
+      drawCanvas();
+    };
+
+    window.onload = () => { loadHistory(); render(); };
+    window.addEventListener('resize', () => { if (gameState) setupCanvasSize(); });
+  </script>
+</body>
+</html>
