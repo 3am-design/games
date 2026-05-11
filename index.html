@@ -63,7 +63,8 @@
       transition: opacity 0.3s ease;
       pointer-events: none;
     }
-    .game-card:not(.disabled):hover::before { opacity: 1; }
+    .game-card:not(.disabled):hover::before,
+    .game-card:not(.disabled).is-clicked::before { opacity: 1; }
     .font-tc { font-family: 'Noto Sans TC', sans-serif; }
   </style>
 </head>
@@ -367,6 +368,51 @@
             </div>
         </a>
 
+        <!-- Karina 新增 Game 10: 氣墊球 (Air Hockey) -->
+        <a href="airhockey.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-7 overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            
+            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-neutral-800/80 rounded-xl overflow-hidden">
+                
+                <!-- 場地邊界與中線 -->
+                <div class="absolute inset-[6px] lg:inset-[8px] border border-neutral-700/40 rounded-sm z-0"></div>
+                <div class="absolute top-1/2 left-[6px] lg:left-[8px] right-[6px] lg:right-[8px] border-t border-dashed border-neutral-600/50 z-0"></div>
+                
+                <!-- 中圈 -->
+                <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[16px] h-[16px] lg:w-[22px] lg:h-[22px] border border-neutral-600/50 rounded-full z-0"></div>
+                
+                <!-- 龍門 (白線) -->
+                <div class="absolute top-[6px] lg:top-[8px] left-1/2 -translate-x-1/2 w-[16px] lg:w-[20px] border-t-[2px] border-neutral-300 z-0"></div>
+                <div class="absolute bottom-[6px] lg:bottom-[8px] left-1/2 -translate-x-1/2 w-[16px] lg:w-[20px] border-b-[2px] border-neutral-300 z-0"></div>
+
+                <!-- AI 擊球器 (Red) -->
+                <div class="absolute top-[20%] right-[30%] w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] rounded-full border-[2px] border-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)] flex justify-center items-center z-10 transition-transform duration-300 group-hover:-translate-x-[10px] group-hover:translate-y-[6px]">
+                    <div class="w-[3px] h-[3px] lg:w-[5px] lg:h-[5px] bg-rose-500 rounded-full"></div>
+                </div>
+
+                <!-- Player 擊球器 (Blue) -->
+                <div class="absolute bottom-[20%] left-[30%] w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] rounded-full border-[2px] border-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] flex justify-center items-center z-20 transition-transform duration-300 group-hover:translate-x-[8px] group-hover:-translate-y-[12px] ease-out">
+                    <div class="w-[3px] h-[3px] lg:w-[5px] lg:h-[5px] bg-blue-500 rounded-full"></div>
+                </div>
+
+                <!-- 軌跡粒子 (預設隱藏，Hover 時浮現) -->
+                <div class="absolute top-[48%] left-[45%] w-[2px] h-[2px] bg-white rounded-full opacity-0 group-hover:opacity-80 transition-opacity duration-300 delay-75 z-0 shadow-[0_0_4px_rgba(255,255,255,1)]"></div>
+                <div class="absolute top-[56%] left-[41%] w-[3px] h-[3px] bg-white/70 rounded-full opacity-0 group-hover:opacity-80 transition-opacity duration-300 delay-150 z-0 shadow-[0_0_4px_rgba(255,255,255,0.8)]"></div>
+                <div class="absolute top-[64%] left-[37%] w-[2px] h-[2px] bg-rose-400/60 rounded-full opacity-0 group-hover:opacity-80 transition-opacity duration-300 delay-200 z-0 shadow-[0_0_4px_rgba(251,113,133,0.8)]"></div>
+
+                <!-- 氣墊球 Puck (White) -->
+                <div class="absolute top-[65%] left-[35%] w-[8px] h-[8px] lg:w-[10px] lg:h-[10px] rounded-full border-[1.5px] lg:border-[2px] border-white shadow-[0_0_8px_rgba(255,255,255,0.9)] bg-[#111] flex justify-center items-center z-30 transition-all duration-300 group-hover:top-[30%] group-hover:left-[55%] ease-out">
+                    <div class="w-[2px] h-[2px] lg:w-[3px] lg:h-[3px] bg-white rounded-full"></div>
+                </div>
+
+            </div>
+            
+            <div class="flex flex-col items-center mt-2">
+                <span class="text-white font-tc font-bold text-[16px] lg:text-[18px] tracking-wider">氣墊球</span>
+                <span class="text-neutral-500 text-[9px] lg:text-[11px] tracking-[0.2em] uppercase mt-1">Air Hockey</span>
+            </div>
+        </a>
+
     </div>
   </main>
 
@@ -374,5 +420,49 @@
     © 2026 Board Games Hub. All rights reserved.
   </footer>
 
+  <!-- 處理 Mobile 點擊觸發 Hover 動畫 -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // 檢測是否為觸控設備 (Mobile/Tablet)
+        const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+        if (isTouchDevice) {
+            // 1. 動態將所有 hover / group-hover class 複製為 is-clicked 的觸發條件 (Tailwind JIT 會自動編譯)
+            document.querySelectorAll('*').forEach(el => {
+                const classes = Array.from(el.classList);
+                classes.forEach(cls => {
+                    if (cls.startsWith('group-hover:')) {
+                        el.classList.add(cls.replace('group-hover:', 'group-[.is-clicked]:'));
+                    } else if (cls.startsWith('hover:')) {
+                        el.classList.add(cls.replace('hover:', '[&.is-clicked]:'));
+                    }
+                });
+            });
+
+            // 2. 攔截卡片點擊，先播放動畫再跳轉頁面
+            document.querySelectorAll('.game-card:not(.disabled)').forEach(card => {
+                card.addEventListener('click', function(e) {
+                    e.preventDefault(); // 阻止原本的 A 標籤直接跳轉
+                    const targetUrl = this.getAttribute('href');
+                    
+                    // 加上觸發動畫的 class
+                    this.classList.add('is-clicked');
+                    
+                    // 延遲跳轉，留時間給動畫播放 (設定 650ms 確保包含 delay 的動畫都能順利播完)
+                    setTimeout(() => {
+                        window.location.href = targetUrl;
+                    }, 650); 
+                });
+            });
+
+            // 3. 解決 iOS Safari 返回上一頁時，動畫卡住的問題 (BFCache 清理)
+            window.addEventListener('pageshow', function(e) {
+                if (e.persisted) {
+                    document.querySelectorAll('.game-card').forEach(card => card.classList.remove('is-clicked'));
+                }
+            });
+        }
+    });
+  </script>
 </body>
 </html>

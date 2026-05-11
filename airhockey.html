@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Games - 氣墊球</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Noto+Sans+TC:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { future: { hoverOnlyWhenSupported: true } };</script>
+  <style>
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.28s ease-out; }
+    html, body {
+      overscroll-behavior-y: none; background-color: #000; font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      color: #fff; height: 100%; height: -webkit-fill-available; overflow: hidden; margin: 0; touch-action: none;
+    }
+    .app-container { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    button, canvas, input { -webkit-tap-highlight-color: transparent; outline: none; touch-action: manipulation; }
+    .key-base { transition: background-color 0.2s ease-out, color 0.2s ease-out, border-color 0.2s, opacity 0.2s; }
+    .key-base:active { opacity: 0.5; transition: none; }
+    .icon-white { filter: brightness(0) invert(1); }
+    .game-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .board-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; padding: 10px 16px 18px; }
+    .board-frame { width: min(88vw, 65vh, 480px); max-width: 480px; position: relative; }
+    .strike-board {
+      width: 100%; aspect-ratio: 3 / 4; display: block; background: #050505;
+      border: 1.5px solid rgba(255,255,255,0.24); border-radius: 12px; box-shadow: 0 0 40px rgba(0,0,0,0.85);
+      cursor: none; position: relative; z-index: 2; touch-action: none;
+    }
+    .game-meta { position: fixed; top: 60px; left: 20px; z-index: 20; pointer-events: none; text-align: left; }
+    .meta-score { margin-top: 18px; }
+    .score-panel { pointer-events: none; }
+    .score-row { display: inline-grid; grid-template-columns: max-content 1px max-content; column-gap: 18px; align-items: start; }
+    .score-divider { width: 1px; height: 48px; background: rgba(255,255,255,0.22); align-self: start; margin-top: 1px; }
+    .score-pill { border: 0; background: transparent; border-radius: 0; padding: 0; min-width: 46px; }
+    .score-label { font-size: 10px; letter-spacing: 0.12em; margin-bottom: 5px; line-height: 1.1; }
+    .score-number { font-family: 'Inter', sans-serif; font-weight: 300; letter-spacing: -0.04em; display:block; }
+    @media (min-width: 1024px) {
+      .game-stage { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(420px, 560px) minmax(260px, 1fr); align-items: center; }
+      .game-meta { top: 85px; left: 48px; }
+      .meta-score { margin-top: 20px; }
+      .score-panel { position: static; grid-column: 1; align-self: center; justify-self: start; padding-left: 0; }
+      .score-divider { height: 56px; }
+      .score-label { font-size: 11px; font-weight: 400; }
+      .board-stage { grid-column: 2; padding: 0; align-self: center; justify-self: center; }
+      .board-frame { width: min(480px, 70vh); max-width: 480px; }
+    }
+    @media (max-width: 1023px) {
+      .game-meta { top: 60px; left: 20px; right: 20px; display: grid; grid-template-columns: max-content 1fr; align-items: end; width: auto; }
+      .meta-score { margin-top: 0; grid-column: 2; justify-self: end; align-self: end; }
+      .score-panel { position: static; text-align: left; align-items: flex-start !important; padding: 0; z-index: 21; }
+      .score-row { justify-content: flex-start; align-items: start; column-gap: 14px; }
+      .score-divider { height: 40px; }
+      .score-label { font-size: 9px; margin-bottom: 4px; }
+      .board-stage { transform: translateY(-2vh); }
+      .board-frame { width: min(92vw, 60vh); }
+    }
+  </style>
+</head>
+<body class="bg-black selection:bg-white/30">
+  <div id="app" class="app-container"></div>
+  <script>
+    const cloneState = (state) => JSON.parse(JSON.stringify(state));
+    const LOGICAL_WIDTH = 600;
+    const LOGICAL_HEIGHT = 800;
+    const PADDLE_R = 34;
+    const PUCK_R = 18;
+    const BONUS_R = 12;
+    const GOAL_W = 230;
+    const GOAL_X1 = (LOGICAL_WIDTH - GOAL_W) / 2;
+    const GOAL_X2 = (LOGICAL_WIDTH + GOAL_W) / 2;
+    const TARGET_SCORE = 100;
+    const MAIN_SCORE = 10;
+    const BONUS_SCORE = 3;
+    const GOLD_R = 15;
+    const GOLD_SCORE = 30;
+
+    const DIFF_CONFIG = {
+      1: { label: 'EASY', aiSpeed: 520, aiError: 76, aiReact: 0.065, bonusEvery: 10.5, maxBonus: 2, puckSpeed: 1.00 },
+      2: { label: 'NORMAL', aiSpeed: 650, aiError: 48, aiReact: 0.05, bonusEvery: 9.0, maxBonus: 3, puckSpeed: 1.05 },
+      3: { label: 'HARD', aiSpeed: 760, aiError: 26, aiReact: 0.035, bonusEvery: 7.8, maxBonus: 4, puckSpeed: 1.10 },
+      4: { label: 'MASTER', aiSpeed: 900, aiError: 12, aiReact: 0.02, bonusEvery: 6.8, maxBonus: 5, puckSpeed: 1.16 }
+    };
+
+    let settings = { playerName: '', difficulty: 2 };
+    let pendingSettings = cloneState(settings);
+    let gameState = null;
+    let canvasScale = 1;
+    let animationFrameId = null;
+    let lastFrame = 0;
+    let isMenuOpen = true;
+    let isRecordOpen = false;
+    let menuJustOpened = true;
+    let matchHistory = [];
+    let pointerDown = false;
+    let pointerTarget = null;
+
+    const rand = (min, max) => Math.random() * (max - min) + min;
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+    const loadHistory = () => {
+      try { const saved = localStorage.getItem('ah_match_history'); if (saved) matchHistory = JSON.parse(saved); } catch (e) { matchHistory = []; }
+    };
+    const saveHistory = () => { try { localStorage.setItem('ah_match_history', JSON.stringify(matchHistory)); } catch (e) {} };
+    const recordFinishedGame = () => {
+      if (!gameState || !gameState.gameOver || gameState.hasRecorded) return;
+      gameState.hasRecorded = true;
+      const rec = {
+        id: Date.now(), timestamp: new Date().toLocaleString(), playerName: gameState.playerName,
+        playerScore: gameState.playerScore, aiScore: gameState.aiScore, difficulty: gameState.difficulty,
+        status: gameState.playerScore > gameState.aiScore ? 'WIN' : 'LOSE', bonusScored: gameState.bonusScored
+      };
+      matchHistory.unshift(rec); if (matchHistory.length > 50) matchHistory.pop(); saveHistory();
+    };
+
+    class GameState {
+      constructor() {
+        this.playerName = settings.playerName.trim() || 'PLAYER 1';
+        this.difficulty = settings.difficulty;
+        this.cfg = DIFF_CONFIG[this.difficulty];
+        this.playerScore = 0; this.aiScore = 0;
+        this.playerPaddle = { x: LOGICAL_WIDTH / 2, y: LOGICAL_HEIGHT - 95, px: LOGICAL_WIDTH / 2, py: LOGICAL_HEIGHT - 95, vx: 0, vy: 0, r: PADDLE_R };
+        this.aiPaddle = { x: LOGICAL_WIDTH / 2, y: 95, px: LOGICAL_WIDTH / 2, py: 95, vx: 0, vy: 0, r: PADDLE_R };
+        this.pucks = [];
+        this.particles = [];
+        this.floatTexts = [];
+        this.flash = 0;
+        this.shake = 0;
+        this.bonusTimer = 3.5;
+        this.goldTimer = rand(14, 28);
+        this.goldSpawned = false;
+        this.bonusScored = 0;
+        this.roundPause = 0.7;
+        this.gameOver = false;
+        this.hasRecorded = false;
+        this.lastScorer = null;
+        this.spawnMainPuck(Math.random() > 0.5 ? 1 : -1);
+      }
+
+      spawnMainPuck(dir = 1) {
+        const speed = 450 * this.cfg.puckSpeed;
+        this.pucks = this.pucks.filter(p => p.type !== 'main');
+        this.pucks.push({
+          type: 'main', x: LOGICAL_WIDTH / 2, y: LOGICAL_HEIGHT / 2, vx: rand(-120, 120), vy: speed * dir,
+          r: PUCK_R, score: MAIN_SCORE, color: '#f4f4f5', mass: 1.35, life: 999, born: 0, glow: 'rgba(255,255,255,0.55)'
+        });
+      }
+
+      spawnBonusBurst() {
+        const activeBonus = this.pucks.filter(p => p.type === 'bonus').length;
+        if (activeBonus >= this.cfg.maxBonus) return;
+        const count = Math.min(this.cfg.maxBonus - activeBonus, Math.random() > 0.45 ? 2 : 1);
+        for (let i = 0; i < count; i++) {
+          const a = rand(-Math.PI * 0.78, -Math.PI * 0.22) + (Math.random() > 0.5 ? 0 : Math.PI);
+          const speed = rand(360, 520) * this.cfg.puckSpeed;
+          this.pucks.push({
+            type: 'bonus', x: LOGICAL_WIDTH / 2 + rand(-36, 36), y: LOGICAL_HEIGHT / 2 + rand(-20, 20),
+            vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, r: BONUS_R, score: BONUS_SCORE,
+            color: '#ff4fa3', mass: 0.58, life: 12, born: 0, glow: 'rgba(255,79,163,0.55)'
+          });
+        }
+        this.flash = 0.16;
+        this.shake = 4;
+        this.addFloatText('BONUS', LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2 - 34, '#ff4fa3');
+      }
+
+      spawnGoldPuck() {
+        if (this.goldSpawned || this.gameOver) return;
+        this.goldSpawned = true;
+        const a = rand(Math.PI * 0.18, Math.PI * 0.82) * (Math.random() > 0.5 ? 1 : -1);
+        const speed = rand(380, 520) * this.cfg.puckSpeed;
+        this.pucks.push({
+          type: 'gold', x: LOGICAL_WIDTH / 2 + rand(-70, 70), y: LOGICAL_HEIGHT / 2 + rand(-50, 50),
+          vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, r: GOLD_R, score: GOLD_SCORE,
+          color: '#facc15', mass: 0.78, life: 18, born: 0, glow: 'rgba(250,204,21,0.58)'
+        });
+        this.flash = 0.12;
+        this.shake = 3;
+        this.addFloatText('30 POINT', LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2 - 42, '#facc15');
+      }
+
+      addParticles(x, y, color, count = 10) {
+        for (let i = 0; i < count; i++) {
+          const a = rand(0, Math.PI * 2); const s = rand(80, 360);
+          this.particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.28, 0.62), color, size: rand(2, 5) });
+        }
+      }
+
+      addFloatText(text, x, y, color = '#fff') {
+        this.floatTexts.push({ text, x, y, color, life: 0.8 });
+      }
+
+      update(dt) {
+        if (this.gameOver) return;
+        this.flash = Math.max(0, this.flash - dt);
+        this.shake = Math.max(0, this.shake - dt * 12);
+        this.updatePaddles(dt);
+        if (this.roundPause > 0) { this.roundPause -= dt; this.updateEffects(dt); return; }
+
+        this.bonusTimer -= dt;
+        if (!this.goldSpawned) {
+          this.goldTimer -= dt;
+          if (this.goldTimer <= 0) this.spawnGoldPuck();
+        }
+        if (this.bonusTimer <= 0) {
+          this.spawnBonusBurst();
+          this.bonusTimer = this.cfg.bonusEvery + rand(-1.2, 1.4);
+        }
+
+        const steps = Math.max(1, Math.ceil(this.maxPuckSpeed() * dt / 10));
+        const sub = dt / steps;
+        for (let i = 0; i < steps; i++) {
+          this.pucks.forEach(p => this.updatePuck(p, sub));
+          this.resolvePuckPaddleCollisions(this.playerPaddle, true);
+          this.resolvePuckPaddleCollisions(this.aiPaddle, false);
+          this.resolvePuckCollisions();
+          this.checkGoals();
+        }
+        this.pucks = this.pucks.filter(p => p.type === 'main' || p.life > 0);
+        if (!this.pucks.some(p => p.type === 'main')) this.spawnMainPuck(Math.random() > 0.5 ? 1 : -1);
+        this.updateEffects(dt);
+        this.checkGameOver();
+      }
+
+      maxPuckSpeed() {
+        return this.pucks.reduce((m, p) => Math.max(m, Math.hypot(p.vx, p.vy)), 1);
+      }
+
+      updatePaddles(dt) {
+        const p = this.playerPaddle;
+        p.px = p.x; p.py = p.y;
+        if (pointerTarget) {
+          p.x += (pointerTarget.x - p.x) * Math.min(1, dt * 19);
+          p.y += (pointerTarget.y - p.y) * Math.min(1, dt * 19);
+        }
+        p.x = clamp(p.x, PADDLE_R + 8, LOGICAL_WIDTH - PADDLE_R - 8);
+        p.y = clamp(p.y, LOGICAL_HEIGHT / 2 + PADDLE_R + 8, LOGICAL_HEIGHT - PADDLE_R - 16);
+        p.vx = (p.x - p.px) / Math.max(dt, 0.001); p.vy = (p.y - p.py) / Math.max(dt, 0.001);
+
+        const ai = this.aiPaddle;
+        ai.px = ai.x; ai.py = ai.y;
+        const targets = this.pucks.filter(pk => pk.vy < 160 || pk.y < LOGICAL_HEIGHT * 0.58).sort((a,b) => a.y - b.y);
+        const target = targets[0] || this.pucks.find(pk => pk.type === 'main') || { x: LOGICAL_WIDTH / 2, y: 130 };
+        let tx = target.x + Math.sin(performance.now() * 0.003) * this.cfg.aiError;
+        let ty = target.y < 360 ? target.y - 34 : 105;
+        const cornerBuffer = PADDLE_R + 38;
+        if (target.y < 145 && (target.x < cornerBuffer || target.x > LOGICAL_WIDTH - cornerBuffer)) {
+          tx = LOGICAL_WIDTH / 2 + (target.x < LOGICAL_WIDTH / 2 ? -72 : 72);
+          ty = 128;
+        }
+        ty = clamp(ty, PADDLE_R + 22, LOGICAL_HEIGHT / 2 - PADDLE_R - 8);
+        const dx = tx - ai.x, dy = ty - ai.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const step = this.cfg.aiSpeed * dt;
+        if (d > 1) { ai.x += dx / d * Math.min(step, d); ai.y += dy / d * Math.min(step, d); }
+        ai.x = clamp(ai.x, PADDLE_R + 14, LOGICAL_WIDTH - PADDLE_R - 14);
+        ai.y = clamp(ai.y, PADDLE_R + 22, LOGICAL_HEIGHT / 2 - PADDLE_R - 8);
+        ai.vx = (ai.x - ai.px) / Math.max(dt, 0.001); ai.vy = (ai.y - ai.py) / Math.max(dt, 0.001);
+      }
+
+      updatePuck(p, dt) {
+        p.born += dt; p.life -= p.type !== 'main' ? dt : 0;
+        p.x += p.vx * dt; p.y += p.vy * dt;
+        p.vx *= Math.pow(0.9985, dt * 60);
+        p.vy *= Math.pow(0.9985, dt * 60);
+        const maxSpeed = p.type === 'main' ? 980 : (p.type === 'gold' ? 920 : 880);
+        const minSpeed = p.type === 'main' ? 300 : (p.type === 'gold' ? 260 : 230);
+        let s = Math.hypot(p.vx, p.vy) || 1;
+        if (s > maxSpeed) { p.vx = p.vx / s * maxSpeed; p.vy = p.vy / s * maxSpeed; }
+        if (s < minSpeed && p.y > 20 && p.y < LOGICAL_HEIGHT - 20) { p.vx = p.vx / s * minSpeed; p.vy = p.vy / s * minSpeed; }
+        if (p.x < p.r + 8) { p.x = p.r + 8; p.vx = Math.abs(p.vx) * 0.96; this.wallHit(p); }
+        if (p.x > LOGICAL_WIDTH - p.r - 8) { p.x = LOGICAL_WIDTH - p.r - 8; p.vx = -Math.abs(p.vx) * 0.96; this.wallHit(p); }
+        const inGoal = p.x > GOAL_X1 && p.x < GOAL_X2;
+        if (!inGoal) {
+          if (p.y < p.r + 8) { p.y = p.r + 8; p.vy = Math.abs(p.vy) * 0.96; this.wallHit(p); }
+          if (p.y > LOGICAL_HEIGHT - p.r - 8) { p.y = LOGICAL_HEIGHT - p.r - 8; p.vy = -Math.abs(p.vy) * 0.96; this.wallHit(p); }
+        }
+        this.preventCornerTrap(p);
+      }
+
+      preventCornerTrap(p) {
+        const margin = p.r + 38;
+        const topCorner = p.y < margin && (p.x < margin || p.x > LOGICAL_WIDTH - margin);
+        const bottomCorner = p.y > LOGICAL_HEIGHT - margin && (p.x < margin || p.x > LOGICAL_WIDTH - margin);
+        if (!topCorner && !bottomCorner) return;
+        const speed = Math.hypot(p.vx, p.vy);
+        if (speed > 520 && Math.abs(p.vx) > 80 && Math.abs(p.vy) > 80) return;
+        const cx = LOGICAL_WIDTH / 2, cy = LOGICAL_HEIGHT / 2;
+        const dx = cx - p.x, dy = cy - p.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const kick = p.type === 'main' ? 360 : 300;
+        p.vx += (dx / d) * kick * 0.035;
+        p.vy += (dy / d) * kick * 0.035;
+      }
+
+      wallHit(p) {
+        if (Math.random() > 0.55) return;
+        this.addParticles(p.x, p.y, p.color, 3);
+      }
+
+      resolvePuckPaddleCollisions(paddle, isPlayer) {
+        for (const puck of this.pucks) {
+          const dx = puck.x - paddle.x, dy = puck.y - paddle.y;
+          const d = Math.hypot(dx, dy) || 1;
+          const minD = puck.r + paddle.r;
+          if (d < minD) {
+            const nx = dx / d, ny = dy / d;
+            puck.x = paddle.x + nx * minD;
+            puck.y = paddle.y + ny * minD;
+            const relVx = puck.vx - paddle.vx * 0.36;
+            const relVy = puck.vy - paddle.vy * 0.36;
+            const vn = relVx * nx + relVy * ny;
+            if (vn < 0) {
+              puck.vx -= (1.82 * vn) * nx;
+              puck.vy -= (1.82 * vn) * ny;
+            }
+            puck.vx += paddle.vx * 0.19;
+            puck.vy += paddle.vy * 0.19;
+            const push = isPlayer ? -140 : 140;
+            puck.vy += push;
+            this.addParticles(puck.x - nx * puck.r, puck.y - ny * puck.r, puck.color, puck.type === 'bonus' ? 4 : 6);
+          }
+        }
+      }
+
+      resolvePuckCollisions() {
+        for (let i = 0; i < this.pucks.length; i++) {
+          for (let j = i + 1; j < this.pucks.length; j++) {
+            const a = this.pucks[i], b = this.pucks[j];
+            const dx = b.x - a.x, dy = b.y - a.y;
+            const d = Math.hypot(dx, dy) || 1;
+            const minD = a.r + b.r;
+            if (d < minD) {
+              const nx = dx / d, ny = dy / d;
+              const overlap = minD - d;
+              a.x -= nx * overlap * 0.5; a.y -= ny * overlap * 0.5;
+              b.x += nx * overlap * 0.5; b.y += ny * overlap * 0.5;
+              const rel = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+              if (rel < 0) {
+                const impulse = -(1.22) * rel / (1 / a.mass + 1 / b.mass);
+                a.vx -= nx * impulse / a.mass; a.vy -= ny * impulse / a.mass;
+                b.vx += nx * impulse / b.mass; b.vy += ny * impulse / b.mass;
+              }
+            }
+          }
+        }
+      }
+
+      checkGoals() {
+        for (const p of this.pucks) {
+          if (p.x <= GOAL_X1 || p.x >= GOAL_X2) continue;
+          if (p.y < -p.r) this.scoreGoal('player', p);
+          if (p.y > LOGICAL_HEIGHT + p.r) this.scoreGoal('ai', p);
+        }
+      }
+
+      scoreGoal(side, puck) {
+        if (puck._scored) return;
+        puck._scored = true;
+        const value = puck.score;
+        if (side === 'player') this.playerScore += value;
+        else this.aiScore += value;
+        if (puck.type === 'bonus') this.bonusScored += 1;
+        this.addParticles(puck.x, clamp(puck.y, 0, LOGICAL_HEIGHT), puck.color, puck.type === 'main' ? 22 : (puck.type === 'gold' ? 24 : 14));
+        this.addFloatText(`+${value}`, puck.x, side === 'player' ? 48 : LOGICAL_HEIGHT - 50, side === 'player' ? '#fff' : '#ff5b5b');
+        this.flash = 0.18; this.shake = puck.type === 'bonus' ? 4 : 8;
+        this.pucks = this.pucks.filter(x => x !== puck);
+        if (puck.type === 'main') {
+          this.roundPause = 0.55;
+          setTimeout(() => { if (gameState && !gameState.gameOver) gameState.spawnMainPuck(side === 'player' ? 1 : -1); }, 520);
+        }
+        updateStatusDOM();
+      }
+
+      updateEffects(dt) {
+        this.particles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.96; p.vy *= 0.96; p.life -= dt; });
+        this.particles = this.particles.filter(p => p.life > 0);
+        this.floatTexts.forEach(t => { t.y -= 42 * dt; t.life -= dt; });
+        this.floatTexts = this.floatTexts.filter(t => t.life > 0);
+      }
+
+      checkGameOver() {
+        if (this.playerScore >= TARGET_SCORE || this.aiScore >= TARGET_SCORE) {
+          this.gameOver = true;
+          recordFinishedGame();
+        }
+      }
+
+      draw(ctx) {
+        const sx = this.shake > 0 ? rand(-this.shake, this.shake) : 0;
+        const sy = this.shake > 0 ? rand(-this.shake, this.shake) : 0;
+        ctx.save(); ctx.translate(sx, sy);
+        this.drawRink(ctx);
+        this.pucks.forEach(p => this.drawPuck(ctx, p));
+        this.drawPaddle(ctx, this.aiPaddle, '#ff5b5b', false);
+        this.drawPaddle(ctx, this.playerPaddle, '#3b82f6', true);
+        this.particles.forEach(p => { ctx.save(); ctx.globalAlpha = Math.max(0, p.life * 2.2); ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); ctx.restore(); });
+        this.floatTexts.forEach(t => { ctx.save(); ctx.globalAlpha = Math.max(0, Math.min(1, t.life * 1.8)); ctx.fillStyle = t.color; ctx.font = '800 24px Inter'; ctx.textAlign = 'center'; ctx.fillText(t.text, t.x, t.y); ctx.restore(); });
+        if (this.flash > 0) { ctx.save(); ctx.globalAlpha = this.flash * 0.35; ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT); ctx.restore(); }
+        ctx.restore();
+      }
+
+      drawRink(ctx) {
+        ctx.fillStyle = '#050505'; ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 2;
+        ctx.strokeRect(8, 8, LOGICAL_WIDTH - 16, LOGICAL_HEIGHT - 16);
+        ctx.beginPath(); ctx.moveTo(20, LOGICAL_HEIGHT / 2); ctx.lineTo(LOGICAL_WIDTH - 20, LOGICAL_HEIGHT / 2); ctx.setLineDash([10, 12]); ctx.stroke(); ctx.setLineDash([]);
+        ctx.beginPath(); ctx.arc(LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2, 78, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.stroke();
+
+        // Very subtle oversized surface score on the rink itself.
+        // Kept intentionally dark so it reads like a printed court marking, not a UI layer.
+        ctx.save();
+        ctx.setLineDash([]);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = '900 116px Inter, sans-serif';
+        ctx.letterSpacing = '-0.06em';
+        ctx.fillStyle = 'rgba(255,255,255,0.045)';
+        ctx.fillText(String(this.aiScore), LOGICAL_WIDTH / 2, LOGICAL_HEIGHT * 0.25);
+        ctx.fillText(String(this.playerScore), LOGICAL_WIDTH / 2, LOGICAL_HEIGHT * 0.75);
+        ctx.font = '800 18px Inter, sans-serif';
+        ctx.letterSpacing = '0.28em';
+        ctx.fillStyle = 'rgba(255,255,255,0.035)';
+        ctx.fillText('AI', LOGICAL_WIDTH / 2, LOGICAL_HEIGHT * 0.25 + 82);
+        ctx.fillText(this.playerName.toUpperCase().slice(0, 10), LOGICAL_WIDTH / 2, LOGICAL_HEIGHT * 0.75 + 82);
+        ctx.restore();
+
+        ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+        ctx.beginPath(); ctx.moveTo(GOAL_X1, 8); ctx.lineTo(GOAL_X2, 8); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(GOAL_X1, LOGICAL_HEIGHT - 8); ctx.lineTo(GOAL_X2, LOGICAL_HEIGHT - 8); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.fillRect(GOAL_X1, 0, GOAL_W, 18); ctx.fillRect(GOAL_X1, LOGICAL_HEIGHT - 18, GOAL_W, 18);
+        ctx.restore();
+      }
+
+      drawPaddle(ctx, p, color, isPlayer) {
+        ctx.save(); ctx.translate(p.x, p.y);
+        ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI * 2); ctx.fillStyle = '#090909'; ctx.fill();
+        ctx.lineWidth = 8; ctx.strokeStyle = color; ctx.shadowBlur = 10; ctx.shadowColor = color; ctx.stroke(); ctx.shadowBlur = 0;
+        ctx.beginPath(); ctx.arc(0, 0, p.r * 0.45, 0, Math.PI * 2); ctx.fillStyle = color; ctx.globalAlpha = isPlayer ? 0.92 : 0.72; ctx.fill();
+        ctx.restore();
+      }
+
+      drawPuck(ctx, p) {
+        ctx.save(); ctx.translate(p.x, p.y);
+        const pulse = p.type === 'bonus' ? 1 + Math.sin(p.born * 10) * 0.04 : 1;
+        ctx.scale(pulse, pulse);
+        ctx.beginPath(); ctx.arc(0, 0, p.r, 0, Math.PI * 2); ctx.fillStyle = p.type === 'gold' ? '#1a1500' : (p.type === 'bonus' ? '#150611' : '#080808'); ctx.fill();
+        ctx.lineWidth = p.type === 'main' ? 6 : 5; ctx.strokeStyle = p.color; ctx.shadowBlur = p.type === 'main' ? 8 : 12; ctx.shadowColor = p.glow; ctx.stroke(); ctx.shadowBlur = 0;
+        ctx.beginPath(); ctx.arc(0, 0, Math.max(3, p.r * 0.22), 0, Math.PI * 2); ctx.fillStyle = p.color; ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    const drawCanvas = () => {
+      const canvas = document.getElementById('gameCanvas'); if (!canvas || !gameState) return;
+      const ctx = canvas.getContext('2d'); const dpr = window.devicePixelRatio || 1;
+      ctx.save(); ctx.setTransform(dpr * canvasScale, 0, 0, dpr * canvasScale, 0, 0); ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+      gameState.draw(ctx); ctx.restore();
+    };
+
+    const gameLoop = (time) => {
+      if (!lastFrame) lastFrame = time;
+      const dt = Math.min(0.033, (time - lastFrame) / 1000); lastFrame = time;
+      if (gameState && !isMenuOpen && !isRecordOpen) { gameState.update(dt); updateStatusDOM(); }
+      drawCanvas(); animationFrameId = requestAnimationFrame(gameLoop);
+    };
+
+    const getCanvasPoint = (e) => {
+      const canvas = document.getElementById('gameCanvas'); const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return { x: (clientX - rect.left) / canvasScale, y: (clientY - rect.top) / canvasScale };
+    };
+
+    const attachInputs = () => {
+      const canvas = document.getElementById('gameCanvas'); if (!canvas || canvas.dataset.ready) return; canvas.dataset.ready = 'true';
+      const start = (e) => { if (!gameState || isMenuOpen || isRecordOpen) return; e.preventDefault(); pointerDown = true; pointerTarget = getCanvasPoint(e); };
+      const move = (e) => { if (!gameState || isMenuOpen || isRecordOpen) return; const pt = getCanvasPoint(e); if (pointerDown || !e.touches) pointerTarget = pt; };
+      const end = () => { pointerDown = false; };
+      canvas.addEventListener('mousedown', start);
+      window.addEventListener('mousemove', move);
+      window.addEventListener('mouseup', end);
+      canvas.addEventListener('touchstart', start, { passive: false });
+      canvas.addEventListener('touchmove', move, { passive: false });
+      canvas.addEventListener('touchend', end, { passive: false });
+    };
+
+    window.setSetting = (key, value) => { pendingSettings[key] = value; };
+    window.setDifficulty = (val) => {
+      pendingSettings.difficulty = val;
+      for(let i=1; i<=4; i++) {
+        let btn = document.getElementById(`btn-diff-${i}`);
+        if(btn) btn.className = `flex items-center justify-center py-2.5 lg:py-3 rounded text-[12px] lg:text-[14px] transition-colors key-base ${i === val ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900 hover:text-white'}`;
+      }
+    };
+    window.toggleRecord = () => { isRecordOpen = !isRecordOpen; render(); };
+    window.initGame = () => {
+      isMenuOpen = false; isRecordOpen = false; pointerTarget = null; pointerDown = false;
+      settings = cloneState(pendingSettings); gameState = new GameState(); lastFrame = 0;
+      if (animationFrameId) cancelAnimationFrame(animationFrameId); render(); gameLoop(performance.now());
+    };
+    window.openMenu = () => { pendingSettings = cloneState(settings); isMenuOpen = true; isRecordOpen = false; render(); };
+
+    const updateStatusDOM = () => {
+      if (!gameState) return;
+      const playerEl = document.getElementById('score-player'); const aiEl = document.getElementById('score-ai');
+      const bonusEl = document.getElementById('meta-bonus');
+      if (playerEl) playerEl.innerText = gameState.playerScore;
+      if (aiEl) aiEl.innerText = gameState.aiScore;
+      if (bonusEl) bonusEl.innerText = gameState.bonusScored;
+      const overlay = document.getElementById('game-overlay');
+      if (overlay) {
+        if (gameState.gameOver) {
+          overlay.classList.remove('hidden'); overlay.classList.add('flex');
+          const win = gameState.playerScore > gameState.aiScore;
+          const title = document.getElementById('overlay-title');
+          if (title) { title.innerText = win ? 'YOU WIN' : 'GAME OVER'; title.className = win ? 'text-3xl lg:text-4xl font-black tracking-[0.3em] mb-2 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.6)]' : 'text-3xl lg:text-4xl font-black tracking-[0.3em] mb-2 text-red-400 drop-shadow-[0_0_10px_rgba(248,113,113,0.6)]'; }
+          const score = document.getElementById('overlay-score'); if (score) score.innerText = `${gameState.playerScore} : ${gameState.aiScore}`;
+        } else { overlay.classList.add('hidden'); overlay.classList.remove('flex'); }
+      }
+    };
+
+    const getMenuHTML = () => {
+      if (!isMenuOpen) return '';
+      const closeBtn = gameState ? `<button onclick="isMenuOpen=false; render();" class="text-white text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-neutral-300 transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white" onerror="this.outerHTML='✕'"></button>` : `<div class="h-[12px] lg:h-[15px] pt-1 lg:pt-1.5"></div>`;
+      let diffGrid = '<div class="grid grid-cols-4 gap-1.5 lg:gap-2 w-full mt-1">';
+      for (let i = 1; i <= 4; i++) diffGrid += `<button id="btn-diff-${i}" onclick="window.setDifficulty(${i})" class="flex items-center justify-center py-2.5 lg:py-3 rounded text-[12px] lg:text-[14px] transition-colors key-base ${i === pendingSettings.difficulty ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900 hover:text-white'}">${i}</button>`;
+      diffGrid += '</div>';
+      return `
+        <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-y-auto ${menuJustOpened ? 'animate-fade-in' : ''}">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+            <a href="index.html" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] hover:text-white transition-colors pt-1 lg:pt-1.5 flex items-center gap-1.5 key-base" style="text-decoration:none;"><img src="./assets/gamehub.svg" alt="Hub" class="h-[12px] opacity-70 icon-white" onerror="this.style.display='none'"> 返回遊戲大堂</a>
+            ${closeBtn}
+          </header>
+          <div class="flex-1 flex flex-col items-center justify-center gap-6 pb-10 px-6 w-full mt-4 lg:mt-0">
+            <div class="flex flex-col items-center justify-center gap-3 mb-2">
+              <img src="./assets/Logo.svg" alt="LOGO" class="h-[22px] lg:h-[28px] object-contain opacity-90 icon-white" onerror="this.style.display='none'">
+              <div class="text-white tracking-[0.4em] text-[15px] lg:text-[18px] font-light opacity-60">氣墊球</div>
+            </div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3 mt-4">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase w-full text-center">PLAYER NAME</div>
+              <input type="text" value="${pendingSettings.playerName}" oninput="window.setSetting('playerName', this.value)" placeholder="你的名字" class="w-full bg-[#111] border border-neutral-800 rounded-lg py-3.5 px-4 text-[12px] lg:text-[14px] text-white text-center focus:outline-none focus:border-neutral-500 transition-colors placeholder-neutral-600 font-medium tracking-widest">
+            </div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3 mt-2">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase flex justify-between w-full"><span>DIFFICULTY 難度</span></div>
+              ${diffGrid}
+            </div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] mt-4">
+              <button onclick="window.initGame()" class="w-full bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black py-4 lg:py-5 rounded-lg font-bold tracking-[0.15em] text-[12px] lg:text-[16px] uppercase key-base">${gameState ? 'RESTART 重新開始' : '開始新局'}</button>
+            </div>
+          </div>
+        </div>`;
+    };
+
+    const getRecordHTML = () => {
+      if (!isRecordOpen) return '';
+      const closeBtn = `<button onclick="window.toggleRecord()" class="p-2"><img src="./assets/close.svg" class="h-[13px] icon-white" onerror="this.outerHTML='✕'"></button>`;
+      const listHTML = matchHistory.map((m) => {
+        const isWin = m.status === 'WIN';
+        const colorTitle = isWin ? 'text-white' : 'text-red-400';
+        return `<div class="w-full text-left border border-neutral-800 bg-[#111] rounded-xl p-4 key-base hover:border-neutral-600">
+          <div class="flex justify-between items-start gap-4"><div><div class="text-white font-bold tracking-widest text-[14px] lg:text-[16px] mb-1">${m.playerName}</div><div class="${colorTitle} font-bold tracking-widest text-[12px]">${m.status}</div><div class="text-neutral-500 text-[11px] mt-2">${m.timestamp}</div></div><div class="text-right flex flex-col justify-between"><div class="text-white font-light text-[22px] leading-none mb-2">${m.playerScore} : ${m.aiScore}</div><div class="text-neutral-600 text-[10px] uppercase">LV.${m.difficulty} | BONUS: ${m.bonusScored}</div></div></div>
+        </div>`;
+      }).join('') || `<div class="text-neutral-500 text-center py-16 uppercase tracking-widest text-[11px]">暫無戰績記錄</div>`;
+      return `<div class="fixed inset-0 z-[60] bg-black/95 flex flex-col animate-fade-in"><header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex justify-between items-center"><div class="text-white font-bold tracking-[0.25em] text-[12px] lg:text-[16px]">MATCH RECORD</div>${closeBtn}</header><main class="flex-1 overflow-y-auto px-6 pb-10 max-w-[620px] w-full mx-auto hide-scrollbar mt-4"><div class="flex flex-col gap-3">${listHTML}</div></main></div>`;
+    };
+
+    const render = () => {
+      const app = document.getElementById('app');
+      if (!gameState && isMenuOpen) { app.innerHTML = getMenuHTML(); menuJustOpened = false; return; }
+      app.innerHTML = `
+        ${getMenuHTML()}${getRecordHTML()}
+        <div class="w-full h-full bg-black flex flex-col overflow-hidden relative">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+            <div class="flex items-center"><img src="./assets/Logo.svg" alt="LOGO" class="h-[19px] lg:h-[25px] object-contain opacity-90 icon-white" onerror="this.style.display='none'"></div>
+            <div class="flex items-center gap-4 lg:gap-6">
+              <button onclick="window.initGame()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/back.svg" alt="RESTART" class="h-[14px] lg:h-[18px] icon-white" onerror="this.outerHTML='↶'"></button>
+              <button onclick="window.toggleRecord()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/record.svg" alt="REC" class="h-[16px] lg:h-[22px] icon-white" onerror="this.outerHTML='◷'"></button>
+              <button onclick="window.openMenu()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/setting.svg" alt="SET" class="h-[14px] lg:h-[18px] icon-white" onerror="this.outerHTML='⚙'"></button>
+            </div>
+          </header>
+          <div class="game-stage relative z-10">
+            <div class="game-meta">
+              <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase mb-3 lg:mb-5">
+                <div class="text-white font-bold tracking-[0.2em] text-[13px] lg:text-[16px] mb-1">氣墊球</div>
+                <div class="mb-1"><span class="text-white font-bold">LV.${gameState.difficulty}</span> <span class="mx-2 opacity-50">|</span> 目標：${TARGET_SCORE}</div>
+                <div class="text-neutral-500">BONUS：<span id="meta-bonus">${gameState.bonusScored}</span></div>
+              </div>
+              <section class="score-panel meta-score flex flex-col items-start">
+                <div class="score-row pointer-events-auto">
+                  <div class="score-pill"><div class="score-label text-neutral-400 font-normal">${gameState.playerName}</div><div id="score-player" class="text-white score-number text-[21px] lg:text-[34px] leading-none font-light">${gameState.playerScore}</div></div>
+                  <div class="score-divider" aria-hidden="true"></div>
+                  <div class="score-pill"><div class="score-label text-neutral-400 font-normal">AI</div><div id="score-ai" class="text-white score-number text-[21px] lg:text-[34px] leading-none font-light">${gameState.aiScore}</div></div>
+                </div>
+              </section>
+            </div>
+            <main class="board-stage">
+              <div class="board-frame">
+                <canvas id="gameCanvas" class="strike-board"></canvas>
+                <div id="game-overlay" class="absolute inset-0 z-40 bg-black/85 backdrop-blur-sm hidden flex-col items-center justify-center rounded-xl">
+                  <div id="overlay-title" class="text-3xl lg:text-4xl font-black tracking-[0.3em] mb-2 text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.6)]">YOU WIN</div>
+                  <div id="overlay-score" class="text-neutral-300 font-bold tracking-widest mb-8">0 : 0</div>
+                  <button onclick="window.initGame()" class="px-8 py-3 bg-white text-black font-bold tracking-[0.1em] rounded-full hover:bg-neutral-200 transition-colors pointer-events-auto shadow-[0_0_15px_rgba(255,255,255,0.2)]">再玩一次</button>
+                </div>
+              </div>
+            </main>
+          </div>
+        </div>`;
+      updateStatusDOM(); setupCanvasSize(); attachInputs(); menuJustOpened = false;
+    };
+
+    const setupCanvasSize = () => {
+      const canvas = document.getElementById('gameCanvas'); if (!canvas) return;
+      const rect = canvas.getBoundingClientRect(); canvasScale = rect.width / LOGICAL_WIDTH;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr); drawCanvas();
+    };
+
+    window.onload = () => { loadHistory(); render(); };
+    window.addEventListener('resize', () => { if (gameState) setupCanvasSize(); });
+  </script>
+</body>
+</html>
