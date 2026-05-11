@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Games - 踩地雷</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Noto+Sans+TC:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { future: { hoverOnlyWhenSupported: true } };
+  </script>
+  <style>
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.28s ease-out; }
+    @keyframes popIn { 0% { transform: scale(0.6); opacity: 0; } 70% { transform: scale(1.08); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+    .anim-pop-in { animation: popIn 0.22s cubic-bezier(0.2, 0.9, 0.2, 1) forwards; }
+    @keyframes softPulse { 0%, 100% { opacity: 0.72; } 50% { opacity: 1; } }
+    .animate-soft-pulse { animation: softPulse 1.4s ease-in-out infinite; }
+    @keyframes blast { 0% { transform: scale(0.8); opacity: 0.9; } 100% { transform: scale(1.9); opacity: 0; } }
+    .anim-blast { animation: blast 0.55s ease-out forwards; }
+
+    html, body {
+      overscroll-behavior-y: none;
+      background-color: #000;
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      color: #fff;
+      height: 100%;
+      height: -webkit-fill-available;
+      overflow: hidden;
+      margin: 0;
+      touch-action: manipulation;
+    }
+    .app-container { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    button { -webkit-tap-highlight-color: transparent; outline: none; touch-action: manipulation; }
+    .key-base { transition: background-color 0.2s ease-out, color 0.2s ease-out, border-color 0.2s, opacity 0.2s, transform 0.2s; }
+    .key-base:active { opacity: 0.55; transition: none; }
+    .icon-white { filter: brightness(0) invert(1); }
+
+    .game-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .board-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; padding: 8px 16px 22px; }
+    .board-frame { width: min(88vw, 64vh, 560px); max-width: 560px; position: relative; }
+    .mine-board {
+      width: 100%; aspect-ratio: 1 / 1; display: grid;
+      background: #030303;
+      border: 1.5px solid rgba(255,255,255,0.22);
+      border-radius: 30px;
+      overflow: hidden;
+      box-shadow: 0 0 42px rgba(0,0,0,0.9);
+      padding: 10px;
+      gap: 2px;
+      position: relative;
+      z-index: 2;
+      user-select: none;
+    }
+    .cell {
+      position: relative;
+      border: 1px solid rgba(255,255,255,0.065);
+      background: #111111;
+      color: #fff;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Inter', sans-serif;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      overflow: hidden;
+    }
+    .cell:hover { background: #171717; border-color: rgba(255,255,255,0.14); }
+    .cell.revealed {
+      background: #050505;
+      border-color: rgba(255,255,255,0.035);
+      cursor: default;
+    }
+    .cell.flagged { background: #151515; border-color: rgba(255,255,255,0.15); }
+    .cell.mine-hit { background: rgba(239,68,68,0.25); border-color: rgba(239,68,68,0.7); }
+    .cell.mine-show { background: #0a0a0a; }
+    .cell.wrong-flag { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.35); }
+    .wrong-mark { position:absolute; color:#ef4444; font-size:1.4em; font-weight:900; line-height:1; text-shadow:0 0 8px rgba(239,68,68,0.45); }
+    .cell .num { transform: translateY(-0.02em); }
+    .cell.n1 { color: #60a5fa; }
+    .cell.n2 { color: #34d399; }
+    .cell.n3 { color: #fb7185; }
+    .cell.n4 { color: #a78bfa; }
+    .cell.n5 { color: #fbbf24; }
+    .cell.n6 { color: #2dd4bf; }
+    .cell.n7 { color: #e5e7eb; }
+    .cell.n8 { color: #94a3b8; }
+    .flag-icon {
+      width: 46%; height: 46%; position: relative; display:block;
+    }
+    .flag-icon:before { content: none; }
+    .flag-icon:after {
+      content: ''; position: absolute; left: 50%; top: 50%; width: 100%; height: 88%; background: #ef4444;
+      transform: translate(-50%, -50%);
+      clip-path: polygon(50% 0, 100% 100%, 0 100%);
+      border-radius: 1px;
+      box-shadow: 0 0 8px rgba(239,68,68,0.45);
+    }
+    .mine-icon {
+      width: 44%; height: 44%; border-radius: 999px; background: #e5e7eb; position: relative; box-shadow: 0 0 14px rgba(255,255,255,0.28);
+    }
+    .mine-icon:before, .mine-icon:after { content: ''; position: absolute; background: rgba(229,231,235,0.85); left: 50%; top: -34%; width: 2px; height: 168%; transform: translateX(-50%); border-radius: 2px; }
+    .mine-icon:after { transform: translateX(-50%) rotate(90deg); }
+    .mine-icon span:before, .mine-icon span:after { content: ''; position: absolute; background: rgba(229,231,235,0.65); left: 50%; top: -30%; width: 2px; height: 160%; transform: translateX(-50%) rotate(45deg); border-radius: 2px; }
+    .mine-icon span:after { transform: translateX(-50%) rotate(-45deg); }
+    .blast-ring { position:absolute; inset: 18%; border: 1.5px solid rgba(239,68,68,0.8); border-radius: 999px; pointer-events:none; }
+
+    .game-meta { position: fixed; top: 60px; left: 20px; z-index: 20; pointer-events: none; text-align: left; }
+    .meta-score { margin-top: 20px; }
+    .score-row { display: inline-grid; grid-template-columns: max-content 1px max-content; column-gap: 18px; align-items: start; }
+    .score-divider { width: 1px; height: 48px; background: rgba(255,255,255,0.22); align-self: start; margin-top: 1px; }
+    .score-pill { border: 0; background: transparent; border-radius: 0; padding: 0; min-width: 48px; }
+    .score-label { font-size: 10px; letter-spacing: 0.12em; margin-bottom: 5px; line-height: 1.1; }
+    .score-number { font-family: 'Inter', sans-serif; font-weight: 300; letter-spacing: -0.04em; display:block; }
+
+    .hint-line { width: min(88vw, 560px); max-width: 560px; margin-top: 14px; color: rgba(255,255,255,0.45); font-size: 9px; letter-spacing: 0.2em; text-align: center; text-transform: uppercase; }
+
+    @media (min-width: 1024px) {
+      .game-stage { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(420px, 600px) minmax(260px, 1fr); align-items: center; }
+      .game-meta { top: 85px; left: 48px; }
+      .meta-score { margin-top: 22px; }
+      .score-divider { height: 56px; }
+      .score-label { font-size: 11px; font-weight: 400; }
+      .board-stage { grid-column: 2; padding: 0; align-self: center; justify-self: center; }
+      .board-frame { width: min(560px, 70vh); max-width: 560px; }
+      .mine-board { border-radius: 34px; padding: 12px; gap: 2px; }
+    }
+    @media (max-width: 1023px) {
+      .game-meta { top: 60px; left: 20px; right: 20px; display: grid; grid-template-columns: max-content 1fr; align-items: end; width: auto; }
+      .meta-score { margin-top: 0; grid-column: 2; justify-self: end; align-self: end; }
+      .score-row { justify-content: flex-start; align-items: start; column-gap: 14px; }
+      .score-divider { height: 40px; }
+      .score-label { font-size: 9px; margin-bottom: 4px; }
+      .board-stage { transform: translateY(-1.2vh); }
+      .board-frame { width: min(92vw, 58vh); }
+      .mine-board { border-radius: 26px; padding: 8px; gap: 1.5px; }
+      .cell { border-radius: 4px; }
+    }
+    @media (max-width: 420px) {
+      .board-frame { width: min(94vw, 56vh); }
+      .mine-board { padding: 7px; gap: 1px; }
+      .cell { border-radius: 3px; }
+    }
+  </style>
+</head>
+<body class="bg-black selection:bg-white/30">
+  <div id="app" class="app-container"></div>
+
+  <script>
+    const cloneState = (state) => JSON.parse(JSON.stringify(state));
+    const DIFF_CONFIG = {
+      1: { label: 'EASY', size: 7, mines: 6 },
+      2: { label: 'NORMAL', size: 9, mines: 12 },
+      3: { label: 'HARD', size: 12, mines: 26 },
+      4: { label: 'EXPERT', size: 14, mines: 40 }
+    };
+
+    let settings = { playerName: '', difficulty: 2 };
+    let pendingSettings = cloneState(settings);
+    let gameState = null;
+    let isMenuOpen = true;
+    let isRecordOpen = false;
+    let menuJustOpened = true;
+    let matchHistory = [];
+    let timerInterval = null;
+    let longPressTimer = null;
+    let suppressNextClick = false;
+
+    class MinesweeperState {
+      constructor() {
+        this.difficulty = settings.difficulty;
+        this.cfg = DIFF_CONFIG[this.difficulty];
+        this.size = this.cfg.size;
+        this.mineCount = this.cfg.mines;
+        this.playerName = settings.playerName.trim() || 'PLAYER 1';
+        this.board = Array(this.size).fill(null).map(() => Array(this.size).fill(null));
+        for (let r = 0; r < this.size; r++) {
+          for (let c = 0; c < this.size; c++) {
+            this.board[r][c] = { mine: false, revealed: false, flagged: false, adjacent: 0, exploded: false, justRevealed: false, wrongFlag: false };
+          }
+        }
+        this.started = false;
+        this.minesPlaced = false;
+        this.answersVisible = false;
+        this.startTime = null;
+        this.elapsed = 0;
+        this.flagsUsed = 0;
+        this.revealedCount = 0;
+        this.gameOver = false;
+        this.victory = false;
+        this.hasRecorded = false;
+        this.lastAction = 'READY';
+      }
+
+      startTimer() {
+        if (this.started) return;
+        this.started = true;
+        this.startTime = Date.now();
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+          if (!gameState || gameState.gameOver || gameState.victory || isMenuOpen || isRecordOpen) return;
+          gameState.elapsed = Math.floor((Date.now() - gameState.startTime) / 1000);
+          updateStatusDOM();
+        }, 250);
+      }
+
+      placeMines(safeR, safeC) {
+        const forbidden = new Set();
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            const r = safeR + dr, c = safeC + dc;
+            if (this.inBounds(r, c)) forbidden.add(`${r},${c}`);
+          }
+        }
+        for (let rr = 0; rr < this.size; rr++) {
+          for (let cc = 0; cc < this.size; cc++) {
+            if (this.board[rr][cc].flagged) forbidden.add(`${rr},${cc}`);
+          }
+        }
+        let placed = 0;
+        while (placed < this.mineCount) {
+          const r = Math.floor(Math.random() * this.size);
+          const c = Math.floor(Math.random() * this.size);
+          const cell = this.board[r][c];
+          if (!cell.mine && !forbidden.has(`${r},${c}`)) {
+            cell.mine = true;
+            placed++;
+          }
+        }
+        this.calculateAdjacency();
+        this.minesPlaced = true;
+      }
+
+      calculateAdjacency() {
+        for (let r = 0; r < this.size; r++) {
+          for (let c = 0; c < this.size; c++) {
+            if (this.board[r][c].mine) continue;
+            let count = 0;
+            for (const [nr, nc] of this.getNeighbors(r, c)) if (this.board[nr][nc].mine) count++;
+            this.board[r][c].adjacent = count;
+          }
+        }
+      }
+
+      inBounds(r, c) { return r >= 0 && r < this.size && c >= 0 && c < this.size; }
+
+      getNeighbors(r, c) {
+        const arr = [];
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            if (dr === 0 && dc === 0) continue;
+            const nr = r + dr, nc = c + dc;
+            if (this.inBounds(nr, nc)) arr.push([nr, nc]);
+          }
+        }
+        return arr;
+      }
+
+      reveal(r, c) {
+        if (this.gameOver || this.victory) return;
+        const cell = this.board[r][c];
+        if (cell.flagged) return;
+        if (!this.minesPlaced) {
+          this.placeMines(r, c);
+        }
+        if (!this.started) this.startTimer();
+        if (cell.revealed) {
+          this.chordOpen(r, c);
+          return;
+        }
+        if (cell.mine) {
+          cell.exploded = true;
+          this.end(false);
+          return;
+        }
+        this.floodReveal(r, c);
+        this.lastAction = 'OPEN';
+        this.checkVictory();
+      }
+
+      floodReveal(r, c) {
+        const queue = [[r, c]];
+        const seen = new Set();
+        while (queue.length) {
+          const [cr, cc] = queue.shift();
+          const key = `${cr},${cc}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const cell = this.board[cr][cc];
+          if (cell.revealed || cell.flagged || cell.mine) continue;
+          cell.revealed = true;
+          cell.justRevealed = true;
+          this.revealedCount++;
+          if (cell.adjacent === 0) {
+            for (const [nr, nc] of this.getNeighbors(cr, cc)) {
+              const n = this.board[nr][nc];
+              if (!n.revealed && !n.flagged && !n.mine) queue.push([nr, nc]);
+            }
+          }
+        }
+        setTimeout(() => {
+          if (!gameState) return;
+          for (let rr = 0; rr < this.size; rr++) for (let cc = 0; cc < this.size; cc++) this.board[rr][cc].justRevealed = false;
+          render();
+        }, 260);
+      }
+
+      toggleFlag(r, c) {
+        if (this.gameOver || this.victory) return;
+        const cell = this.board[r][c];
+        if (cell.revealed) return;
+        if (!cell.flagged && this.flagsUsed >= this.mineCount) return;
+        cell.flagged = !cell.flagged;
+        this.flagsUsed += cell.flagged ? 1 : -1;
+        this.lastAction = cell.flagged ? 'FLAG' : 'UNFLAG';
+        // Flagging before the first open should not start the game or allow instant-clear states.
+        if (this.minesPlaced) this.checkVictory();
+      }
+
+      chordOpen(r, c) {
+        const cell = this.board[r][c];
+        if (!cell.revealed || cell.adjacent === 0) return;
+        let flags = 0;
+        const neighbors = this.getNeighbors(r, c);
+        for (const [nr, nc] of neighbors) if (this.board[nr][nc].flagged) flags++;
+        if (flags !== cell.adjacent) return;
+        for (const [nr, nc] of neighbors) {
+          const n = this.board[nr][nc];
+          if (!n.revealed && !n.flagged) this.reveal(nr, nc);
+          if (this.gameOver) break;
+        }
+      }
+
+      end(isWin) {
+        this.gameOver = !isWin;
+        this.victory = isWin;
+        this.elapsed = this.started ? Math.floor((Date.now() - this.startTime) / 1000) : this.elapsed;
+        if (timerInterval) clearInterval(timerInterval);
+        this.answersVisible = false;
+        if (!isWin) {
+          this.lastAction = 'BOOM';
+        } else {
+          for (let r = 0; r < this.size; r++) {
+            for (let c = 0; c < this.size; c++) {
+              if (this.board[r][c].mine && !this.board[r][c].flagged) { this.board[r][c].flagged = true; this.flagsUsed++; }
+            }
+          }
+          this.lastAction = 'CLEAR';
+        }
+        recordFinishedGame();
+        this.revealAnswers();
+      }
+
+      checkVictory() {
+        if (!this.minesPlaced) return;
+        const safeCells = this.size * this.size - this.mineCount;
+        if (this.revealedCount >= safeCells && !this.gameOver) this.end(true);
+      }
+
+      revealAnswers() {
+        if (!this.gameOver && !this.victory) return;
+        this.answersVisible = true;
+        for (let r = 0; r < this.size; r++) {
+          for (let c = 0; c < this.size; c++) {
+            const cell = this.board[r][c];
+            cell.wrongFlag = cell.flagged && !cell.mine;
+            if (cell.mine) cell.revealed = true;
+          }
+        }
+      }
+    }
+
+    const padTime = (sec) => String(Math.max(0, Math.min(999, sec))).padStart(3, '0');
+
+    const loadHistory = () => {
+      try { const saved = localStorage.getItem('minesweeper_history'); if (saved) { const parsed = JSON.parse(saved); if (Array.isArray(parsed)) matchHistory = parsed; } } catch (e) { matchHistory = []; }
+    };
+    const saveHistory = () => { try { localStorage.setItem('minesweeper_history', JSON.stringify(matchHistory)); } catch (e) {} };
+
+    const recordFinishedGame = () => {
+      if (!gameState || (!gameState.gameOver && !gameState.victory) || gameState.hasRecorded) return;
+      gameState.hasRecorded = true;
+      const rec = {
+        id: Date.now(),
+        timestamp: new Date().toLocaleString(),
+        playerName: gameState.playerName,
+        difficulty: gameState.difficulty,
+        size: gameState.size,
+        mines: gameState.mineCount,
+        time: gameState.elapsed,
+        status: gameState.victory ? 'STAGE CLEAR' : 'GAME OVER',
+        revealed: gameState.revealedCount,
+        flags: gameState.flagsUsed
+      };
+      matchHistory.unshift(rec);
+      if (matchHistory.length > 50) matchHistory.pop();
+      saveHistory();
+    };
+
+    window.setSetting = (key, value) => { pendingSettings[key] = value; };
+    window.setDifficulty = (val) => {
+      pendingSettings.difficulty = val;
+      for (let i = 1; i <= 4; i++) {
+        const btn = document.getElementById(`btn-diff-${i}`);
+        if (btn) btn.className = `flex items-center justify-center py-2.5 lg:py-3 rounded text-[12px] lg:text-[14px] transition-colors key-base ${i === val ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900 hover:text-white'}`;
+      }
+      const cfg = DIFF_CONFIG[val];
+      const label = document.getElementById('diff-label');
+      if (label) label.innerText = `${cfg.size} × ${cfg.size} | ${cfg.mines} MINES`;
+    };
+    window.toggleRecord = () => { isRecordOpen = !isRecordOpen; render(); };
+    window.showAnswers = () => {
+      if (!gameState) return;
+      gameState.revealAnswers();
+      updateStatusDOM();
+      render();
+    };
+
+    window.initGame = () => {
+      isMenuOpen = false; isRecordOpen = false;
+      settings = cloneState(pendingSettings);
+      gameState = new MinesweeperState();
+      if (timerInterval) clearInterval(timerInterval);
+      render();
+    };
+    window.openMenu = () => { pendingSettings = cloneState(settings); isMenuOpen = true; isRecordOpen = false; render(); };
+    window.cancelMenu = () => { isMenuOpen = false; render(); };
+
+    const handleCellOpen = (r, c) => {
+      if (!gameState || isMenuOpen || isRecordOpen) return;
+      gameState.reveal(r, c);
+      updateStatusDOM();
+      render();
+    };
+    const handleCellFlag = (r, c) => {
+      if (!gameState || isMenuOpen || isRecordOpen) return;
+      gameState.toggleFlag(r, c);
+      updateStatusDOM();
+      render();
+    };
+    window.handleCellClick = (r, c) => {
+      if (suppressNextClick) { suppressNextClick = false; return; }
+      handleCellOpen(r, c);
+    };
+    window.handleCellRight = (e, r, c) => { e.preventDefault(); handleCellFlag(r, c); };
+    window.handleTouchStart = (e, r, c) => {
+      if (longPressTimer) clearTimeout(longPressTimer);
+      longPressTimer = setTimeout(() => {
+        suppressNextClick = true;
+        if (navigator.vibrate) navigator.vibrate(18);
+        handleCellFlag(r, c);
+      }, 390);
+    };
+    window.handleTouchEnd = () => { if (longPressTimer) clearTimeout(longPressTimer); longPressTimer = null; };
+
+    const updateStatusDOM = () => {
+      if (!gameState) return;
+      const timeEl = document.getElementById('score-time');
+      const flagsEl = document.getElementById('score-flags');
+      const minesEl = document.getElementById('meta-mines');
+      if (timeEl) timeEl.innerText = padTime(gameState.elapsed);
+      if (flagsEl) flagsEl.innerText = `${String(Math.max(0, gameState.mineCount - gameState.flagsUsed)).padStart(3, '0')}`;
+      if (minesEl) minesEl.innerText = gameState.mineCount;
+
+      const resultTitle = document.getElementById('result-title');
+      const resultDetail = document.getElementById('result-detail');
+      if (resultTitle && (gameState.gameOver || gameState.victory)) {
+        resultTitle.innerText = gameState.victory ? 'STAGE CLEAR' : 'GAME OVER';
+        resultTitle.className = gameState.victory
+          ? 'text-green-400 font-black tracking-[0.24em] text-[13px] lg:text-[16px] uppercase'
+          : 'text-white font-black tracking-[0.24em] text-[13px] lg:text-[16px] uppercase';
+      }
+      if (resultDetail && (gameState.gameOver || gameState.victory)) {
+        resultDetail.innerText = `TIME ${padTime(gameState.elapsed)} · FLAGS ${gameState.flagsUsed}/${gameState.mineCount}`;
+      }
+    };
+
+    const getMenuHTML = () => {
+      if (!isMenuOpen) return '';
+      const cfg = DIFF_CONFIG[pendingSettings.difficulty];
+      const closeBtn = gameState ? `<button onclick="window.cancelMenu()" class="text-white text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-neutral-300 transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white" onerror="this.outerHTML='✕'"></button>` : `<div class="h-[12px] lg:h-[15px] pt-1 lg:pt-1.5"></div>`;
+      let diffGrid = '<div class="grid grid-cols-4 gap-1.5 lg:gap-2 w-full mt-1">';
+      for (let i = 1; i <= 4; i++) diffGrid += `<button id="btn-diff-${i}" onclick="window.setDifficulty(${i})" class="flex items-center justify-center py-2.5 lg:py-3 rounded text-[12px] lg:text-[14px] transition-colors key-base ${i === pendingSettings.difficulty ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900 hover:text-white'}">${i}</button>`;
+      diffGrid += '</div>';
+
+      return `
+        <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-y-auto ${menuJustOpened ? 'animate-fade-in' : ''}">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+            <a href="index.html" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] hover:text-white transition-colors pt-1 lg:pt-1.5 flex items-center gap-1.5 key-base" style="text-decoration:none;"><img src="./assets/gamehub.svg" alt="Hub" class="h-[12px] opacity-70 icon-white" onerror="this.style.display='none'"> 返回遊戲大堂</a>
+            ${closeBtn}
+          </header>
+          <div class="flex-1 flex flex-col items-center justify-center gap-6 pb-10 px-6 w-full mt-4 lg:mt-0">
+            <div class="flex flex-col items-center justify-center gap-3 mb-2">
+              <img src="./assets/Logo.svg" alt="LOGO" class="h-[22px] lg:h-[28px] object-contain opacity-90 icon-white" onerror="this.style.display='none'">
+              <div class="text-white tracking-[0.4em] text-[15px] lg:text-[18px] font-light opacity-60">踩地雷</div>
+            </div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3 mt-4">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase w-full text-center">PLAYER NAME</div>
+              <input type="text" value="${pendingSettings.playerName}" oninput="window.setSetting('playerName', this.value)" placeholder="你的名字" class="w-full bg-[#111] border border-neutral-800 rounded-lg py-3.5 px-4 text-[12px] lg:text-[14px] text-white text-center focus:outline-none focus:border-neutral-500 transition-colors placeholder-neutral-600 font-medium tracking-widest">
+            </div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3 mt-2">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase flex justify-between w-full"><span>DIFFICULTY 難度</span><span id="diff-label" class="text-white font-bold">${cfg.size} × ${cfg.size} | ${cfg.mines} MINES</span></div>
+              ${diffGrid}
+            </div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] mt-4">
+              <button onclick="window.initGame()" class="w-full bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black py-4 lg:py-5 rounded-lg font-bold tracking-[0.15em] text-[12px] lg:text-[16px] uppercase key-base">${gameState ? 'RESTART 重新開始' : '開始新局'}</button>
+            </div>
+          </div>
+        </div>`;
+    };
+
+    const getRecordHTML = () => {
+      if (!isRecordOpen) return '';
+      const listHTML = matchHistory.map((m) => {
+        const isWin = m.status === 'STAGE CLEAR';
+        const colorTitle = isWin ? 'text-green-400' : 'text-red-500';
+        return `
+          <div class="w-full text-left border border-neutral-800 bg-[#111] rounded-xl p-4 key-base hover:border-neutral-600">
+            <div class="flex justify-between items-start gap-4">
+              <div>
+                <div class="text-white font-bold tracking-widest text-[14px] lg:text-[16px] mb-1">${m.playerName}</div>
+                <div class="${colorTitle} font-bold tracking-widest text-[12px]">${m.status}</div>
+                <div class="text-neutral-500 text-[11px] mt-2">${m.timestamp}</div>
+              </div>
+              <div class="text-right flex flex-col justify-between">
+                <div class="text-white font-light text-[22px] leading-none mb-2">${padTime(m.time)}</div>
+                <div class="text-neutral-600 text-[10px] uppercase">LV.${m.difficulty} | ${m.size}×${m.size} | 雷: ${m.mines}</div>
+              </div>
+            </div>
+          </div>`;
+      }).join('') || `<div class="text-neutral-500 text-center py-16 uppercase tracking-widest text-[11px]">暫無戰績記錄</div>`;
+      return `
+        <div class="fixed inset-0 z-[60] bg-black/95 flex flex-col animate-fade-in">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex justify-between items-center">
+            <div class="text-white font-bold tracking-[0.25em] text-[12px] lg:text-[16px]">MATCH RECORD</div>
+            <button onclick="window.toggleRecord()" class="p-2"><img src="./assets/close.svg" class="h-[13px] icon-white" onerror="this.outerHTML='✕'"></button>
+          </header>
+          <main class="flex-1 overflow-y-auto px-6 pb-10 max-w-[620px] w-full mx-auto hide-scrollbar mt-4">
+            <div class="flex flex-col gap-3">${listHTML}</div>
+          </main>
+        </div>`;
+    };
+
+    const getCellHTML = (r, c) => {
+      const cell = gameState.board[r][c];
+      const size = gameState.size;
+      let cls = 'cell';
+      if (cell.revealed) cls += ' revealed';
+      if (cell.flagged) cls += ' flagged';
+      if (cell.exploded) cls += ' mine-hit';
+      if (cell.revealed && cell.mine && !cell.exploded) cls += ' mine-show';
+      if (cell.wrongFlag) cls += ' wrong-flag';
+      if (cell.revealed && !cell.mine && cell.adjacent > 0) cls += ` n${cell.adjacent}`;
+      if (cell.justRevealed) cls += ' anim-pop-in';
+      const fontSize = size <= 9 ? 'clamp(16px, 4.1vw, 24px)' : size <= 12 ? 'clamp(13px, 3.1vw, 20px)' : size <= 16 ? 'clamp(10px, 2.2vw, 16px)' : 'clamp(8px, 1.6vw, 13px)';
+      let inner = '';
+      if (cell.flagged && !cell.revealed) inner = '<span class="flag-icon"></span>';
+      else if (cell.wrongFlag) inner = '<span class="flag-icon"></span><span class="wrong-mark">×</span>'; 
+      else if (cell.revealed && cell.mine) inner = '<span class="mine-icon"><span></span></span>' + (cell.exploded ? '<span class="blast-ring anim-blast"></span>' : '');
+      else if (cell.revealed && cell.adjacent > 0) inner = `<span class="num">${cell.adjacent}</span>`;
+      return `<button class="${cls}" style="font-size:${fontSize};" oncontextmenu="window.handleCellRight(event, ${r}, ${c})" ontouchstart="window.handleTouchStart(event, ${r}, ${c})" ontouchend="window.handleTouchEnd()" ontouchcancel="window.handleTouchEnd()" onclick="window.handleCellClick(${r}, ${c})" aria-label="cell ${r},${c}">${inner}</button>`;
+    };
+
+    const getBoardHTML = () => {
+      let cells = '';
+      for (let r = 0; r < gameState.size; r++) for (let c = 0; c < gameState.size; c++) cells += getCellHTML(r, c);
+      return `<div id="mineBoard" class="mine-board" style="grid-template-columns: repeat(${gameState.size}, minmax(0, 1fr)); grid-template-rows: repeat(${gameState.size}, minmax(0, 1fr));">${cells}</div>`;
+    };
+
+    const getEndPanelHTML = () => {
+      if (!gameState || (!gameState.gameOver && !gameState.victory)) return '';
+      const titleClass = gameState.victory
+        ? 'text-green-400 font-black tracking-[0.24em] text-[13px] lg:text-[16px] uppercase'
+        : 'text-white font-black tracking-[0.24em] text-[13px] lg:text-[16px] uppercase';
+      return `
+        <div class="mt-4 lg:mt-5 w-full flex flex-col items-center gap-3 animate-fade-in">
+          <div class="flex items-center justify-center gap-3 lg:gap-4 text-center">
+            <div>
+              <div id="result-title" class="${titleClass}">${gameState.victory ? 'STAGE CLEAR' : 'GAME OVER'}</div>
+              <div id="result-detail" class="text-neutral-500 font-medium tracking-[0.16em] text-[9px] lg:text-[11px] mt-1 uppercase">TIME ${padTime(gameState.elapsed)} · FLAGS ${gameState.flagsUsed}/${gameState.mineCount}</div>
+            </div>
+            <button onclick="window.initGame()" class="px-5 lg:px-7 py-3 bg-white text-black font-bold tracking-[0.1em] rounded-full hover:bg-neutral-200 transition-colors pointer-events-auto shadow-[0_0_15px_rgba(255,255,255,0.18)] text-[11px] lg:text-[13px] key-base">再玩一次</button>
+          </div>
+        </div>`;
+    };
+
+    const render = () => {
+      const app = document.getElementById('app');
+      if (!gameState && isMenuOpen) { app.innerHTML = getMenuHTML(); menuJustOpened = false; return; }
+      app.innerHTML = `
+        ${getMenuHTML()}${getRecordHTML()}
+        <div class="w-full h-full bg-black flex flex-col overflow-hidden relative">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+            <div class="flex items-center"><img src="./assets/Logo.svg" alt="LOGO" class="h-[19px] lg:h-[25px] object-contain opacity-90 icon-white" onerror="this.style.display='none'"></div>
+            <div class="flex items-center gap-4 lg:gap-6">
+              <button onclick="window.initGame()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/back.svg" alt="RESTART" class="h-[14px] lg:h-[18px] icon-white" onerror="this.outerHTML='↶'"></button>
+              <button onclick="window.toggleRecord()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/record.svg" alt="REC" class="h-[16px] lg:h-[22px] icon-white" onerror="this.outerHTML='◷'"></button>
+              <button onclick="window.openMenu()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/setting.svg" alt="SET" class="h-[14px] lg:h-[18px] icon-white" onerror="this.outerHTML='⚙'"></button>
+            </div>
+          </header>
+          <div class="game-stage relative z-10">
+            <div class="game-meta">
+              <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase mb-3 lg:mb-5">
+                <div class="text-white font-bold tracking-[0.2em] text-[13px] lg:text-[16px] mb-1">踩地雷</div>
+                <div class="mb-1"><span class="text-white font-bold">LV.${gameState.difficulty}</span> <span class="mx-2 opacity-50">|</span> ${gameState.size} × ${gameState.size}</div>
+                <div class="text-neutral-500">雷：<span id="meta-mines">${gameState.mineCount}</span> | ${gameState.playerName}</div>
+              </div>
+              <section class="score-panel meta-score flex flex-col items-start">
+                <div class="score-row pointer-events-auto">
+                  <div class="score-pill"><div class="score-label text-neutral-400 font-normal">TIME</div><div id="score-time" class="text-white score-number text-[21px] lg:text-[34px] leading-none font-light">${padTime(gameState.elapsed)}</div></div>
+                  <div class="score-divider" aria-hidden="true"></div>
+                  <div class="score-pill"><div class="score-label text-neutral-400 font-normal">MINES</div><div id="score-flags" class="text-white score-number text-[21px] lg:text-[34px] leading-none font-light">${String(Math.max(0, gameState.mineCount - gameState.flagsUsed)).padStart(3, '0')}</div></div>
+                </div>
+              </section>
+            </div>
+            <main class="board-stage">
+              <div class="board-frame">
+                ${getBoardHTML()}
+              </div>
+              ${getEndPanelHTML()}
+              <div class="hint-line">${gameState.gameOver || gameState.victory ? '' : (!gameState.started ? 'FIRST TAP IS SAFE · OPEN ANY CELL TO START' : 'TAP TO OPEN · LONG PRESS / RIGHT CLICK TO FLAG')}</div>
+            </main>
+          </div>
+        </div>`;
+      updateStatusDOM();
+      menuJustOpened = false;
+    };
+
+    window.onload = () => { loadHistory(); render(); };
+    window.addEventListener('blur', () => { if (longPressTimer) clearTimeout(longPressTimer); });
+  </script>
+</body>
+</html>
