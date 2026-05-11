@@ -103,26 +103,26 @@
     const LOGICAL_HEIGHT = 800;
     const BUBBLE_RADIUS = 24;
     const ROW_HEIGHT = BUBBLE_RADIUS * Math.sqrt(3);
-    const BUBBLE_SPEED = 1400; // px per second
+    const BUBBLE_SPEED = 1260; // px per second - tuned for smoother control
     const COLS = 12;
     const ROWS = 18;
     const DANGER_Y = 660; 
 
-    // 指定配色：綠、藍、紅、黃、紫、灰
+    // Gameplay palette: more solid, cleaner on black background
     const COLORS = [
-      { id: 1, hex: '#22c55e', shadow: 'rgba(34, 197, 94, 0.6)' },   // 綠 Green
-      { id: 2, hex: '#3b82f6', shadow: 'rgba(59, 130, 246, 0.6)' },  // 藍 Blue
-      { id: 3, hex: '#ef4444', shadow: 'rgba(239, 68, 68, 0.6)' },   // 紅 Red
-      { id: 4, hex: '#facc15', shadow: 'rgba(250, 204, 21, 0.6)' },  // 黃 Yellow
-      { id: 5, hex: '#a855f7', shadow: 'rgba(168, 85, 247, 0.6)' },  // 紫 Purple
-      { id: 6, hex: '#9ca3af', shadow: 'rgba(156, 163, 175, 0.6)' }  // 灰 Grey
+      { id: 1, hex: '#2FD17C', fill: 'rgba(47, 209, 124, 0.20)', shadow: 'rgba(47, 209, 124, 0.40)' },
+      { id: 2, hex: '#4D8DFF', fill: 'rgba(77, 141, 255, 0.20)', shadow: 'rgba(77, 141, 255, 0.38)' },
+      { id: 3, hex: '#FF5A66', fill: 'rgba(255, 90, 102, 0.18)', shadow: 'rgba(255, 90, 102, 0.38)' },
+      { id: 4, hex: '#FFD34D', fill: 'rgba(255, 211, 77, 0.18)', shadow: 'rgba(255, 211, 77, 0.34)' },
+      { id: 5, hex: '#B67AFF', fill: 'rgba(182, 122, 255, 0.18)', shadow: 'rgba(182, 122, 255, 0.36)' },
+      { id: 6, hex: '#D8D2C4', fill: 'rgba(216, 210, 196, 0.16)', shadow: 'rgba(216, 210, 196, 0.30)' }
     ];
 
     const DIFF_CONFIG = {
-      1: { label: 'EASY', baseDrop: 8, step: 1000, minDrop: 4 },
-      2: { label: 'NORMAL', baseDrop: 6, step: 800, minDrop: 3 },
-      3: { label: 'HARD', baseDrop: 4, step: 600, minDrop: 2 },
-      4: { label: 'MASTER', baseDrop: 3, step: 500, minDrop: 1 }
+      1: { label: 'EASY', baseDrop: 8, step: 900, minDrop: 5 },
+      2: { label: 'NORMAL', baseDrop: 6, step: 800, minDrop: 4 },
+      3: { label: 'HARD', baseDrop: 5, step: 700, minDrop: 3 },
+      4: { label: 'MASTER', baseDrop: 4, step: 600, minDrop: 2 }
     };
 
     let settings = { playerName: '', difficulty: 2 };
@@ -196,6 +196,10 @@
         this.victory = false;
         this.hasRecorded = false;
         this.particles = [];
+        this.ringEffects = [];
+        this.wallHits = [];
+        this.snapPops = [];
+        this.screenShake = 0;
         
         // 必須先 initGrid，因為 getRandomColor 會從場上抽取現有顏色
         this.initGrid();
@@ -288,7 +292,14 @@
         if (availableColors.length === 0) availableColors = this.allowedColors;
 
         for (let c = 0; c < colsInRow; c++) {
-          newRow[c] = { colorId: availableColors[Math.floor(Math.random() * availableColors.length)].id, x: 0, y: 0 };
+          const pos = this.getGridPos(0, c);
+          newRow[c] = {
+            colorId: availableColors[Math.floor(Math.random() * availableColors.length)].id,
+            x: pos.x, y: pos.y,
+            // New bubbles now grow/drop straight down from above, instead of sliding in from the left.
+            visualX: pos.x,
+            visualY: pos.y - ROW_HEIGHT * 1.25
+          };
         }
         this.grid.unshift(newRow);
         
@@ -296,7 +307,11 @@
           let cols = (r + this.rowShiftCount) % 2 === 0 ? COLS : COLS - 1;
           for (let c = 0; c < cols; c++) {
             if (this.grid[r][c]) {
+              const oldX = this.grid[r][c].x || 0;
+              const oldY = this.grid[r][c].y || -ROW_HEIGHT;
               let pos = this.getGridPos(r, c);
+              if (this.grid[r][c].visualX === undefined) this.grid[r][c].visualX = oldX;
+              if (this.grid[r][c].visualY === undefined) this.grid[r][c].visualY = oldY;
               this.grid[r][c].x = pos.x; this.grid[r][c].y = pos.y;
             }
           }
@@ -307,12 +322,12 @@
       update(dt) {
         if (this.gameOver || this.victory) return;
 
-        const angleSpeed = 0.85; 
+        const angleSpeed = 1.15; 
         if (keys.left) this.shooterAngle -= angleSpeed * dt;
         if (keys.right) this.shooterAngle += angleSpeed * dt;
         
-        const minA = -Math.PI + 0.18;
-        const maxA = -0.18;
+        const minA = -Math.PI + 0.34;
+        const maxA = -0.34;
         if (this.shooterAngle < minA) this.shooterAngle = minA;
         if (this.shooterAngle > maxA) this.shooterAngle = maxA;
 
@@ -320,6 +335,27 @@
           p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 600 * dt; p.life -= dt;
         });
         this.particles = this.particles.filter(p => p.life > 0);
+
+        this.ringEffects.forEach(r => { r.radius += 92 * dt; r.life -= dt; });
+        this.ringEffects = this.ringEffects.filter(r => r.life > 0);
+        this.wallHits.forEach(w => { w.life -= dt; });
+        this.wallHits = this.wallHits.filter(w => w.life > 0);
+        this.snapPops.forEach(p => { p.life -= dt; });
+        this.snapPops = this.snapPops.filter(p => p.life > 0);
+        this.screenShake = Math.max(0, this.screenShake - dt * 10);
+
+        for (let r = 0; r < ROWS; r++) {
+          let colsInRow = (r + this.rowShiftCount) % 2 === 0 ? COLS : COLS - 1;
+          for (let c = 0; c < colsInRow; c++) {
+            const cell = this.grid[r][c];
+            if (!cell) continue;
+            if (cell.visualX === undefined) cell.visualX = cell.x;
+            if (cell.visualY === undefined) cell.visualY = cell.y;
+            const ease = Math.min(1, dt * 14);
+            cell.visualX += (cell.x - cell.visualX) * ease;
+            cell.visualY += (cell.y - cell.visualY) * ease;
+          }
+        }
 
         if (!this.movingBubble && !this.currentColor && this.spawnTimer > 0) {
           this.spawnTimer -= dt;
@@ -331,25 +367,35 @@
 
         if (this.movingBubble) {
           let mb = this.movingBubble;
-          mb.x += mb.vx * dt; mb.y += mb.vy * dt;
-
-          if (mb.x < BUBBLE_RADIUS) { mb.x = BUBBLE_RADIUS; mb.vx *= -1; }
-          if (mb.x > LOGICAL_WIDTH - BUBBLE_RADIUS) { mb.x = LOGICAL_WIDTH - BUBBLE_RADIUS; mb.vx *= -1; }
-
+          const steps = Math.max(1, Math.ceil((Math.hypot(mb.vx, mb.vy) * dt) / (BUBBLE_RADIUS * 0.72)));
           let collided = false;
-          if (mb.y <= BUBBLE_RADIUS) {
-            collided = true;
-          } else {
-            let rEstimate = Math.floor((mb.y - BUBBLE_RADIUS) / ROW_HEIGHT);
-            for(let r = Math.max(0, rEstimate - 1); r <= Math.min(ROWS - 1, rEstimate + 1); r++) {
-              let colsInRow = (r + this.rowShiftCount) % 2 === 0 ? COLS : COLS - 1;
-              for (let c = 0; c < colsInRow; c++) {
-                let cell = this.grid[r][c];
-                if (cell) {
-                  if (Math.hypot(mb.x - cell.x, mb.y - cell.y) < BUBBLE_RADIUS * 1.8) { collided = true; break; }
+
+          for (let step = 0; step < steps && !collided; step++) {
+            const subDt = dt / steps;
+            mb.x += mb.vx * subDt; mb.y += mb.vy * subDt;
+
+            if (mb.x < BUBBLE_RADIUS) {
+              mb.x = BUBBLE_RADIUS; mb.vx *= -1;
+              this.wallHits.push({ x: mb.x, y: mb.y, life: 0.18 });
+            }
+            if (mb.x > LOGICAL_WIDTH - BUBBLE_RADIUS) {
+              mb.x = LOGICAL_WIDTH - BUBBLE_RADIUS; mb.vx *= -1;
+              this.wallHits.push({ x: mb.x, y: mb.y, life: 0.18 });
+            }
+
+            if (mb.y <= BUBBLE_RADIUS) {
+              mb.y = BUBBLE_RADIUS;
+              collided = true;
+            } else {
+              let rEstimate = Math.floor((mb.y - BUBBLE_RADIUS) / ROW_HEIGHT);
+              for(let r = Math.max(0, rEstimate - 2); r <= Math.min(ROWS - 1, rEstimate + 2); r++) {
+                let colsInRow = (r + this.rowShiftCount) % 2 === 0 ? COLS : COLS - 1;
+                for (let c = 0; c < colsInRow; c++) {
+                  let cell = this.grid[r][c];
+                  if (cell && Math.hypot(mb.x - cell.x, mb.y - cell.y) <= BUBBLE_RADIUS * 1.96) { collided = true; break; }
                 }
+                if (collided) break;
               }
-              if (collided) break;
             }
           }
 
@@ -361,7 +407,8 @@
         let mb = this.movingBubble;
         let bestR = -1, bestC = -1, minDist = Infinity;
 
-        for (let r = 0; r < ROWS; r++) {
+        const estimatedR = Math.floor((mb.y - BUBBLE_RADIUS) / ROW_HEIGHT);
+        for (let r = Math.max(0, estimatedR - 3); r <= Math.min(ROWS - 1, estimatedR + 3); r++) {
           let colsInRow = (r + this.rowShiftCount) % 2 === 0 ? COLS : COLS - 1;
           for (let c = 0; c < colsInRow; c++) {
             if (!this.grid[r][c]) {
@@ -373,14 +420,16 @@
         }
 
         if (bestR >= 0 && bestC >= 0) {
-          this.grid[bestR][bestC] = { colorId: mb.colorId, ...this.getGridPos(bestR, bestC) };
+          const pos = this.getGridPos(bestR, bestC);
+          this.grid[bestR][bestC] = { colorId: mb.colorId, ...pos, visualX: mb.x, visualY: mb.y };
+          this.snapPops.push({ r: bestR, c: bestC, life: 0.16 });
           this.movingBubble = null;
 
           let matched = this.resolveMatches(bestR, bestC);
           this.checkGameOver();
           if (this.gameOver || this.victory) return;
 
-          this.spawnTimer = matched ? 0.45 : 0.15;
+          this.spawnTimer = matched ? 0.32 : 0.10;
           this.shotsSinceLastDrop++;
           
           if (this.shotsSinceLastDrop >= this.getDropThreshold()) {
@@ -472,8 +521,9 @@
         }
         
         if (dropped > 0) {
-          this.score += Math.pow(2, dropped) * 10;
+          this.score += dropped * 20 + Math.min(300, dropped * dropped * 4);
           this.bubblesPopped += dropped;
+          this.screenShake = Math.min(1, 0.18 + dropped * 0.018);
         }
 
         if (remaining === 0) {
@@ -485,16 +535,27 @@
 
       createExplosion(cell, isDrop = false) {
         const color = COLORS.find(c => c.id === cell.colorId);
-        for(let i=0; i<6; i++) {
+        const px = cell.visualX !== undefined ? cell.visualX : cell.x;
+        const py = cell.visualY !== undefined ? cell.visualY : cell.y;
+        this.ringEffects.push({ x: px, y: py, color: color.hex, radius: BUBBLE_RADIUS * 0.55, life: isDrop ? 0.28 : 0.34, maxLife: isDrop ? 0.28 : 0.34 });
+        for(let i=0; i<8; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const spd = isDrop ? (70 + Math.random() * 130) : (130 + Math.random() * 260);
           this.particles.push({
-            x: cell.x, y: cell.y,
-            vx: (Math.random() - 0.5) * (isDrop ? 200 : 400), vy: (Math.random() - 0.5) * (isDrop ? 100 : 400) - (isDrop ? 0 : 100),
-            color: color.hex, life: Math.random() * 0.4 + 0.2
+            x: px, y: py,
+            vx: Math.cos(a) * spd, vy: Math.sin(a) * spd - (isDrop ? 20 : 80),
+            color: color.hex, life: Math.random() * 0.34 + 0.22,
+            radius: Math.random() * 2.5 + 2
           });
         }
       }
 
       draw(ctx) {
+        ctx.save();
+        if (this.screenShake > 0) {
+          const amt = this.screenShake * 4;
+          ctx.translate((Math.random() - 0.5) * amt, (Math.random() - 0.5) * amt);
+        }
         ctx.save();
         ctx.beginPath(); ctx.moveTo(0, DANGER_Y); ctx.lineTo(LOGICAL_WIDTH, DANGER_Y);
         ctx.setLineDash([10, 10]); ctx.strokeStyle = 'rgba(239, 68, 68, 0.5)'; ctx.lineWidth = 3; ctx.stroke();
@@ -517,28 +578,47 @@
               let colsInRow = (r + this.rowShiftCount) % 2 === 0 ? COLS : COLS - 1;
               for (let c = 0; c < colsInRow; c++) {
                 let cell = this.grid[r][c];
-                if (cell && Math.hypot(aimX - cell.x, aimY - cell.y) < BUBBLE_RADIUS * 1.8) { hit = true; break; }
+                if (cell && Math.hypot(aimX - cell.x, aimY - cell.y) < BUBBLE_RADIUS * 1.96) { hit = true; break; }
               }
               if (hit) break;
             }
           }
-          ctx.lineTo(aimX, aimY); ctx.setLineDash([4, 6]); ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; ctx.lineWidth = 2; ctx.stroke(); ctx.restore();
+          ctx.lineTo(aimX, aimY); ctx.setLineDash([5, 7]); ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)'; ctx.lineWidth = 2; ctx.stroke(); ctx.setLineDash([]); ctx.beginPath(); ctx.arc(aimX, aimY, 7, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,255,255,0.34)'; ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore();
         }
 
         for (let r = 0; r < ROWS; r++) {
           let colsInRow = (r + this.rowShiftCount) % 2 === 0 ? COLS : COLS - 1;
           for (let c = 0; c < colsInRow; c++) {
             let cell = this.grid[r][c];
-            if (cell) this.drawBubble(ctx, cell.x, cell.y, cell.colorId);
+            if (cell) { const pop = this.snapPops.find(p => p.r === r && p.c === c); const scale = pop ? 1 + (pop.life / 0.16) * 0.12 : 1; this.drawBubble(ctx, cell.visualX !== undefined ? cell.visualX : cell.x, cell.visualY !== undefined ? cell.visualY : cell.y, cell.colorId, scale); }
           }
         }
 
-        // Cyberpunk 方形粒子特效
+        this.ringEffects.forEach(r => {
+          ctx.save();
+          const alpha = Math.max(0, r.life / r.maxLife);
+          ctx.globalAlpha = alpha * 0.75;
+          ctx.beginPath(); ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+          ctx.strokeStyle = r.color; ctx.lineWidth = 2.2;
+          ctx.shadowBlur = 10; ctx.shadowColor = r.color; ctx.stroke();
+          ctx.restore();
+        });
+
+        this.wallHits.forEach(w => {
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, w.life / 0.18) * 0.55;
+          ctx.beginPath(); ctx.arc(w.x, w.y, 12, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(255,255,255,0.65)'; ctx.lineWidth = 2; ctx.stroke();
+          ctx.restore();
+        });
+
         this.particles.forEach(p => {
-          ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.life * 10);
-          ctx.beginPath(); ctx.rect(-3, -3, 6, 6);
-          ctx.strokeStyle = p.color; ctx.lineWidth = 1.5; ctx.globalAlpha = p.life * 2;
-          ctx.shadowBlur = 10; ctx.shadowColor = p.color; ctx.stroke(); ctx.restore();
+          ctx.save();
+          ctx.globalAlpha = Math.max(0, p.life * 2.1);
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.radius || 3, 0, Math.PI * 2);
+          ctx.fillStyle = p.color;
+          ctx.shadowBlur = 8; ctx.shadowColor = p.color; ctx.fill();
+          ctx.restore();
         });
         ctx.globalAlpha = 1;
 
@@ -550,16 +630,16 @@
         let rem = this.getDropThreshold() - this.shotsSinceLastDrop;
         ctx.save(); ctx.translate(LOGICAL_WIDTH / 2 + 100, LOGICAL_HEIGHT - BUBBLE_RADIUS + 5);
         ctx.font = '700 12px Inter'; ctx.fillStyle = rem <= 2 ? '#ef4444' : '#666'; ctx.textAlign = 'center';
-        ctx.fillText('DROP IN', 0, -25); ctx.font = '900 22px Inter'; ctx.fillText(rem, 0, 0); ctx.restore();
+        ctx.fillText('DROP IN', 0, -28); ctx.font = '900 32px Inter'; ctx.fillText(rem, 0, 4); ctx.restore();
 
         // NEXT 排隊氣泡 (3粒)
         ctx.save(); 
         ctx.translate(LOGICAL_WIDTH / 2 - 120, LOGICAL_HEIGHT - BUBBLE_RADIUS + 5);
         ctx.font = '700 12px Inter'; ctx.fillStyle = '#666'; ctx.textAlign = 'center';
         ctx.fillText('NEXT', 0, -30); 
-        this.drawBubble(ctx, 0, -5, this.nextColors[0].id, 0.65);
-        this.drawBubble(ctx, -38, -5, this.nextColors[1].id, 0.45);
-        this.drawBubble(ctx, -70, -5, this.nextColors[2].id, 0.35);
+        this.drawBubble(ctx, 0, -5, this.nextColors[0].id, 0.58);
+        this.drawBubble(ctx, -34, -5, this.nextColors[1].id, 0.58);
+        this.drawBubble(ctx, -68, -5, this.nextColors[2].id, 0.58);
         ctx.restore();
 
         if (this.movingBubble) {
@@ -567,25 +647,27 @@
         } else if (!this.gameOver && !this.victory && this.currentColor) {
           this.drawBubble(ctx, LOGICAL_WIDTH / 2, LOGICAL_HEIGHT - BUBBLE_RADIUS, this.currentColor.id);
         }
+        ctx.restore();
       }
 
-      // 【極簡視覺】只保留外框與中間細實心圓
+      // Semi-solid bubble: cleaner, more readable, less neon
       drawBubble(ctx, x, y, colorId, scale = 1) {
         const c = COLORS.find(col => col.id === colorId);
         ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
 
-        // 黑底 (遮蓋背後的線條)
-        ctx.beginPath(); ctx.arc(0, 0, BUBBLE_RADIUS - 1, 0, Math.PI * 2); 
+        ctx.beginPath(); ctx.arc(0, 0, BUBBLE_RADIUS - 1, 0, Math.PI * 2);
         ctx.fillStyle = '#050505'; ctx.fill();
 
-        // 粗身霓虹外框
-        ctx.beginPath(); ctx.arc(0, 0, BUBBLE_RADIUS - 4, 0, Math.PI * 2); 
-        ctx.lineWidth = 5; ctx.strokeStyle = c.hex;
-        ctx.shadowBlur = 6; ctx.shadowColor = c.shadow; ctx.stroke();
-        ctx.shadowBlur = 0; // 重置陰影
+        ctx.beginPath(); ctx.arc(0, 0, BUBBLE_RADIUS - 5, 0, Math.PI * 2);
+        ctx.fillStyle = c.fill || 'rgba(255,255,255,0.12)'; ctx.fill();
 
-        // 中間細實心圓點
-        ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2);
+        ctx.beginPath(); ctx.arc(0, 0, BUBBLE_RADIUS - 5, 0, Math.PI * 2);
+        ctx.lineWidth = 5.5; ctx.strokeStyle = c.hex;
+        ctx.shadowBlur = 4; ctx.shadowColor = c.shadow; ctx.stroke();
+        ctx.shadowBlur = 0;
+
+
+        ctx.beginPath(); ctx.arc(0, 0, 4.2, 0, Math.PI * 2);
         ctx.fillStyle = c.hex; ctx.fill();
 
         ctx.restore();
@@ -614,6 +696,16 @@
     };
 
     // --- Inputs ---
+    const clampShooterAngle = (angle) => Math.max(-Math.PI + 0.34, Math.min(-0.34, angle));
+    const updateAimFromClientPoint = (clientX, clientY) => {
+      const canvas = document.getElementById('gameCanvas');
+      if (!canvas || !gameState) return;
+      const rect = canvas.getBoundingClientRect();
+      const dx = (clientX - rect.left) / canvasScale - (LOGICAL_WIDTH / 2);
+      const dy = (clientY - rect.top) / canvasScale - (LOGICAL_HEIGHT - BUBBLE_RADIUS);
+      gameState.shooterAngle = clampShooterAngle(Math.atan2(dy, dx));
+    };
+
     const attachInputs = () => {
       const canvas = document.getElementById('gameCanvas');
       if (canvas.dataset.ready) return;
@@ -621,15 +713,34 @@
 
       window.addEventListener('mousemove', (e) => {
         if (!gameState || gameState.gameOver || gameState.victory || isMenuOpen || isRecordOpen || hasTouch) return;
-        const rect = canvas.getBoundingClientRect();
-        let dx = (e.clientX - rect.left) / canvasScale - (LOGICAL_WIDTH / 2);
-        let dy = (e.clientY - rect.top) / canvasScale - (LOGICAL_HEIGHT - BUBBLE_RADIUS);
-        gameState.shooterAngle = Math.atan2(dy, dx);
+        updateAimFromClientPoint(e.clientX, e.clientY);
       });
 
       canvas.addEventListener('mousedown', (e) => {
         if (!hasTouch && gameState && !isMenuOpen && !isRecordOpen) gameState.shoot();
       });
+
+      canvas.addEventListener('touchstart', (e) => {
+        if (!gameState || isMenuOpen || isRecordOpen) return;
+        hasTouch = true;
+        const ctrls = document.getElementById('mobile-controls');
+        if (ctrls) ctrls.style.display = 'flex';
+        const t = e.touches[0];
+        if (t) updateAimFromClientPoint(t.clientX, t.clientY);
+        e.preventDefault();
+      }, {passive: false});
+
+      canvas.addEventListener('touchmove', (e) => {
+        if (!gameState || isMenuOpen || isRecordOpen) return;
+        const t = e.touches[0];
+        if (t) updateAimFromClientPoint(t.clientX, t.clientY);
+        e.preventDefault();
+      }, {passive: false});
+
+      canvas.addEventListener('touchend', (e) => {
+        if (gameState && !isMenuOpen && !isRecordOpen) gameState.shoot();
+        e.preventDefault();
+      }, {passive: false});
 
       window.addEventListener('keydown', (e) => {
         if (e.code === 'ArrowLeft') keys.left = true;
