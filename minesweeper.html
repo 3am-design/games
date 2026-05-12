@@ -33,9 +33,32 @@
       overflow: hidden;
       margin: 0;
       touch-action: manipulation;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-user-drag: none;
     }
     .app-container { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
-    button { -webkit-tap-highlight-color: transparent; outline: none; touch-action: manipulation; }
+    button {
+      -webkit-tap-highlight-color: transparent;
+      outline: none;
+      touch-action: manipulation;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-user-drag: none;
+    }
+    input, textarea {
+      -webkit-user-select: text;
+      -moz-user-select: text;
+      -ms-user-select: text;
+      user-select: text;
+      -webkit-touch-callout: default;
+    }
     .key-base { transition: background-color 0.2s ease-out, color 0.2s ease-out, border-color 0.2s, opacity 0.2s, transform 0.2s; }
     .key-base:active { opacity: 0.55; transition: none; }
     .icon-white { filter: brightness(0) invert(1); }
@@ -55,6 +78,10 @@
       position: relative;
       z-index: 2;
       user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-user-drag: none;
+      touch-action: none;
     }
     .cell {
       position: relative;
@@ -70,6 +97,13 @@
       line-height: 1;
       cursor: pointer;
       overflow: hidden;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-user-drag: none;
+      touch-action: none;
     }
     .cell:hover { background: #171717; border-color: rgba(255,255,255,0.14); }
     .cell.revealed {
@@ -171,6 +205,7 @@
     let timerInterval = null;
     let longPressTimer = null;
     let suppressNextClick = false;
+    let touchLongPressed = false;
 
     class MinesweeperState {
       constructor() {
@@ -450,14 +485,45 @@
     };
     window.handleCellRight = (e, r, c) => { e.preventDefault(); handleCellFlag(r, c); };
     window.handleTouchStart = (e, r, c) => {
+      if (!gameState || isMenuOpen || isRecordOpen) return;
+      if (e.cancelable) e.preventDefault();
+      e.stopPropagation();
+      touchLongPressed = false;
       if (longPressTimer) clearTimeout(longPressTimer);
       longPressTimer = setTimeout(() => {
+        touchLongPressed = true;
         suppressNextClick = true;
         if (navigator.vibrate) navigator.vibrate(18);
         handleCellFlag(r, c);
       }, 390);
     };
-    window.handleTouchEnd = () => { if (longPressTimer) clearTimeout(longPressTimer); longPressTimer = null; };
+    window.handleTouchEnd = (e, r, c) => {
+      if (e && e.cancelable) e.preventDefault();
+      if (e) e.stopPropagation();
+      if (longPressTimer) clearTimeout(longPressTimer);
+      longPressTimer = null;
+      if (!touchLongPressed) {
+        suppressNextClick = true;
+        handleCellOpen(r, c);
+      }
+      touchLongPressed = false;
+    };
+    window.handleTouchCancel = (e) => {
+      if (e && e.cancelable) e.preventDefault();
+      if (longPressTimer) clearTimeout(longPressTimer);
+      longPressTimer = null;
+      touchLongPressed = false;
+    };
+
+    document.addEventListener('selectstart', (e) => {
+      if (e.target && e.target.closest && e.target.closest('.mine-board')) e.preventDefault();
+    });
+    document.addEventListener('contextmenu', (e) => {
+      if (e.target && e.target.closest && e.target.closest('.mine-board')) e.preventDefault();
+    });
+    document.addEventListener('dragstart', (e) => {
+      if (e.target && e.target.closest && e.target.closest('.mine-board')) e.preventDefault();
+    });
 
     const updateStatusDOM = () => {
       if (!gameState) return;
@@ -564,7 +630,7 @@
       else if (cell.wrongFlag) inner = '<span class="flag-icon"></span><span class="wrong-mark">×</span>'; 
       else if (cell.revealed && cell.mine) inner = '<span class="mine-icon"><span></span></span>' + (cell.exploded ? '<span class="blast-ring anim-blast"></span>' : '');
       else if (cell.revealed && cell.adjacent > 0) inner = `<span class="num">${cell.adjacent}</span>`;
-      return `<button class="${cls}" style="font-size:${fontSize};" oncontextmenu="window.handleCellRight(event, ${r}, ${c})" ontouchstart="window.handleTouchStart(event, ${r}, ${c})" ontouchend="window.handleTouchEnd()" ontouchcancel="window.handleTouchEnd()" onclick="window.handleCellClick(${r}, ${c})" aria-label="cell ${r},${c}">${inner}</button>`;
+      return `<button class="${cls}" style="font-size:${fontSize};" oncontextmenu="window.handleCellRight(event, ${r}, ${c})" ontouchstart="window.handleTouchStart(event, ${r}, ${c})" ontouchend="window.handleTouchEnd(event, ${r}, ${c})" ontouchcancel="window.handleTouchCancel(event)" onclick="window.handleCellClick(${r}, ${c})" aria-label="cell ${r},${c}">${inner}</button>`;
     };
 
     const getBoardHTML = () => {
@@ -633,7 +699,7 @@
     };
 
     window.onload = () => { loadHistory(); render(); };
-    window.addEventListener('blur', () => { if (longPressTimer) clearTimeout(longPressTimer); });
+    window.addEventListener('blur', () => { window.handleTouchCancel(); });
   </script>
 </body>
 </html>

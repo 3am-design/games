@@ -519,6 +519,7 @@
       render(); gameLoop(performance.now());
     };
     window.openMenu = () => { pendingSettings = cloneState(settings); isMenuOpen = true; isRecordOpen = false; render(); };
+    window.closeMenu = () => { isMenuOpen = false; isRecordOpen = false; menuJustOpened = false; render(); };
 
     const updateStatusDOM = () => {
       if (!gameState) return;
@@ -541,7 +542,7 @@
 
     const getMenuHTML = () => {
       if (!isMenuOpen) return '';
-      const closeBtn = gameState ? `<button onclick="window.openMenu=false; render();" class="text-white text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-neutral-300 transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white" onerror="this.outerHTML='✕'"></button>` : `<div class="h-[12px] lg:h-[15px] pt-1 lg:pt-1.5"></div>`;
+      const closeBtn = gameState ? `<button onclick="window.closeMenu()" class="text-white text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-neutral-300 transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white" onerror="this.outerHTML='✕'"></button>` : `<div class="h-[12px] lg:h-[15px] pt-1 lg:pt-1.5"></div>`;
       let diffGrid = '<div class="grid grid-cols-4 gap-1.5 lg:gap-2 w-full mt-1">';
       for (let i = 1; i <= 4; i++) diffGrid += `<button id="btn-diff-${i}" onclick="window.setDifficulty(${i})" class="flex items-center justify-center py-2.5 lg:py-3 rounded text-[12px] lg:text-[14px] transition-colors key-base ${i === pendingSettings.difficulty ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900 hover:text-white'}">${i}</button>`;
       diffGrid += '</div>';
