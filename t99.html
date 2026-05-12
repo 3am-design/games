@@ -267,11 +267,19 @@
             if (dist > 2) {
               const nx = dx / dist;
               const ny = dy / dist;
-              const power = clamp((dist - 4) / 86, 0, 1);
-              const desiredVx = nx * maxSpeed * power;
-              const desiredVy = ny * maxSpeed * power;
-              p.vx += (desiredVx - p.vx) * Math.min(1, 18 * dt);
-              p.vy += (desiredVy - p.vy) * Math.min(1, 18 * dt);
+              // Mobile joystick tuning:
+              // - bigger deadzone for tiny hand tremors
+              // - longer travel before full speed
+              // - eased power curve for finer low-speed control
+              const touchDeadzone = 12;
+              const touchFullTravel = 150;
+              const rawPower = clamp((dist - touchDeadzone) / (touchFullTravel - touchDeadzone), 0, 1);
+              const power = Math.pow(rawPower, 1.45);
+              const touchMaxSpeed = maxSpeed * 0.92;
+              const desiredVx = nx * touchMaxSpeed * power;
+              const desiredVy = ny * touchMaxSpeed * power;
+              p.vx += (desiredVx - p.vx) * Math.min(1, 12 * dt);
+              p.vy += (desiredVy - p.vy) * Math.min(1, 12 * dt);
             } else {
               p.vx *= Math.pow(0.78, dt * 60);
               p.vy *= Math.pow(0.78, dt * 60);
