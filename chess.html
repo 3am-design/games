@@ -25,16 +25,23 @@
     @keyframes pulse-fast { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .animate-thinking { animation: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
 
-    /* --- 被食棋子擊飛動畫 --- */
-    @keyframes captureFlyAway {
-      0% { transform: scale(1) rotate(0deg); opacity: 1; }
-      100% { transform: translate(0, -60px) scale(0.2) rotate(180deg); opacity: 0; }
+    /* --- 食棋自然淡出 + 圓形線圈 fade out 效果 --- */
+    @keyframes captureSoftFade {
+      0% { transform: scale(1); opacity: 0.90; }
+      55% { transform: scale(0.94); opacity: 0.38; }
+      100% { transform: scale(0.84); opacity: 0; }
     }
-    .anim-capture-fly {
-      animation: captureFlyAway 0.8s cubic-bezier(0.6, 0, 1, 1) forwards;
+    .anim-capture-soft {
+      animation: captureSoftFade 0.36s ease-out forwards;
       transform-origin: center;
       pointer-events: none;
     }
+    @keyframes moveLandPulse {
+      0%, 70% { filter: brightness(1); }
+      86% { filter: brightness(1.35); }
+      100% { filter: brightness(1); }
+    }
+    .anim-move-land { animation: moveLandPulse 0.50s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
 
     /* --- 擲先後 3D 硬幣動畫 --- */
     .coin-scene { perspective: 800px; width: 100px; height: 100px; }
@@ -789,17 +796,44 @@
     };
 
     const triggerAIWithMinimumDelay = () => {
+       if (!gameState || gameState.winner || !isAITurn()) return;
+
+       // 先更新畫面，再計算 AI。
+       // 用 setTimeout 而唔係 requestAnimationFrame，避免高 LV 搜尋喺瀏覽器 repaint 前就 block 住，
+       // 令「電腦思考中 / AI TURN」完全未顯示就已經行棋。
        const cfg = getAIConfig();
-       const start = performance.now();
-       const aiMove = calculateAIMove();
-       const elapsed = performance.now() - start;
-       const wait = Math.max(0, cfg.delay - elapsed);
+       const visualStart = performance.now();
+       gameState.isThinking = true;
+       render();
+
        setTimeout(() => {
-          if (aiMove) {
-            gameState.isThinking = false;
-            performMove(aiMove.from.x, aiMove.from.y, aiMove.to.x, aiMove.to.y);
-          }
-       }, wait);
+          if (!gameState || gameState.winner || !isAITurn()) return;
+
+          const start = performance.now();
+          const aiMove = calculateAIMove();
+          const calcElapsed = performance.now() - start;
+          const totalElapsed = performance.now() - visualStart;
+          const wait = Math.max(0, cfg.delay - totalElapsed, 120 - calcElapsed);
+
+          setTimeout(() => {
+             if (!gameState || gameState.winner || !isAITurn()) return;
+
+             if (aiMove) {
+                // AI 搜尋完會短暫 block main thread；隔兩個 frame 先開 move animation，
+                // 避免棋子行嗰一下同瀏覽器 repaint 撞埋一齊，睇落 lag 一 lag。
+                requestAnimationFrame(() => {
+                   requestAnimationFrame(() => {
+                      if (!gameState || gameState.winner || !isAITurn()) return;
+                      gameState.isThinking = false;
+                      performMove(aiMove.from.x, aiMove.from.y, aiMove.to.x, aiMove.to.y);
+                   });
+                });
+             } else {
+                gameState.isThinking = false;
+                render();
+             }
+          }, wait);
+       }, 90);
     };
 
     // --- 計算 AI 提示 (Hint Mode) ---
@@ -875,7 +909,12 @@
         gameState.isAnimating = true; 
         currentHints = []; 
         
-        if (targetPiece) gameState.animatingCapture = targetPiece;
+        if (targetPiece) {
+            gameState.animatingCapture = targetPiece;
+            gameState.showCaptureEffect = { x: tx, y: ty, capturerColor: movingPiece.color };
+        } else {
+            gameState.showCaptureEffect = null;
+        }
 
         gameState.selectedPiece = null;
         gameState.validMoves = [];
@@ -884,18 +923,10 @@
 
         setTimeout(() => {
             gameState.isAnimating = false;
-            if (targetPiece) {
-                gameState.showCaptureEffect = { x: tx, y: ty, piece: targetPiece, capturerColor: movingPiece.color };
-                gameState.animatingCapture = null;
-                render();
-                setTimeout(() => {
-                    gameState.showCaptureEffect = null;
-                    completeMoveLogic(targetPiece);
-                }, 800); 
-            } else {
-                completeMoveLogic(null);
-            }
-        }, 400); 
+            gameState.animatingCapture = null;
+            gameState.showCaptureEffect = null;
+            completeMoveLogic(targetPiece || null);
+        }, targetPiece ? 500 : 480); 
     };
 
     const completeMoveLogic = (targetPiece) => {
@@ -934,9 +965,7 @@
             recordFinishedGame();
             render();
         } else if (isAITurn()) {
-            gameState.isThinking = true;
-            render();
-            requestAnimationFrame(() => triggerAIWithMinimumDelay());
+            triggerAIWithMinimumDelay();
         } else {
             if (isHintMode) {
                 gameState.isCalculatingHints = true;
@@ -1092,9 +1121,7 @@
                   gameState.isTossing = false;
                   render();
                   if (isAITurn()) { 
-                      gameState.isThinking = true;
-                      render();
-                      requestAnimationFrame(() => triggerAIWithMinimumDelay());
+                      triggerAIWithMinimumDelay();
                   } else if (isHintMode) {
                       gameState.isCalculatingHints = true; render();
                       setTimeout(() => { updateHintsLogic(); gameState.isCalculatingHints = false; render(); }, 10);
@@ -1103,10 +1130,8 @@
               return;
           } else {
               if (isAITurn()) {
-                  gameState.isThinking = true;
-                  setTimeout(() => { 
-                      render(); 
-                      requestAnimationFrame(() => triggerAIWithMinimumDelay()); 
+                  setTimeout(() => {
+                      triggerAIWithMinimumDelay();
                   }, 0);
               } else if (isHintMode) {
                   gameState.isCalculatingHints = true; render();
@@ -1342,7 +1367,7 @@
           const p = gameState.animatingCapture;
           const strokeColor = p.color === 'R' ? '#ef4444' : '#f8fafc';
           const textColor = p.color === 'R' ? '#ef4444' : '#f8fafc';
-          baseTargetPieceSVG += `<g transform="translate(${cx}, ${cy})" pointer-events="none"><circle cx="0" cy="0" r="16" fill="#111111" stroke="${strokeColor}" stroke-width="1.5" /><circle cx="0" cy="0" r="13" fill="none" stroke="${strokeColor}" stroke-width="0.5" opacity="0.5" /><text x="0" y="0" fill="${textColor}" font-size="18" class="font-chess" text-anchor="middle" dominant-baseline="central">${p.label}</text></g>`;
+          baseTargetPieceSVG += `<g transform="translate(${cx}, ${cy})" pointer-events="none"><g class="anim-capture-soft"><circle cx="0" cy="0" r="16" fill="#111111" stroke="${strokeColor}" stroke-width="1.5" /><circle cx="0" cy="0" r="13" fill="none" stroke="${strokeColor}" stroke-width="0.5" opacity="0.42" /><text x="0" y="0" fill="${textColor}" font-size="18" class="font-chess" text-anchor="middle" dominant-baseline="central">${p.label}</text></g></g>`;
       }
 
       let piecesSVG = ``;
@@ -1357,21 +1382,40 @@
             const glow = isSelected ? `<circle cx="0" cy="0" r="18" fill="none" stroke="#22d3ee" stroke-width="2" />` : '';
             
             let animTag = '';
+            let moveClass = '';
             if (gameState.isAnimating && gameState.lastMove && gameState.lastMove.to.x === x && gameState.lastMove.to.y === y) {
                 const oldCx = OFFSET_X + toScreenX(gameState.lastMove.from.x) * GRID_SIZE; const oldCy = OFFSET_Y + toScreenY(gameState.lastMove.from.y) * GRID_SIZE;
-                animTag = `<animateTransform attributeName="transform" type="translate" from="${oldCx - cx} ${oldCy - cy}" to="0 0" dur="0.4s" additive="sum" fill="freeze" />`;
+                animTag = `<animateTransform attributeName="transform" type="translate" from="${oldCx - cx} ${oldCy - cy}" to="0 0" dur="0.50s" calcMode="spline" keyTimes="0;1" keySplines="0.22 1 0.36 1" additive="sum" fill="freeze" />`;
+                moveClass = 'anim-move-land';
             }
-            piecesSVG += `<g class="chess-piece" transform="translate(${cx}, ${cy})" onclick="window.handleSquareClick(${x}, ${y})">${animTag}${glow}<circle cx="0" cy="0" r="16" fill="${bgColor}" stroke="${strokeColor}" stroke-width="1.5" /><circle cx="0" cy="0" r="13" fill="none" stroke="${strokeColor}" stroke-width="0.5" opacity="0.5" /><text x="0" y="0" fill="${textColor}" font-size="18" class="font-chess" text-anchor="middle" dominant-baseline="central">${piece.label}</text></g>`;
+            piecesSVG += `<g class="chess-piece ${moveClass}" transform="translate(${cx}, ${cy})" onclick="window.handleSquareClick(${x}, ${y})">${animTag}${glow}<circle cx="0" cy="0" r="16" fill="${bgColor}" stroke="${strokeColor}" stroke-width="1.5" /><circle cx="0" cy="0" r="13" fill="none" stroke="${strokeColor}" stroke-width="0.5" opacity="0.5" /><text x="0" y="0" fill="${textColor}" font-size="18" class="font-chess" text-anchor="middle" dominant-baseline="central">${piece.label}</text></g>`;
           }
         }
       }
 
       let captureEffectsSVG = '';
       if (gameState.showCaptureEffect) {
-          const cx = OFFSET_X + toScreenX(gameState.showCaptureEffect.x) * GRID_SIZE; const cy = OFFSET_Y + toScreenY(gameState.showCaptureEffect.y) * GRID_SIZE;
-          const p = gameState.showCaptureEffect.piece; const waveColor = gameState.showCaptureEffect.capturerColor === 'R' ? '#ef4444' : '#f8fafc';
-          const strokeColor = p.color === 'R' ? '#ef4444' : '#f8fafc'; const textColor = p.color === 'R' ? '#ef4444' : '#f8fafc';
-          captureEffectsSVG += `<g pointer-events="none"><circle cx="${cx}" cy="${cy}" r="16" fill="none" stroke="${waveColor}" stroke-width="6"><animate attributeName="r" from="16" to="240" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" /><animate attributeName="stroke-width" from="6" to="0" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" /><animate attributeName="opacity" from="0.8" to="0" dur="0.8s" calcMode="spline" keyTimes="0; 1" keySplines="0.6 0 1 1" fill="freeze" /></circle><g transform="translate(${cx}, ${cy})"><g class="anim-capture-fly"><circle cx="0" cy="0" r="16" fill="#111111" stroke="${strokeColor}" stroke-width="1.5" /><circle cx="0" cy="0" r="13" fill="none" stroke="${strokeColor}" stroke-width="0.5" opacity="0.5" /><text x="0" y="0" fill="${textColor}" font-size="18" class="font-chess" text-anchor="middle" dominant-baseline="central">${p.label}</text></g></g></g>`;
+          const cx = OFFSET_X + toScreenX(gameState.showCaptureEffect.x) * GRID_SIZE;
+          const cy = OFFSET_Y + toScreenY(gameState.showCaptureEffect.y) * GRID_SIZE;
+          const waveColor = gameState.showCaptureEffect.capturerColor === 'R' ? '#ef4444' : '#f8fafc';
+
+          // 食棋 effect：由棋中心點擴散出去的圓形線圈，fade out，不再用放射線。
+          captureEffectsSVG += `<g pointer-events="none">
+            <circle cx="${cx}" cy="${cy}" r="10" fill="${waveColor}" opacity="0.12">
+              <animate attributeName="r" from="10" to="26" dur="0.28s" calcMode="spline" keyTimes="0;1" keySplines="0.22 1 0.36 1" fill="freeze" />
+              <animate attributeName="opacity" values="0.12;0.05;0" dur="0.28s" fill="freeze" />
+            </circle>
+            <circle cx="${cx}" cy="${cy}" r="14" fill="none" stroke="${waveColor}" stroke-width="3" opacity="0.68">
+              <animate attributeName="r" from="14" to="54" dur="0.36s" calcMode="spline" keyTimes="0;1" keySplines="0.22 1 0.36 1" fill="freeze" />
+              <animate attributeName="stroke-width" values="3;2;0" dur="0.36s" fill="freeze" />
+              <animate attributeName="opacity" values="0.68;0.36;0" dur="0.36s" fill="freeze" />
+            </circle>
+            <circle cx="${cx}" cy="${cy}" r="19" fill="none" stroke="${waveColor}" stroke-width="1.4" opacity="0.36">
+              <animate attributeName="r" from="19" to="70" dur="0.46s" begin="0.04s" calcMode="spline" keyTimes="0;1" keySplines="0.22 1 0.36 1" fill="freeze" />
+              <animate attributeName="stroke-width" values="1.4;1;0" dur="0.46s" begin="0.04s" fill="freeze" />
+              <animate attributeName="opacity" values="0.36;0.16;0" dur="0.46s" begin="0.04s" fill="freeze" />
+            </circle>
+          </g>`;
       }
 
       let hintsSVG = '';
@@ -1568,7 +1612,7 @@
                 rightContent = `<span class="${currentTurnClass} font-bold tracking-wider uppercase">${currentTurnName} TURN</span>`;
             } else {
                 if (gameState.isThinking) {
-                    rightContent = `<div class="flex items-center gap-3"><span class="${currentTurnClass} font-bold tracking-wider uppercase">${currentTurnName} TURN</span><span class="text-[#22d3ee] font-bold animate-pulse tracking-widest">THINKING...</span></div>`;
+                    rightContent = `<div class="flex items-center gap-3 min-w-0"><span class="${currentTurnClass} font-bold tracking-wider uppercase truncate">${currentTurnName} TURN</span><span class="text-[#22d3ee] font-bold animate-pulse tracking-widest whitespace-nowrap">AI THINKING</span></div>`;
                     borderClass = 'border-[#22d3ee]/30 shadow-[0_0_15px_rgba(34,211,238,0.1)]';
                 } else {
                     rightContent = `<span class="${currentTurnClass} font-bold tracking-wider uppercase">${currentTurnName} TURN</span>`;
