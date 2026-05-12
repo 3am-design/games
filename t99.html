@@ -100,6 +100,8 @@
     const keys = { left: false, right: false, up: false, down: false };
     let pointerActive = false;
     let pointerTarget = null;
+    let pointerOrigin = null;
+    let pointerMode = 'target';
 
     const loadHistory = () => {
       try { const saved = localStorage.getItem('training99_bullet_history'); if (saved) matchHistory = JSON.parse(saved); } catch (e) { matchHistory = []; }
@@ -124,6 +126,7 @@
         this.gameOver = false;
         this.hasRecorded = false;
         this.player = { x: LOGICAL_WIDTH / 2, y: LOGICAL_HEIGHT / 2, vx: 0, vy: 0, invincible: 1.1 };
+        this.keyRamp = 0;
         this.bullets = [];
         this.particles = [];
         this.spawnTimer = 0.35;
@@ -182,8 +185,8 @@
         if (!speed) {
           const roll = Math.random();
           if (opts.fast) { speed = rand(spdRange.max * 0.9, spdRange.max * 1.08); speedTone = 'fast'; }
-          else if (roll < 0.62) { speed = rand(spdRange.min * 0.46, spdRange.min * 0.76); speedTone = 'slow'; }
-          else if (roll > 0.94) { speed = rand(spdRange.max * 0.9, spdRange.max * 1.08); speedTone = 'fast'; }
+          else if (roll < 0.58) { speed = rand(spdRange.min * 0.42, spdRange.min * 0.72); speedTone = 'slow'; }
+          else if (roll > 0.88) { speed = rand(spdRange.max * 0.9, spdRange.max * 1.08); speedTone = 'fast'; }
           else speed = rand(spdRange.min * 0.78, spdRange.max * 0.92);
         }
         const hue = opts.special ? '#FFD34D' : ((opts.fast || speedTone === 'fast') ? '#FF5A66' : (speedTone === 'slow' ? '#64748b' : '#f8fafc'));
@@ -206,10 +209,10 @@
           const t = count === 1 ? 0 : (i / (count - 1) - 0.5);
           const angle = base + t * spread;
           const mix = Math.random();
-          const speed = mix < 0.66 ? rand(spdRange.min * 0.46, spdRange.min * 0.76) : (mix > 0.94 ? rand(spdRange.max * 0.9, spdRange.max * 1.08) : rand(spdRange.min * 0.78, spdRange.max * 0.92));
+          const speed = mix < 0.58 ? rand(spdRange.min * 0.42, spdRange.min * 0.72) : (mix > 0.88 ? rand(spdRange.max * 0.9, spdRange.max * 1.08) : rand(spdRange.min * 0.78, spdRange.max * 0.92));
           const id = Math.random().toString(36).slice(2) + Date.now();
-          const color = mix < 0.66 ? '#64748b' : (mix > 0.94 ? '#FF5A66' : '#f8fafc');
-          this.bullets.push({ id, x: origin.x, y: origin.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, r: this.cfg.size, color, life: 0, fast: mix > 0.94 });
+          const color = mix < 0.58 ? '#64748b' : (mix > 0.88 ? '#FF5A66' : '#f8fafc');
+          this.bullets.push({ id, x: origin.x, y: origin.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, r: this.cfg.size, color, life: 0, fast: mix > 0.88 });
         }
       }
 
@@ -222,7 +225,7 @@
           this.spawnFan(opposite, lv + 4, 0.72);
         }
         if (lv >= 3 && this.survival > 22) {
-          for (let s = 0; s < 4; s++) this.spawnBullet({ side: s, aimAtCenter: true, fast: Math.random() > 0.86, radius: 3.8 });
+          for (let s = 0; s < 4; s++) this.spawnBullet({ side: s, aimAtCenter: true, fast: Math.random() > 0.80, radius: 3.8 });
         }
         if (lv >= 4 && this.survival > 34) {
           for (let s = 0; s < 4; s++) this.spawnFan(s, 5, 0.52);
@@ -231,27 +234,54 @@
 
       updatePlayer(dt) {
         const p = this.player;
-        const maxSpeed = 650;
-        const keyboardAccel = 7200;
+        const maxSpeed = 690;
+        const keyboardAccel = 8600;
         const pointerAccel = 42;
         const keyX = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
         const keyY = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
         const keyLen = Math.hypot(keyX, keyY);
 
         if (keyLen > 0 && !(pointerActive && pointerTarget)) {
+          this.keyRamp = Math.min(1, this.keyRamp + dt / 0.32);
           const nx = keyX / keyLen;
           const ny = keyY / keyLen;
-          const desiredVx = nx * maxSpeed;
-          const desiredVy = ny * maxSpeed;
+          // Keyboard now starts slower for fine dodging, then ramps up to full speed.
+          const rampEase = 1 - Math.pow(1 - this.keyRamp, 2);
+          const keyboardSpeed = maxSpeed * (0.42 + rampEase * 0.58);
+          const desiredVx = nx * keyboardSpeed;
+          const desiredVy = ny * keyboardSpeed;
           p.vx += (desiredVx - p.vx) * Math.min(1, keyboardAccel * dt / maxSpeed);
           p.vy += (desiredVy - p.vy) * Math.min(1, keyboardAccel * dt / maxSpeed);
+        } else if (!pointerActive) {
+          this.keyRamp = 0;
         }
 
         if (pointerActive && pointerTarget) {
-          const dx = pointerTarget.x - p.x;
-          const dy = pointerTarget.y - p.y;
-          p.vx += dx * pointerAccel * dt;
-          p.vy += dy * pointerAccel * dt;
+          this.keyRamp = 0;
+          if (pointerMode === 'joystick' && pointerOrigin) {
+            // Mobile: virtual joystick. The first touch point becomes the origin,
+            // then movement is controlled by drag distance/direction from that origin.
+            const dx = pointerTarget.x - pointerOrigin.x;
+            const dy = pointerTarget.y - pointerOrigin.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist > 2) {
+              const nx = dx / dist;
+              const ny = dy / dist;
+              const power = clamp((dist - 4) / 86, 0, 1);
+              const desiredVx = nx * maxSpeed * power;
+              const desiredVy = ny * maxSpeed * power;
+              p.vx += (desiredVx - p.vx) * Math.min(1, 18 * dt);
+              p.vy += (desiredVy - p.vy) * Math.min(1, 18 * dt);
+            } else {
+              p.vx *= Math.pow(0.78, dt * 60);
+              p.vy *= Math.pow(0.78, dt * 60);
+            }
+          } else {
+            const dx = pointerTarget.x - p.x;
+            const dy = pointerTarget.y - p.y;
+            p.vx += dx * pointerAccel * dt;
+            p.vy += dy * pointerAccel * dt;
+          }
         }
 
         const hasInput = keyLen > 0 || (pointerActive && pointerTarget);
@@ -304,7 +334,7 @@
         this.spawnTimer -= dt;
         if (this.spawnTimer <= 0) {
           const n = this.survival > 18 ? (this.difficulty >= 3 ? 3 : 2) : (this.difficulty >= 4 && this.survival > 8 ? 2 : 1);
-          for (let i = 0; i < n; i++) this.spawnBullet({ fast: Math.random() < 0.035 + this.difficulty * 0.012 });
+          for (let i = 0; i < n; i++) this.spawnBullet({ fast: Math.random() < 0.055 + this.difficulty * 0.015 });
           this.spawnTimer = this.getDynamicSpawn() * rand(0.82, 1.2);
         }
 
@@ -427,10 +457,40 @@
         if (['ArrowUp','KeyW'].includes(e.code)) keys.up = false;
         if (['ArrowDown','KeyS'].includes(e.code)) keys.down = false;
       });
-      canvas.addEventListener('pointerdown', (e) => { if (!gameState || isMenuOpen || isRecordOpen) return; pointerActive = true; pointerTarget = canvasPoint(e.clientX, e.clientY); canvas.setPointerCapture(e.pointerId); e.preventDefault(); });
-      canvas.addEventListener('pointermove', (e) => { if (!gameState || !pointerActive) return; pointerTarget = canvasPoint(e.clientX, e.clientY); e.preventDefault(); });
-      canvas.addEventListener('pointerup', (e) => { pointerActive = false; pointerTarget = null; try { canvas.releasePointerCapture(e.pointerId); } catch (_) {} e.preventDefault(); });
-      canvas.addEventListener('pointercancel', () => { pointerActive = false; pointerTarget = null; });
+      const playArea = document.getElementById('play-area') || canvas;
+      const startPointerControl = (e) => {
+        if (!gameState || isMenuOpen || isRecordOpen || gameState.gameOver) return;
+        if (e.target && e.target.closest && e.target.closest('button, a, input')) return;
+        pointerActive = true;
+        pointerTarget = canvasPoint(e.clientX, e.clientY);
+        if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+          pointerMode = 'joystick';
+          pointerOrigin = { ...pointerTarget };
+        } else {
+          pointerMode = 'target';
+          pointerOrigin = null;
+        }
+        try { playArea.setPointerCapture(e.pointerId); } catch (_) {}
+        e.preventDefault();
+      };
+      const movePointerControl = (e) => {
+        if (!gameState || !pointerActive) return;
+        pointerTarget = canvasPoint(e.clientX, e.clientY);
+        e.preventDefault();
+      };
+      const endPointerControl = (e) => {
+        pointerActive = false;
+        pointerTarget = null;
+        pointerOrigin = null;
+        pointerMode = 'target';
+        try { playArea.releasePointerCapture(e.pointerId); } catch (_) {}
+        e.preventDefault();
+      };
+
+      playArea.addEventListener('pointerdown', startPointerControl, { passive: false });
+      playArea.addEventListener('pointermove', movePointerControl, { passive: false });
+      playArea.addEventListener('pointerup', endPointerControl, { passive: false });
+      playArea.addEventListener('pointercancel', endPointerControl, { passive: false });
     };
 
     window.setSetting = (key, value) => { pendingSettings[key] = value; };
@@ -443,7 +503,7 @@
     };
     window.toggleRecord = () => { isRecordOpen = !isRecordOpen; render(); };
     window.initGame = () => {
-      isMenuOpen = false; isRecordOpen = false; pointerActive = false; pointerTarget = null;
+      isMenuOpen = false; isRecordOpen = false; pointerActive = false; pointerTarget = null; pointerOrigin = null; pointerMode = 'target';
       settings = cloneState(pendingSettings);
       gameState = new GameState();
       lastFrame = 0;
@@ -536,7 +596,7 @@
       if (!gameState && isMenuOpen) { app.innerHTML = getMenuHTML(); menuJustOpened = false; return; }
       app.innerHTML = `
         ${getMenuHTML()}${getRecordHTML()}
-        <div class="w-full h-full bg-black flex flex-col overflow-hidden relative">
+        <div id="play-area" class="w-full h-full bg-black flex flex-col overflow-hidden relative">
           <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
             <div class="flex items-center"><img src="./assets/Logo.svg" alt="LOGO" class="h-[19px] lg:h-[25px] object-contain opacity-90 icon-white" onerror="this.style.display='none'"></div>
             <div class="flex items-center gap-4 lg:gap-6">

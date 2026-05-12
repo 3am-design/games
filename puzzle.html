@@ -55,21 +55,7 @@
     .score-label { font-size: 10px; letter-spacing: 0.12em; margin-bottom: 5px; line-height: 1.1; }
     .score-number { font-family: 'Inter', sans-serif; font-weight: 300; letter-spacing: -0.04em; display:block; }
     
-    /* Mobile Controls Overlay */
-    .mobile-controls {
-      display: none; 
-      width: 100%; max-width: 480px; margin-top: 15px; 
-      gap: 12px; justify-content: center;
-    }
-    .control-btn {
-      background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2);
-      color: white; border-radius: 8px; font-weight: bold; font-size: 20px;
-      display: flex; align-items: center; justify-content: center;
-      user-select: none;
-    }
-    .control-btn:active { background: rgba(255, 255, 255, 0.2); }
-    .btn-side { width: 60px; height: 50px; }
-    .btn-action { flex: 1; height: 50px; font-size: 16px; letter-spacing: 0.1em; }
+    /* Mobile touch control uses the game area directly; no on-screen buttons. */
 
     @media (min-width: 1024px) {
       .game-stage { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(420px, 560px) minmax(260px, 1fr); align-items: center; }
@@ -697,6 +683,31 @@
 
     // --- Inputs ---
     const clampShooterAngle = (angle) => Math.max(-Math.PI + 0.34, Math.min(-0.34, angle));
+
+    // Mobile touch aiming:
+    // 1. Touch down anywhere inside the game stage to set that point as the control origin.
+    // 2. Drag left / right from that origin to rotate the shooter relatively.
+    // 3. Release to shoot.
+    const touchAim = {
+      active: false,
+      startX: 0,
+      startY: 0,
+      baseAngle: -Math.PI / 2,
+      moved: false,
+      pointerId: null
+    };
+
+    const TOUCH_AIM_SENSITIVITY = 0.0062; // radians per px. Higher = faster steering.
+    let globalInputReady = false;
+
+    const canControlGame = () => (
+      gameState &&
+      !gameState.gameOver &&
+      !gameState.victory &&
+      !isMenuOpen &&
+      !isRecordOpen
+    );
+
     const updateAimFromClientPoint = (clientX, clientY) => {
       const canvas = document.getElementById('gameCanvas');
       if (!canvas || !gameState) return;
@@ -706,70 +717,126 @@
       gameState.shooterAngle = clampShooterAngle(Math.atan2(dy, dx));
     };
 
+    const beginTouchAim = (touch) => {
+      if (!touch || !canControlGame()) return;
+      hasTouch = true;
+      keys.left = false;
+      keys.right = false;
+      touchAim.active = true;
+      touchAim.startX = touch.clientX;
+      touchAim.startY = touch.clientY;
+      touchAim.baseAngle = gameState.shooterAngle;
+      touchAim.moved = false;
+      touchAim.pointerId = touch.identifier;
+    };
+
+    const moveTouchAim = (touch) => {
+      if (!touchAim.active || !touch || !canControlGame()) return;
+
+      const dx = touch.clientX - touchAim.startX;
+      const dy = touch.clientY - touchAim.startY;
+      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) touchAim.moved = true;
+
+      // Left/right control is relative to the first touch point, not absolute canvas position.
+      // Drag right = aim more right. Drag left = aim more left.
+      gameState.shooterAngle = clampShooterAngle(touchAim.baseAngle + dx * TOUCH_AIM_SENSITIVITY);
+    };
+
+    const endTouchAim = () => {
+      if (!touchAim.active) return;
+      touchAim.active = false;
+      touchAim.pointerId = null;
+
+      if (canControlGame()) {
+        gameState.shoot();
+      }
+    };
+
+    const getTrackedTouch = (touchList) => {
+      if (!touchList || touchList.length === 0) return null;
+      if (touchAim.pointerId === null) return touchList[0];
+      for (let i = 0; i < touchList.length; i++) {
+        if (touchList[i].identifier === touchAim.pointerId) return touchList[i];
+      }
+      return touchList[0];
+    };
+
     const attachInputs = () => {
       const canvas = document.getElementById('gameCanvas');
-      if (canvas.dataset.ready) return;
-      canvas.dataset.ready = 'true';
+      const stage = document.querySelector('.game-stage');
+      if (!canvas || !stage) return;
+
+      // Re-bind stage touch handlers after render(), because the stage DOM is rebuilt.
+      if (!stage.dataset.touchReady) {
+        stage.dataset.touchReady = 'true';
+
+        stage.addEventListener('touchstart', (e) => {
+          if (!canControlGame()) return;
+          const t = e.touches[0];
+          beginTouchAim(t);
+          e.preventDefault();
+        }, { passive: false });
+
+        stage.addEventListener('touchmove', (e) => {
+          if (!touchAim.active) return;
+          const t = getTrackedTouch(e.touches);
+          moveTouchAim(t);
+          e.preventDefault();
+        }, { passive: false });
+
+        stage.addEventListener('touchend', (e) => {
+          if (!touchAim.active) return;
+          // When there are still touches on screen, keep tracking the remaining finger.
+          if (e.touches && e.touches.length > 0) {
+            const t = getTrackedTouch(e.touches);
+            beginTouchAim(t);
+          } else {
+            endTouchAim();
+          }
+          e.preventDefault();
+        }, { passive: false });
+
+        stage.addEventListener('touchcancel', (e) => {
+          touchAim.active = false;
+          touchAim.pointerId = null;
+          e.preventDefault();
+        }, { passive: false });
+      }
+
+      if (!canvas.dataset.mouseReady) {
+        canvas.dataset.mouseReady = 'true';
+        canvas.addEventListener('mousedown', (e) => {
+          if (!hasTouch && canControlGame()) gameState.shoot();
+        });
+      }
+
+      // Global listeners should only be attached once.
+      if (globalInputReady) return;
+      globalInputReady = true;
 
       window.addEventListener('mousemove', (e) => {
-        if (!gameState || gameState.gameOver || gameState.victory || isMenuOpen || isRecordOpen || hasTouch) return;
+        if (!canControlGame() || hasTouch) return;
         updateAimFromClientPoint(e.clientX, e.clientY);
       });
-
-      canvas.addEventListener('mousedown', (e) => {
-        if (!hasTouch && gameState && !isMenuOpen && !isRecordOpen) gameState.shoot();
-      });
-
-      canvas.addEventListener('touchstart', (e) => {
-        if (!gameState || isMenuOpen || isRecordOpen) return;
-        hasTouch = true;
-        const ctrls = document.getElementById('mobile-controls');
-        if (ctrls) ctrls.style.display = 'flex';
-        const t = e.touches[0];
-        if (t) updateAimFromClientPoint(t.clientX, t.clientY);
-        e.preventDefault();
-      }, {passive: false});
-
-      canvas.addEventListener('touchmove', (e) => {
-        if (!gameState || isMenuOpen || isRecordOpen) return;
-        const t = e.touches[0];
-        if (t) updateAimFromClientPoint(t.clientX, t.clientY);
-        e.preventDefault();
-      }, {passive: false});
-
-      canvas.addEventListener('touchend', (e) => {
-        if (gameState && !isMenuOpen && !isRecordOpen) gameState.shoot();
-        e.preventDefault();
-      }, {passive: false});
 
       window.addEventListener('keydown', (e) => {
         if (e.code === 'ArrowLeft') keys.left = true;
         if (e.code === 'ArrowRight') keys.right = true;
-        if (e.code === 'Space') { e.preventDefault(); if (gameState && !isMenuOpen && !isRecordOpen) gameState.shoot(); }
+        if (e.code === 'Space') {
+          e.preventDefault();
+          if (canControlGame()) gameState.shoot();
+        }
       });
+
       window.addEventListener('keyup', (e) => {
         if (e.code === 'ArrowLeft') keys.left = false;
         if (e.code === 'ArrowRight') keys.right = false;
       });
-
-      window.addEventListener('touchstart', () => {
-        if (!hasTouch) {
-          hasTouch = true;
-          const ctrls = document.getElementById('mobile-controls');
-          if (ctrls) ctrls.style.display = 'flex';
-        }
-      }, {once: true});
     };
 
     const setupMobileButtons = () => {
-      const bindBtn = (id, keyName) => {
-        const btn = document.getElementById(id); if(!btn) return;
-        btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; }, {passive: false});
-        btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; }, {passive: false});
-      };
-      bindBtn('btn-left', 'left'); bindBtn('btn-right', 'right');
-      const fireBtn = document.getElementById('btn-fire');
-      if(fireBtn) fireBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (gameState && !isMenuOpen && !isRecordOpen) gameState.shoot(); }, {passive: false});
+      // Mobile is now touch-drag-to-aim and release-to-shoot.
+      // The old on-screen buttons are intentionally removed.
     };
 
     // --- UI/DOM ---
@@ -949,11 +1016,6 @@
                 </div>
                 
               </div>
-              <div id="mobile-controls" class="mobile-controls">
-                <button id="btn-left" class="control-btn btn-side">◀</button>
-                <button id="btn-fire" class="control-btn btn-action">SHOOT</button>
-                <button id="btn-right" class="control-btn btn-side">▶</button>
-              </div>
             </main>
           </div>
         </div>`;
@@ -962,11 +1024,7 @@
       setupCanvasSize();
       attachInputs();
       setupMobileButtons();
-      
-      if(hasTouch) {
-        const ctrls = document.getElementById('mobile-controls');
-        if (ctrls) ctrls.style.display = 'flex';
-      }
+
       menuJustOpened = false;
     };
 
