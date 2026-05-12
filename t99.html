@@ -102,6 +102,10 @@
     let pointerTarget = null;
     let pointerOrigin = null;
     let pointerMode = 'target';
+    // Input priority prevents mouse target-follow from locking out keyboard control.
+    // keyboard takes over on keydown; mouse takes over again only when the mouse moves.
+    let activeControl = 'none'; // 'keyboard' | 'mouse' | 'touch' | 'none'
+    const anyKeyDown = () => keys.left || keys.right || keys.up || keys.down;
 
     const loadHistory = () => {
       try { const saved = localStorage.getItem('training99_bullet_history'); if (saved) matchHistory = JSON.parse(saved); } catch (e) { matchHistory = []; }
@@ -236,12 +240,12 @@
         const p = this.player;
         const maxSpeed = 690;
         const keyboardAccel = 8600;
-        const pointerAccel = 42;
+        const pointerAccel = 62;
         const keyX = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
         const keyY = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
         const keyLen = Math.hypot(keyX, keyY);
 
-        if (keyLen > 0 && !(pointerActive && pointerTarget)) {
+        if (keyLen > 0 && activeControl === 'keyboard') {
           this.keyRamp = Math.min(1, this.keyRamp + dt / 0.32);
           const nx = keyX / keyLen;
           const ny = keyY / keyLen;
@@ -256,7 +260,7 @@
           this.keyRamp = 0;
         }
 
-        if (pointerActive && pointerTarget) {
+        if (pointerActive && pointerTarget && activeControl !== 'keyboard') {
           this.keyRamp = 0;
           if (pointerMode === 'joystick' && pointerOrigin) {
             // Mobile: virtual joystick. The first touch point becomes the origin,
@@ -453,6 +457,12 @@
       const canvas = document.getElementById('gameCanvas'); if (!canvas || canvas.dataset.ready) return;
       canvas.dataset.ready = 'true';
       window.addEventListener('keydown', (e) => {
+        const isMoveKey = ['ArrowLeft','KeyA','ArrowRight','KeyD','ArrowUp','KeyW','ArrowDown','KeyS'].includes(e.code);
+        if (isMoveKey) {
+          activeControl = 'keyboard';
+          // Stop desktop mouse target-follow immediately, otherwise keyboard feels like it is fighting the cursor.
+          if (pointerMode === 'target') { pointerActive = false; pointerTarget = null; pointerOrigin = null; }
+        }
         if (['ArrowLeft','KeyA'].includes(e.code)) { keys.left = true; e.preventDefault(); }
         if (['ArrowRight','KeyD'].includes(e.code)) { keys.right = true; e.preventDefault(); }
         if (['ArrowUp','KeyW'].includes(e.code)) { keys.up = true; e.preventDefault(); }
@@ -464,37 +474,68 @@
         if (['ArrowRight','KeyD'].includes(e.code)) keys.right = false;
         if (['ArrowUp','KeyW'].includes(e.code)) keys.up = false;
         if (['ArrowDown','KeyS'].includes(e.code)) keys.down = false;
+        if (!anyKeyDown() && activeControl === 'keyboard') {
+          activeControl = 'none';
+        }
       });
       const playArea = document.getElementById('play-area') || canvas;
+
+      // Desktop mouse: back to direct follow / target control.
+      // No need to hold-click; moving the mouse over the game area becomes the target point.
+      const updateMouseTarget = (e) => {
+        if (!gameState || isMenuOpen || isRecordOpen || gameState.gameOver) return;
+        if (e.target && e.target.closest && e.target.closest('button, a, input')) return;
+        if (anyKeyDown() && activeControl === 'keyboard') return;
+        activeControl = 'mouse';
+        pointerActive = true;
+        pointerMode = 'target';
+        pointerOrigin = null;
+        pointerTarget = canvasPoint(e.clientX, e.clientY);
+      };
+
       const startPointerControl = (e) => {
         if (!gameState || isMenuOpen || isRecordOpen || gameState.gameOver) return;
         if (e.target && e.target.closest && e.target.closest('button, a, input')) return;
-        pointerActive = true;
         pointerTarget = canvasPoint(e.clientX, e.clientY);
         if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+          activeControl = 'touch';
+          pointerActive = true;
           pointerMode = 'joystick';
           pointerOrigin = { ...pointerTarget };
+          try { playArea.setPointerCapture(e.pointerId); } catch (_) {}
+          e.preventDefault();
         } else {
+          // Mouse keeps the old target-follow feeling instead of the mobile joystick mode.
+          activeControl = 'mouse';
+          pointerActive = true;
           pointerMode = 'target';
           pointerOrigin = null;
         }
-        try { playArea.setPointerCapture(e.pointerId); } catch (_) {}
-        e.preventDefault();
       };
       const movePointerControl = (e) => {
-        if (!gameState || !pointerActive) return;
-        pointerTarget = canvasPoint(e.clientX, e.clientY);
-        e.preventDefault();
+        if (!gameState) return;
+        if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+          if (!pointerActive) return;
+          pointerTarget = canvasPoint(e.clientX, e.clientY);
+          e.preventDefault();
+        }
       };
       const endPointerControl = (e) => {
-        pointerActive = false;
-        pointerTarget = null;
-        pointerOrigin = null;
-        pointerMode = 'target';
-        try { playArea.releasePointerCapture(e.pointerId); } catch (_) {}
-        e.preventDefault();
+        if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+          pointerActive = false;
+          pointerTarget = null;
+          pointerOrigin = null;
+          pointerMode = 'target';
+          activeControl = anyKeyDown() ? 'keyboard' : 'none';
+          try { playArea.releasePointerCapture(e.pointerId); } catch (_) {}
+          e.preventDefault();
+        }
       };
 
+      playArea.addEventListener('mousemove', updateMouseTarget, { passive: true });
+      playArea.addEventListener('mouseleave', () => {
+        if (pointerMode === 'target') { pointerActive = false; pointerTarget = null; if (activeControl === 'mouse') activeControl = 'none'; }
+      });
       playArea.addEventListener('pointerdown', startPointerControl, { passive: false });
       playArea.addEventListener('pointermove', movePointerControl, { passive: false });
       playArea.addEventListener('pointerup', endPointerControl, { passive: false });
@@ -514,6 +555,8 @@
       isMenuOpen = false; isRecordOpen = false; pointerActive = false; pointerTarget = null; pointerOrigin = null; pointerMode = 'target';
       settings = cloneState(pendingSettings);
       gameState = new GameState();
+      pointerActive = false; pointerTarget = null; pointerOrigin = null; pointerMode = 'target'; activeControl = 'none';
+      keys.left = keys.right = keys.up = keys.down = false;
       lastFrame = 0;
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
       render(); gameLoop(performance.now());
