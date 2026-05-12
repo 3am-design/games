@@ -25,14 +25,14 @@
     @keyframes pulse-fast { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .animate-thinking { animation: pulse-fast 1s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
 
-    /* --- 食棋自然淡出 + 圓形線圈 fade out 效果 --- */
+    /* --- 食棋自然淡出 + 圓形線圈擴散效果 --- */
     @keyframes captureSoftFade {
       0% { transform: scale(1); opacity: 0.90; }
       55% { transform: scale(0.94); opacity: 0.38; }
       100% { transform: scale(0.84); opacity: 0; }
     }
     .anim-capture-soft {
-      animation: captureSoftFade 0.36s ease-out forwards;
+      animation: captureSoftFade 0.52s ease-out forwards;
       transform-origin: center;
       pointer-events: none;
     }
@@ -41,7 +41,7 @@
       86% { filter: brightness(1.35); }
       100% { filter: brightness(1); }
     }
-    .anim-move-land { animation: moveLandPulse 0.50s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+    .anim-move-land { animation: moveLandPulse 0.66s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
 
     /* --- 擲先後 3D 硬幣動畫 --- */
     .coin-scene { perspective: 800px; width: 100px; height: 100px; }
@@ -220,9 +220,29 @@
     const moveOrderingScore = (board, move) => {
       const target = board[move.to.y][move.to.x];
       const moving = board[move.from.y][move.from.x];
-      let score = target ? PIECE_VALUES[target.type] * 10 - PIECE_VALUES[moving.type] : 0;
-      const centerBonus = 6 - Math.abs(move.to.x - 4);
-      return score + centerBonus;
+      if (!moving) return 0;
+
+      let score = target ? PIECE_VALUES[target.type] * 10 - PIECE_VALUES[moving.type] * 0.8 : 0;
+      const centerBonus = 8 - Math.abs(move.to.x - 4);
+      score += centerBonus;
+
+      // 搜尋排序層面嘅輕量心法：食高價子、將軍、開發子力優先。
+      const captured = doMove(board, move);
+      const givesCheck = isInCheck(board, getOpponentColor(moving.color));
+      const unsafe = isPieceThreatenedBy(board, move.to.x, move.to.y, moving.color);
+      undoMove(board, move, captured);
+
+      if (givesCheck) score += 240;
+      if (unsafe && !target) score -= getPieceSafetyPenalty(moving) * 0.25;
+
+      const isBlack = moving.color === 'B';
+      const homeRow = isBlack ? 0 : 9;
+      const cannonRow = isBlack ? 2 : 7;
+      if (moving.type === 'h' && move.from.y === homeRow && move.to.y !== homeRow) score += 80;
+      if (moving.type === 'r' && move.from.y === homeRow && move.to.y !== homeRow) score += 48;
+      if (moving.type === 'c' && move.from.y === cannonRow && move.to.y === cannonRow && !target) score -= 45;
+
+      return score;
     };
 
     const sortMovesForSearch = (board, moves) => {
@@ -462,12 +482,16 @@
 
     const getAIConfig = () => {
       const diff = settings.aiDifficulty;
-      if (diff <= 3) return { depth: 2, random: 0.28, topN: 10, searchTopN: 10, poolRatio: 0.36, delay: 450 };
-      if (diff <= 6) return { depth: diff <= 4 ? 2 : 3, random: 0.14, topN: 12, searchTopN: 12, poolRatio: 0.28, delay: 550 };
-      if (diff <= 10) return { depth: 3, random: 0.05, topN: 14, searchTopN: 14, poolRatio: 0.2, delay: 650 };
-      if (diff <= 13) return { depth: 4, random: 0, topN: 16, searchTopN: 16, poolRatio: 0.14, delay: 750 };
-      if (diff === 14) return { depth: 5, random: 0, topN: 18, searchTopN: 16, poolRatio: 0.1, delay: 850 };
-      return { depth: 5, random: 0, topN: 22, searchTopN: 18, poolRatio: 0.08, delay: 950 };
+
+      // v5：高 LV 改為「快而穩」。
+      // 之前 LV.14/15 depth 5 太易令 main thread 卡住；而家改用 depth 4 + 更精準候選步排序，
+      // 體感會快好多，同時避免 AI 因為只看短期食子而行怪步。
+      if (diff <= 3) return { depth: 2, random: 0.24, topN: 10, searchTopN: 9, poolRatio: 0.34, delay: 420 };
+      if (diff <= 6) return { depth: diff <= 4 ? 2 : 3, random: 0.11, topN: 12, searchTopN: 10, poolRatio: 0.24, delay: 500 };
+      if (diff <= 10) return { depth: 3, random: 0.02, topN: 14, searchTopN: 12, poolRatio: 0.14, delay: 520 };
+      if (diff <= 13) return { depth: 4, random: 0, topN: 15, searchTopN: 12, poolRatio: 0.08, delay: 580 };
+      if (diff === 14) return { depth: 4, random: 0, topN: 18, searchTopN: 14, poolRatio: 0.045, delay: 600 };
+      return { depth: 4, random: 0, topN: 22, searchTopN: 16, poolRatio: 0.035, delay: 640 };
     };
 
     const getBoardKey = (board, depth, isMaximizing) => {
@@ -566,6 +590,374 @@
       return color === 'B' ? score : -score;
     };
 
+    const getMoveCountForColor = (color) => {
+      if (!gameState || !Array.isArray(gameState.gameLog)) return 0;
+      return gameState.gameLog.filter(log => log.turn === color).length;
+    };
+
+    const getOpeningShapeScore = (board, color) => {
+      // 早局引導：多發展車馬炮、少無意義左右橫移炮，令 AI 開局冇咁「遊魂」。
+      const ownMoves = getMoveCountForColor(color);
+      if (ownMoves > 7) return 0;
+
+      let score = 0;
+      const isBlack = color === 'B';
+      const homeRow = isBlack ? 0 : 9;
+      const cannonRow = isBlack ? 2 : 7;
+      const pawnRow = isBlack ? 3 : 6;
+
+      for (let y = 0; y <= 9; y++) {
+        for (let x = 0; x <= 8; x++) {
+          const p = board[y][x];
+          if (!p || p.color !== color) continue;
+
+          const rank = isBlack ? y : 9 - y;
+          if (p.type === 'h' && y !== homeRow) score += 34;
+          if (p.type === 'r' && y !== homeRow) score += 24;
+          if (p.type === 'c') {
+            if (y !== cannonRow) score += 18;
+            if (x >= 3 && x <= 5 && rank >= 2) score += 20;
+          }
+          if (p.type === 's' && y !== pawnRow) score += 10;
+        }
+      }
+
+      return color === 'B' ? score : -score;
+    };
+
+    const getMoveShapeAdjustment = (board, move, color) => {
+      const piece = board[move.from.y][move.from.x];
+      if (!piece) return 0;
+
+      let score = 0;
+      const ownMoves = getMoveCountForColor(color);
+      const target = board[move.to.y][move.to.x];
+
+      // 前 8 手避免同一隻棋來回遊走，除非係食子 / 將軍 / 解危。
+      if (ownMoves <= 8 && gameState && Array.isArray(gameState.gameLog)) {
+        const recentSamePiece = gameState.gameLog
+          .slice(-4)
+          .some(log => log.turn === color && log.piece === piece.label && log.to.x === move.from.x && log.to.y === move.from.y);
+        if (recentSamePiece && !target) score -= 95;
+      }
+
+      const isBlack = color === 'B';
+      const startCannonRow = isBlack ? 2 : 7;
+      const startHomeRow = isBlack ? 0 : 9;
+      const forward = isBlack ? 1 : -1;
+
+      // 炮早局淨係左右滑，好多時睇落怪；輕微扣分，逼 AI 多啲發展。
+      if (ownMoves <= 7 && piece.type === 'c' && move.from.y === startCannonRow && move.to.y === startCannonRow && !target) {
+        score -= 70;
+      }
+
+      // 鼓勵開馬 / 出車 / 中路控場。
+      if (ownMoves <= 7 && piece.type === 'h' && move.from.y === startHomeRow && move.to.y !== startHomeRow) score += 55;
+      if (ownMoves <= 9 && piece.type === 'r' && move.from.y === startHomeRow && move.to.y !== startHomeRow) score += 36;
+      if (piece.type === 's' && move.to.y - move.from.y === forward) score += 14;
+
+      // 中路同河界附近位置通常比較有價值，少少加分就夠，唔好變硬性規則。
+      if (move.to.x >= 3 && move.to.x <= 5) score += 12;
+      if ((isBlack && move.to.y >= 4) || (!isBlack && move.to.y <= 5)) score += 10;
+
+      return color === 'B' ? score : -score;
+    };
+
+    const getGeneralPos = (board, color) => {
+      for (let y = 0; y <= 9; y++) {
+        for (let x = 0; x <= 8; x++) {
+          const p = board[y][x];
+          if (p && p.color === color && p.type === 'g') return { x, y };
+        }
+      }
+      return null;
+    };
+
+    const sameMove = (a, b) => a && b && a.from.x === b.from.x && a.from.y === b.from.y && a.to.x === b.to.x && a.to.y === b.to.y;
+
+    const isLegalMoveObject = (board, move, color) => {
+      const p = board[move.from.y]?.[move.from.x];
+      if (!p || p.color !== color) return false;
+      return getStrictValidMoves(board, move.from.x, move.from.y).some(m => m.x === move.to.x && m.y === move.to.y);
+    };
+
+    const mirrorMoveForColor = (move, color) => {
+      if (color === 'B') return move;
+      return {
+        from: { x: move.from.x, y: 9 - move.from.y },
+        to: { x: move.to.x, y: 9 - move.to.y }
+      };
+    };
+
+    const AI_OPENING_PLANS = {
+      screenHorse: {
+        name: '屏風馬',
+        style: 'defensive-counter',
+        steps: [
+          [{ from:{x:1,y:0}, to:{x:2,y:2}, weight:100 }, { from:{x:7,y:0}, to:{x:6,y:2}, weight:96 }],
+          [{ from:{x:7,y:0}, to:{x:6,y:2}, weight:104 }, { from:{x:1,y:0}, to:{x:2,y:2}, weight:96 }],
+          [{ from:{x:4,y:3}, to:{x:4,y:4}, weight:76 }, { from:{x:2,y:3}, to:{x:2,y:4}, weight:58 }, { from:{x:6,y:3}, to:{x:6,y:4}, weight:58 }],
+          [{ from:{x:0,y:0}, to:{x:1,y:0}, weight:74 }, { from:{x:8,y:0}, to:{x:7,y:0}, weight:74 }],
+          [{ from:{x:1,y:2}, to:{x:4,y:2}, weight:58 }, { from:{x:7,y:2}, to:{x:4,y:2}, weight:58 }, { from:{x:3,y:0}, to:{x:4,y:1}, weight:48 }]
+        ]
+      },
+      centralCannon: {
+        name: '中炮主攻',
+        style: 'attack',
+        steps: [
+          [{ from:{x:1,y:2}, to:{x:4,y:2}, weight:100 }, { from:{x:7,y:2}, to:{x:4,y:2}, weight:92 }],
+          [{ from:{x:1,y:0}, to:{x:2,y:2}, weight:94 }, { from:{x:7,y:0}, to:{x:6,y:2}, weight:94 }],
+          [{ from:{x:0,y:0}, to:{x:1,y:0}, weight:72 }, { from:{x:8,y:0}, to:{x:7,y:0}, weight:72 }],
+          [{ from:{x:4,y:3}, to:{x:4,y:4}, weight:64 }, { from:{x:3,y:0}, to:{x:4,y:1}, weight:48 }],
+          [{ from:{x:1,y:0}, to:{x:3,y:1}, weight:54 }, { from:{x:7,y:0}, to:{x:5,y:1}, weight:54 }]
+        ]
+      },
+      balancedHorse: {
+        name: '正馬均衡',
+        style: 'balanced',
+        steps: [
+          [{ from:{x:7,y:0}, to:{x:6,y:2}, weight:100 }, { from:{x:1,y:0}, to:{x:2,y:2}, weight:100 }],
+          [{ from:{x:1,y:0}, to:{x:2,y:2}, weight:102 }, { from:{x:7,y:0}, to:{x:6,y:2}, weight:102 }],
+          [{ from:{x:2,y:3}, to:{x:2,y:4}, weight:68 }, { from:{x:6,y:3}, to:{x:6,y:4}, weight:68 }, { from:{x:4,y:3}, to:{x:4,y:4}, weight:62 }],
+          [{ from:{x:1,y:2}, to:{x:4,y:2}, weight:62 }, { from:{x:7,y:2}, to:{x:4,y:2}, weight:62 }],
+          [{ from:{x:0,y:0}, to:{x:1,y:0}, weight:56 }, { from:{x:8,y:0}, to:{x:7,y:0}, weight:56 }]
+        ]
+      },
+      earlyRook: {
+        name: '早出車',
+        style: 'active',
+        steps: [
+          [{ from:{x:1,y:0}, to:{x:2,y:2}, weight:92 }, { from:{x:7,y:0}, to:{x:6,y:2}, weight:92 }],
+          [{ from:{x:0,y:0}, to:{x:1,y:0}, weight:98 }, { from:{x:8,y:0}, to:{x:7,y:0}, weight:98 }],
+          [{ from:{x:1,y:0}, to:{x:4,y:0}, weight:76 }, { from:{x:7,y:0}, to:{x:4,y:0}, weight:76 }, { from:{x:1,y:0}, to:{x:1,y:4}, weight:62 }],
+          [{ from:{x:7,y:0}, to:{x:6,y:2}, weight:76 }, { from:{x:1,y:0}, to:{x:2,y:2}, weight:76 }],
+          [{ from:{x:4,y:3}, to:{x:4,y:4}, weight:62 }, { from:{x:1,y:2}, to:{x:4,y:2}, weight:56 }]
+        ]
+      },
+      reactive: {
+        name: '反應防守',
+        style: 'reactive',
+        steps: [
+          [{ from:{x:1,y:0}, to:{x:2,y:2}, weight:96 }, { from:{x:7,y:0}, to:{x:6,y:2}, weight:96 }, { from:{x:4,y:3}, to:{x:4,y:4}, weight:60 }],
+          [{ from:{x:7,y:0}, to:{x:6,y:2}, weight:90 }, { from:{x:1,y:0}, to:{x:2,y:2}, weight:90 }, { from:{x:3,y:0}, to:{x:4,y:1}, weight:54 }],
+          [{ from:{x:4,y:3}, to:{x:4,y:4}, weight:72 }, { from:{x:2,y:3}, to:{x:2,y:4}, weight:56 }, { from:{x:6,y:3}, to:{x:6,y:4}, weight:56 }],
+          [{ from:{x:1,y:2}, to:{x:4,y:2}, weight:52 }, { from:{x:7,y:2}, to:{x:4,y:2}, weight:52 }, { from:{x:0,y:0}, to:{x:1,y:0}, weight:50 }],
+          [{ from:{x:8,y:0}, to:{x:7,y:0}, weight:54 }, { from:{x:0,y:0}, to:{x:1,y:0}, weight:54 }]
+        ]
+      }
+    };
+
+    const pickWeighted = (items) => {
+      if (!items || !items.length) return null;
+      const total = items.reduce((sum, item) => sum + Math.max(1, item.weight || 1), 0);
+      let r = Math.random() * total;
+      for (const item of items) {
+        r -= Math.max(1, item.weight || 1);
+        if (r <= 0) return item;
+      }
+      return items[0];
+    };
+
+    const chooseAIPlan = (aiFirst = false) => {
+      const initiativePool = [
+        { id: 'screenHorse', weight: 28 },
+        { id: 'centralCannon', weight: 24 },
+        { id: 'balancedHorse', weight: 22 },
+        { id: 'earlyRook', weight: 18 },
+        { id: 'reactive', weight: 8 }
+      ];
+      const reactivePool = [
+        { id: 'screenHorse', weight: 26 },
+        { id: 'balancedHorse', weight: 26 },
+        { id: 'reactive', weight: 24 },
+        { id: 'centralCannon', weight: 14 },
+        { id: 'earlyRook', weight: 10 }
+      ];
+      const picked = pickWeighted(aiFirst ? initiativePool : reactivePool);
+      return {
+        id: picked?.id || 'balancedHorse',
+        aiFirst,
+        abandon: false,
+        committedUntilMove: aiFirst ? 2 : 1
+      };
+    };
+
+    const ensureAIPlan = (color) => {
+      if (!gameState) return null;
+      if (!gameState.aiPlan) {
+        const aiFirst = getMoveCountForColor(color) === 0 && getMoveCountForColor(getOpponentColor(color)) === 0;
+        gameState.aiPlan = chooseAIPlan(aiFirst);
+      }
+      return gameState.aiPlan;
+    };
+
+    const getPlayerLastMovePressure = (board, aiColor) => {
+      const playerColor = getOpponentColor(aiColor);
+      const last = gameState?.gameLog?.slice().reverse().find(log => log.turn === playerColor);
+      if (!last) return 0;
+
+      let pressure = 0;
+      if (isInCheck(board, aiColor)) pressure += 1000;
+      if (getImmediateMateThreatMoves(board, playerColor).length > 0) pressure += 1600;
+      if (getImmediateKingCaptureMoves(board, playerColor).length > 0) pressure += 2200;
+
+      const movedPiece = board[last.to.y]?.[last.to.x];
+      if (movedPiece) {
+        const aiGeneral = getGeneralPos(board, aiColor);
+        if (aiGeneral) {
+          const dist = Math.abs(last.to.x - aiGeneral.x) + Math.abs(last.to.y - aiGeneral.y);
+          if (dist <= 4) pressure += 220;
+          if (movedPiece.type === 'r' || movedPiece.type === 'c' || movedPiece.type === 'h') pressure += 140;
+        }
+      }
+      return pressure;
+    };
+
+    const getPlanStepCandidates = (board, color) => {
+      const planState = ensureAIPlan(color);
+      if (!planState || planState.abandon) return [];
+      const plan = AI_OPENING_PLANS[planState.id] || AI_OPENING_PLANS.balancedHorse;
+      const ownMoves = getMoveCountForColor(color);
+      if (ownMoves > 5) return [];
+
+      // 對手已經做出強威脅，就立刻放棄原劇本。
+      const pressure = getPlayerLastMovePressure(board, color);
+      if (pressure >= 900) {
+        planState.abandon = true;
+        return [];
+      }
+
+      const stage = plan.steps[Math.min(ownMoves, plan.steps.length - 1)] || [];
+      return stage
+        .map(item => ({ move: mirrorMoveForColor(item, color), weight: item.weight, planId: planState.id }))
+        .filter(item => isLegalMoveObject(board, item.move, color));
+    };
+
+    const getOpeningBookMove = (board, color) => {
+      if (!gameState || isInCheck(board, color)) return null;
+      if (getImmediateMateThreatMoves(board, getOpponentColor(color)).length > 0) return null;
+
+      const ownMoves = getMoveCountForColor(color);
+      if (ownMoves > 5) return null;
+
+      const legal = getPlanStepCandidates(board, color);
+      if (!legal.length) return null;
+
+      // AI 先行第一步：喺一堆 plan 入面揀，令每局開局唔同。
+      // 之後則只提供 plan move，實際是否採用由搜尋分決定。
+      if (ownMoves === 0 && getMoveCountForColor(getOpponentColor(color)) === 0) {
+        const picked = pickWeighted(legal);
+        return picked?.move || legal[0].move;
+      }
+
+      let best = null;
+      let bestScore = -Infinity;
+      for (const item of legal) {
+        const target = board[item.move.to.y][item.move.to.x];
+        const captured = doMove(board, item.move);
+        const unsafe = moveAllowsImmediateMate(board, item.move, color) || moveAllowsKingCapture(board, item.move, color);
+        undoMove(board, item.move, captured);
+
+        let score = item.weight + (target ? PIECE_VALUES[target.type] * 0.1 : 0);
+        if (unsafe) score -= 10000;
+        score += Math.random() * (settings.aiDifficulty >= 11 ? 2 : 12);
+
+        if (score > bestScore) {
+          bestScore = score;
+          best = item.move;
+        }
+      }
+
+      return bestScore > -1000 ? best : null;
+    };
+
+    const getPlanMoveBonus = (move, color) => {
+      if (!move || !gameState || !gameState.aiPlan || gameState.aiPlan.abandon) return 0;
+      const candidates = getPlanStepCandidates(gameState.board, color);
+      const matched = candidates.find(item => sameMove(item.move, move));
+      if (!matched) return 0;
+
+      const ownMoves = getMoveCountForColor(color);
+      const pressure = getPlayerLastMovePressure(gameState.board, color);
+      const plan = AI_OPENING_PLANS[gameState.aiPlan.id] || AI_OPENING_PLANS.balancedHorse;
+
+      let bonus = 0;
+      if (ownMoves <= gameState.aiPlan.committedUntilMove && pressure < 360) bonus += 170;
+      else bonus += 70;
+
+      if (plan.style === 'attack') bonus += 28;
+      if (plan.style === 'reactive' && pressure > 180) bonus += 45;
+      if (plan.style === 'defensive-counter') bonus += 26;
+      if (plan.style === 'active') bonus += 22;
+
+      return color === 'B' ? bonus : -bonus;
+    };
+
+    const getPalacePressureScore = (board, attackerColor, attackMap) => {
+      const defender = getOpponentColor(attackerColor);
+      const gyRange = defender === 'B' ? [0, 1, 2] : [7, 8, 9];
+      const general = getGeneralPos(board, defender);
+      let score = 0;
+
+      for (const y of gyRange) {
+        for (let x = 3; x <= 5; x++) {
+          if (attackMap.has(`${x},${y}`)) score += 18;
+        }
+      }
+
+      if (general) {
+        const around = [
+          { x: general.x, y: general.y - 1 },
+          { x: general.x, y: general.y + 1 },
+          { x: general.x - 1, y: general.y },
+          { x: general.x + 1, y: general.y }
+        ];
+        around.forEach(s => {
+          if (s.x >= 3 && s.x <= 5 && s.y >= 0 && s.y <= 9 && attackMap.has(`${s.x},${s.y}`)) score += 30;
+        });
+      }
+
+      return attackerColor === 'B' ? score : -score;
+    };
+
+    const getCannonFormationScore = (board, color) => {
+      // 簡化殺法：炮有炮架指向將 / 帥，屬於高價值形態。
+      const opp = getOpponentColor(color);
+      const g = getGeneralPos(board, opp);
+      if (!g) return 0;
+
+      let raw = 0;
+      for (let y = 0; y <= 9; y++) {
+        for (let x = 0; x <= 8; x++) {
+          const p = board[y][x];
+          if (!p || p.color !== color || p.type !== 'c') continue;
+
+          const aligned = x === g.x || y === g.y;
+          if (!aligned) continue;
+
+          const dx = Math.sign(g.x - x);
+          const dy = Math.sign(g.y - y);
+          let screens = 0;
+          let cx = x + dx, cy = y + dy;
+          while (cx !== g.x || cy !== g.y) {
+            if (board[cy][cx]) screens++;
+            cx += dx; cy += dy;
+          }
+          if (screens === 1) raw += 120;
+          if (screens === 0) raw += 28; // 控線壓力
+        }
+      }
+      return color === 'B' ? raw : -raw;
+    };
+
+    const getHangingPieceExtraPenalty = (piece, threatened, protectedByOwn) => {
+      if (!piece || !threatened) return 0;
+      const base = getPieceSafetyPenalty(piece);
+      if (!protectedByOwn) return base * 0.42;
+      if (piece.type === 'r' || piece.type === 'c' || piece.type === 'h') return base * 0.14;
+      return 0;
+    };
+
     const evaluateBoard = (board) => {
       if (!hasGeneral(board, 'R')) return 100000;
       if (!hasGeneral(board, 'B')) return -100000;
@@ -580,9 +972,18 @@
       const blackStrictCount = getAllStrictMoves(board, 'B').length;
       score += (blackStrictCount - redStrictCount) * 5;
       score += getGuardShapeScore(board, 'B') + getGuardShapeScore(board, 'R');
+      score += getOpeningShapeScore(board, 'B') + getOpeningShapeScore(board, 'R');
+      score += getPalacePressureScore(board, 'B', blackAttackMap) + getPalacePressureScore(board, 'R', redAttackMap);
+      score += getCannonFormationScore(board, 'B') + getCannonFormationScore(board, 'R');
 
       if (isInCheck(board, 'R')) score += 220;
       if (isInCheck(board, 'B')) score -= 220;
+
+      // 一步殺威脅要比普通食子重要，否則最高 LV 都會偶然忽視殺局。
+      const blackMateThreats = getImmediateMateThreatMoves(board, 'B').length;
+      const redMateThreats = getImmediateMateThreatMoves(board, 'R').length;
+      if (blackMateThreats) score += 2800 + blackMateThreats * 180;
+      if (redMateThreats) score -= 2800 + redMateThreats * 180;
 
       for (let y = 0; y <= 9; y++) {
         for (let x = 0; x <= 8; x++) {
@@ -616,6 +1017,7 @@
           const threatened = isBlack ? redAttackMap.has(`${x},${y}`) : blackAttackMap.has(`${x},${y}`);
           const protectedByOwn = isBlack ? blackAttackMap.has(`${x},${y}`) : redAttackMap.has(`${x},${y}`);
           if (threatened) val -= getPieceSafetyPenalty(p) * (protectedByOwn ? 0.35 : 0.75);
+          val -= getHangingPieceExtraPenalty(p, threatened, protectedByOwn);
           if (protectedByOwn && (p.type === 'r' || p.type === 'c' || p.type === 'h')) val += 35;
 
           score += isBlack ? val : -val;
@@ -637,7 +1039,8 @@
       const color = isMaximizing ? 'B' : 'R';
       let moves = getAllStrictMoves(board, color);
       sortMovesForSearch(board, moves);
-      moves = moves.slice(0, currentSearchTopN);
+      const underCheck = isInCheck(board, color);
+      moves = underCheck ? moves : moves.slice(0, currentSearchTopN);
 
       if (moves.length === 0) {
         const noMoveScore = isMaximizing ? -100000 - depth : 100000 + depth;
@@ -716,6 +1119,90 @@
       return null;
     };
 
+    const getBestFastCaptureOrCheck = (board, color) => {
+      const moves = getAllStrictMoves(board, color);
+      if (!moves.length) return null;
+
+      const opp = getOpponentColor(color);
+      let best = null;
+      let bestScore = -Infinity;
+
+      for (const m of moves) {
+        const target = board[m.to.y][m.to.x];
+        const captured = doMove(board, m);
+        const givesCheck = isInCheck(board, opp);
+        const moved = board[m.to.y][m.to.x];
+        const unsafe = moved && isPieceThreatenedBy(board, m.to.x, m.to.y, color);
+        undoMove(board, m, captured);
+
+        let score = 0;
+        if (target) score += PIECE_VALUES[target.type] * 1.05;
+        if (givesCheck) score += 180;
+        if (unsafe && moved) score -= getPieceSafetyPenalty(moved) * 0.42;
+        score += moveOrderingScore(board, m) * 0.03;
+
+        if (score > bestScore) {
+          bestScore = score;
+          best = m;
+        }
+      }
+
+      return bestScore >= 900 ? best : null;
+    };
+
+    const getImmediateMateThreatMoves = (board, color) => {
+      const moves = getAllStrictMoves(board, color);
+      return moves.filter(m => moveIsCheckmate(board, m, color));
+    };
+
+    const moveAllowsImmediateMate = (board, move, color) => {
+      const opp = getOpponentColor(color);
+      const captured = doMove(board, move);
+      const bad = getImmediateMateThreatMoves(board, opp).length > 0;
+      undoMove(board, move, captured);
+      return bad;
+    };
+
+    const moveAllowsKingCapture = (board, move, color) => {
+      const opp = getOpponentColor(color);
+      const captured = doMove(board, move);
+      const bad = getImmediateKingCaptureMoves(board, opp).length > 0 || isInCheck(board, color);
+      undoMove(board, move, captured);
+      return bad;
+    };
+
+    const getDefensiveUrgentMove = (board, color) => {
+      const opp = getOpponentColor(color);
+      const moves = getAllStrictMoves(board, color);
+      if (!moves.length) return null;
+
+      const oppMates = getImmediateMateThreatMoves(board, opp);
+      const oppKingCaptures = getImmediateKingCaptureMoves(board, opp);
+      if (!isInCheck(board, color) && !oppMates.length && !oppKingCaptures.length) return null;
+
+      const safeMoves = moves.filter(m => {
+        const captured = doMove(board, m);
+        const stillInCheck = isInCheck(board, color);
+        const stillMate = getImmediateMateThreatMoves(board, opp).length > 0;
+        const stillKingCapture = getImmediateKingCaptureMoves(board, opp).length > 0;
+        undoMove(board, m, captured);
+        return !stillInCheck && !stillMate && !stillKingCapture;
+      });
+
+      if (!safeMoves.length) return null;
+
+      let best = safeMoves[0];
+      let bestScore = color === 'B' ? -Infinity : Infinity;
+      for (const m of safeMoves) {
+        const score = evaluateMoveForColor(board, m, color, Math.min(2, Math.max(1, getAIConfig().depth - 2)));
+        if (isBetterForColor(score, bestScore, color)) {
+          bestScore = score;
+          best = m;
+        }
+      }
+      return best;
+    };
+
     const evaluateMoveForColor = (board, move, color, depth) => {
       const captured = doMove(board, move);
       let moveValue = 0;
@@ -740,6 +1227,16 @@
         moveValue += color === 'B' ? 90 : -90;
       }
 
+      moveValue += getMoveShapeAdjustment(board, move, color);
+
+      const opp = getOpponentColor(color);
+      const oppMateAfterMove = getImmediateMateThreatMoves(board, opp).length;
+      const oppKingCaptureAfterMove = getImmediateKingCaptureMoves(board, opp).length;
+      if (oppMateAfterMove || oppKingCaptureAfterMove) {
+        const danger = (oppKingCaptureAfterMove ? 90000 : 5200 + oppMateAfterMove * 400);
+        moveValue += color === 'B' ? -danger : danger;
+      }
+
       undoMove(board, move, captured);
       return moveValue;
     };
@@ -750,13 +1247,30 @@
       transpositionTable.clear();
       currentSearchTopN = cfg.searchTopN;
 
+      // 最高優先：被將 / 對手有一步殺 / 對手有直接食將路線，先救命。
+      const urgentDefense = getDefensiveUrgentMove(gameState.board, aiColor);
+      if (urgentDefense) return urgentDefense;
+
+      // 其次：自己可以一步殺 / 食將 / 強制戰術。
       const tactical = getTacticalMove(gameState.board, aiColor);
       if (tactical) return tactical;
+
+      // 開局庫只做「候選加分」，唔再硬行，避免玩家一偏離開局 AI 就傻跟 script。
+      const openingMove = getOpeningBookMove(gameState.board, aiColor);
+
+      const fastStrongMove = settings.aiDifficulty >= 7 ? getBestFastCaptureOrCheck(gameState.board, aiColor) : null;
+      if (fastStrongMove && settings.aiDifficulty <= 6) return fastStrongMove;
 
       let moves = getAllStrictMoves(gameState.board, aiColor);
       if (moves.length === 0) return null;
       sortMovesForSearch(gameState.board, moves);
-      moves = moves.slice(0, cfg.topN);
+      moves = isInCheck(gameState.board, aiColor) ? moves : moves.slice(0, cfg.topN);
+
+      const addCandidate = (candidate) => {
+        if (candidate && !moves.some(m => sameMove(m, candidate))) moves.unshift(candidate);
+      };
+      addCandidate(openingMove);
+      addCandidate(fastStrongMove);
 
       let evaluatedMoves = [];
       let bestMoves = [];
@@ -765,6 +1279,12 @@
       for (let i = 0; i < moves.length; i++) {
         let move = moves[i];
         let moveValue = evaluateMoveForColor(gameState.board, move, aiColor, cfg.depth);
+
+        // 戰術部署係 soft bonus：會記住自己揀咗咩 plan，但仍然要應對玩家行法。
+        moveValue += getPlanMoveBonus(move, aiColor);
+        if (openingMove && sameMove(move, openingMove)) {
+          moveValue += aiColor === 'B' ? 60 : -60;
+        }
 
         if (moveValue > -50000 && moveValue < 50000) {
           moveValue += (Math.random() * 2 - 1);
@@ -813,7 +1333,7 @@
           const aiMove = calculateAIMove();
           const calcElapsed = performance.now() - start;
           const totalElapsed = performance.now() - visualStart;
-          const wait = Math.max(0, cfg.delay - totalElapsed, 120 - calcElapsed);
+          const wait = Math.max(0, cfg.delay - totalElapsed, 80 - calcElapsed);
 
           setTimeout(() => {
              if (!gameState || gameState.winner || !isAITurn()) return;
@@ -926,7 +1446,7 @@
             gameState.animatingCapture = null;
             gameState.showCaptureEffect = null;
             completeMoveLogic(targetPiece || null);
-        }, targetPiece ? 500 : 480); 
+        }, targetPiece ? 660 : 620); 
     };
 
     const completeMoveLogic = (targetPiece) => {
@@ -1106,10 +1626,16 @@
         animatingCapture: null, showCaptureEffect: null, lastMove: null, gameLog: [], isTossing: false,
         isCalculatingHints: false,
         inCheck: false,
+        aiPlan: null,
         redName: settings.mode === 'PvE' ? (settings.playerColor === 'R' ? p1Name : p2Name) : p1Name,
         whiteName: settings.mode === 'PvE' ? (settings.playerColor === 'B' ? p1Name : p2Name) : p2Name,
         startingTurn: 'R' 
       };
+
+      if (settings.mode === 'PvE') {
+        gameState.aiPlan = chooseAIPlan(isAITurn());
+      }
+
       historyStack = [];
       currentHints = [];
 
@@ -1399,21 +1925,19 @@
           const cy = OFFSET_Y + toScreenY(gameState.showCaptureEffect.y) * GRID_SIZE;
           const waveColor = gameState.showCaptureEffect.capturerColor === 'R' ? '#ef4444' : '#f8fafc';
 
-          // 食棋 effect：由棋中心點擴散出去的圓形線圈，fade out，不再用放射線。
           captureEffectsSVG += `<g pointer-events="none">
             <circle cx="${cx}" cy="${cy}" r="10" fill="${waveColor}" opacity="0.12">
-              <animate attributeName="r" from="10" to="26" dur="0.28s" calcMode="spline" keyTimes="0;1" keySplines="0.22 1 0.36 1" fill="freeze" />
-              <animate attributeName="opacity" values="0.12;0.05;0" dur="0.28s" fill="freeze" />
+              <animate attributeName="r" from="10" to="34" dur="0.42s" calcMode="spline" keyTimes="0;1" keySplines="0.22 1 0.36 1" fill="freeze" />
+              <animate attributeName="opacity" values="0.12;0.06;0" dur="0.42s" fill="freeze" />
             </circle>
-            <circle cx="${cx}" cy="${cy}" r="14" fill="none" stroke="${waveColor}" stroke-width="3" opacity="0.68">
-              <animate attributeName="r" from="14" to="54" dur="0.36s" calcMode="spline" keyTimes="0;1" keySplines="0.22 1 0.36 1" fill="freeze" />
-              <animate attributeName="stroke-width" values="3;2;0" dur="0.36s" fill="freeze" />
-              <animate attributeName="opacity" values="0.68;0.36;0" dur="0.36s" fill="freeze" />
+            <circle cx="${cx}" cy="${cy}" r="15" fill="none" stroke="${waveColor}" stroke-width="3.2" opacity="0.68">
+              <animate attributeName="r" from="15" to="66" dur="0.54s" calcMode="spline" keyTimes="0;1" keySplines="0.22 1 0.36 1" fill="freeze" />
+              <animate attributeName="stroke-width" values="3.2;2;0" dur="0.54s" fill="freeze" />
+              <animate attributeName="opacity" values="0.68;0.34;0" dur="0.54s" fill="freeze" />
             </circle>
-            <circle cx="${cx}" cy="${cy}" r="19" fill="none" stroke="${waveColor}" stroke-width="1.4" opacity="0.36">
-              <animate attributeName="r" from="19" to="70" dur="0.46s" begin="0.04s" calcMode="spline" keyTimes="0;1" keySplines="0.22 1 0.36 1" fill="freeze" />
-              <animate attributeName="stroke-width" values="1.4;1;0" dur="0.46s" begin="0.04s" fill="freeze" />
-              <animate attributeName="opacity" values="0.36;0.16;0" dur="0.46s" begin="0.04s" fill="freeze" />
+            <circle cx="${cx}" cy="${cy}" r="20" fill="none" stroke="${waveColor}" stroke-width="1.4" opacity="0.36">
+              <animate attributeName="r" from="20" to="82" dur="0.68s" begin="0.04s" calcMode="spline" keyTimes="0;1" keySplines="0.22 1 0.36 1" fill="freeze" />
+              <animate attributeName="opacity" values="0.36;0.16;0" dur="0.68s" begin="0.04s" fill="freeze" />
             </circle>
           </g>`;
       }
