@@ -26,7 +26,18 @@
       touch-action: none;
     }
     .app-container { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
-    button, canvas, input { -webkit-tap-highlight-color: transparent; outline: none; touch-action: manipulation; }
+    button, input { -webkit-tap-highlight-color: transparent; outline: none; touch-action: manipulation; }
+    canvas,
+    .board-frame,
+    .strike-board {
+      -webkit-tap-highlight-color: transparent;
+      outline: none;
+      touch-action: none;
+      -ms-touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
     .key-base { transition: background-color 0.2s ease-out, color 0.2s ease-out, border-color 0.2s, opacity 0.2s; }
     .key-base:active { opacity: 0.5; transition: none; }
     .icon-white { filter: brightness(0) invert(1); }
@@ -75,6 +86,21 @@
   <div id="app" class="app-container"></div>
 
   <script>
+    // Mobile Safari guard: prevent accidental double-tap / pinch zoom during fast gameplay.
+    let lastTouchEnd = 0;
+
+    document.addEventListener('touchend', (e) => {
+      const now = Date.now();
+      if (now - lastTouchEnd <= 320) {
+        e.preventDefault();
+      }
+      lastTouchEnd = now;
+    }, { passive: false });
+
+    document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
+    document.addEventListener('gesturechange', (e) => e.preventDefault(), { passive: false });
+    document.addEventListener('gestureend', (e) => e.preventDefault(), { passive: false });
+
     const cloneState = (state) => JSON.parse(JSON.stringify(state));
     const LOGICAL_WIDTH = 600;
     const LOGICAL_HEIGHT = 800;
@@ -487,6 +513,12 @@
         const clientY = e.clientY ?? (e.touches && e.touches[0]?.clientY);
         return { x: (clientX - rect.left) / canvasScale, y: (clientY - rect.top) / canvasScale };
       };
+      ['touchstart', 'touchmove', 'touchend', 'touchcancel'].forEach(type => {
+        canvas.addEventListener(type, (e) => {
+          if (!isMenuOpen && !isRecordOpen) e.preventDefault();
+        }, { passive: false });
+      });
+
       canvas.addEventListener('pointerdown', (e) => {
         if (!gameState || isMenuOpen || isRecordOpen) return;
         const p = getPoint(e);

@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Games - 特訓99</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Noto+Sans+TC:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { future: { hoverOnlyWhenSupported: true } };</script>
+  <style>
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.28s ease-out; }
+    html, body {
+      overscroll-behavior-y: none;
+      background-color: #000;
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      color: #fff;
+      height: 100%;
+      height: -webkit-fill-available;
+      overflow: hidden;
+      margin: 0;
+      touch-action: none;
+    }
+    .app-container { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    button, canvas, input { -webkit-tap-highlight-color: transparent; outline: none; touch-action: manipulation; }
+    .key-base { transition: background-color 0.2s ease-out, color 0.2s ease-out, border-color 0.2s, opacity 0.2s; }
+    .key-base:active { opacity: 0.5; transition: none; }
+    .icon-white { filter: brightness(0) invert(1); }
+
+    .game-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .board-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; padding: 10px 16px 18px; }
+    .board-frame { width: min(88vw, 65vh, 480px); max-width: 480px; position: relative; }
+    .strike-board {
+      width: 100%; aspect-ratio: 3 / 4; display: block;
+      background: #050505; border: 1.5px solid rgba(255,255,255,0.24); border-radius: 12px;
+      box-shadow: 0 0 40px rgba(0,0,0,0.85); cursor: crosshair;
+      position: relative; z-index: 2;
+    }
+    .game-meta { position: fixed; top: 60px; left: 20px; z-index: 20; pointer-events: none; text-align: left; }
+    .meta-score { margin-top: 18px; }
+    .score-panel { pointer-events: none; }
+    .score-row { display: inline-grid; grid-template-columns: max-content 1px max-content; column-gap: 18px; align-items: start; }
+    .score-divider { width: 1px; height: 48px; background: rgba(255,255,255,0.22); align-self: start; margin-top: 1px; }
+    .score-pill { border: 0; background: transparent; border-radius: 0; padding: 0; min-width: 46px; }
+    .score-label { font-size: 10px; letter-spacing: 0.12em; margin-bottom: 5px; line-height: 1.1; }
+    .score-number { font-family: 'Inter', sans-serif; font-weight: 300; letter-spacing: -0.04em; display:block; }
+    .control-hint { margin-top: 12px; color: rgba(255,255,255,0.34); font-size: 10px; letter-spacing: .15em; text-align: center; user-select:none; }
+    @media (min-width: 1024px) {
+      .game-stage { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(420px, 560px) minmax(260px, 1fr); align-items: center; }
+      .game-meta { top: 85px; left: 48px; }
+      .meta-score { margin-top: 20px; }
+      .score-divider { height: 56px; }
+      .score-label { font-size: 11px; font-weight: 400; }
+      .board-stage { grid-column: 2; padding: 0; align-self: center; justify-self: center; }
+      .board-frame { width: min(480px, 70vh); max-width: 480px; }
+    }
+    @media (max-width: 1023px) {
+      .game-meta { top: 60px; left: 20px; right: 20px; display: grid; grid-template-columns: max-content 1fr; align-items: end; width: auto; }
+      .meta-score { margin-top: 0; grid-column: 2; justify-self: end; align-self: end; }
+      .score-row { justify-content: flex-start; align-items: start; column-gap: 14px; }
+      .score-divider { height: 40px; }
+      .score-label { font-size: 9px; margin-bottom: 4px; }
+      .board-stage { transform: translateY(-2vh); }
+      .board-frame { width: min(92vw, 60vh); }
+      .control-hint { font-size: 9px; margin-top: 9px; }
+    }
+  </style>
+</head>
+<body class="bg-black selection:bg-white/30">
+  <div id="app" class="app-container"></div>
+
+  <script>
+    const cloneState = (state) => JSON.parse(JSON.stringify(state));
+    const LOGICAL_WIDTH = 600;
+    const LOGICAL_HEIGHT = 800;
+    const SAFE_MARGIN = 22;
+    const PLAYER_RADIUS = 11;
+
+    const DIFF_CONFIG = {
+      1: { label: 'EASY', maxBullets: 68, spawn: 0.46, minSpawn: 0.22, speedMin: 92, speedMax: 220, accelAfter: 42, spread: 0.40, size: 4.8, scoreMul: 1.0 },
+      2: { label: 'NORMAL', maxBullets: 96, spawn: 0.36, minSpawn: 0.17, speedMin: 108, speedMax: 270, accelAfter: 32, spread: 0.33, size: 4.55, scoreMul: 1.2 },
+      3: { label: 'HARD', maxBullets: 128, spawn: 0.29, minSpawn: 0.125, speedMin: 124, speedMax: 330, accelAfter: 24, spread: 0.28, size: 4.25, scoreMul: 1.45 },
+      4: { label: 'MASTER', maxBullets: 160, spawn: 0.23, minSpawn: 0.095, speedMin: 138, speedMax: 390, accelAfter: 18, spread: 0.24, size: 4.05, scoreMul: 1.8 }
+    };
+
+    let settings = { playerName: '', difficulty: 2 };
+    let pendingSettings = cloneState(settings);
+    let gameState = null;
+    let canvasScale = 1;
+    let animationFrameId = null;
+    let lastFrame = 0;
+    let isMenuOpen = true;
+    let isRecordOpen = false;
+    let menuJustOpened = true;
+    let matchHistory = [];
+    const keys = { left: false, right: false, up: false, down: false };
+    let pointerActive = false;
+    let pointerTarget = null;
+
+    const loadHistory = () => {
+      try { const saved = localStorage.getItem('training99_bullet_history'); if (saved) matchHistory = JSON.parse(saved); } catch (e) { matchHistory = []; }
+    };
+    const saveHistory = () => { try { localStorage.setItem('training99_bullet_history', JSON.stringify(matchHistory)); } catch (e) {} };
+    const highKey = (lv) => `training99_bullet_high_lv_${lv}`;
+    const getHighScore = (lv) => parseInt(localStorage.getItem(highKey(lv)) || '0', 10) || 0;
+    const setHighScore = (lv, score) => localStorage.setItem(highKey(lv), String(score));
+
+    const rand = (a, b) => a + Math.random() * (b - a);
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const dist = (a, b, c, d) => Math.hypot(a - c, b - d);
+
+    class GameState {
+      constructor() {
+        this.playerName = settings.playerName.trim() || 'PLAYER 1';
+        this.difficulty = settings.difficulty;
+        this.cfg = DIFF_CONFIG[this.difficulty];
+        this.score = 0;
+        this.highScore = getHighScore(this.difficulty);
+        this.survival = 0;
+        this.gameOver = false;
+        this.hasRecorded = false;
+        this.player = { x: LOGICAL_WIDTH / 2, y: LOGICAL_HEIGHT / 2, vx: 0, vy: 0, invincible: 1.1 };
+        this.bullets = [];
+        this.particles = [];
+        this.spawnTimer = 0.35;
+        this.patternTimer = 3.5;
+        this.warningLines = [];
+        this.grazeSet = new Set();
+        this.grazeCount = 0;
+        this.screenShake = 0;
+        this.startFlash = 1;
+      }
+
+      getDynamicSpawn() {
+        const pressure = Math.min(1, this.survival / this.cfg.accelAfter);
+        return Math.max(this.cfg.minSpawn, this.cfg.spawn - pressure * 0.24);
+      }
+
+      getDynamicSpeed() {
+        const pressure = Math.min(1.35, this.survival / 55);
+        return {
+          min: this.cfg.speedMin + pressure * 18,
+          max: this.cfg.speedMax + pressure * 34
+        };
+      }
+
+      recordEnd() {
+        if (this.hasRecorded) return;
+        this.hasRecorded = true;
+        if (this.score > this.highScore) {
+          this.highScore = this.score;
+          setHighScore(this.difficulty, this.score);
+        }
+        matchHistory.unshift({
+          id: Date.now(), timestamp: new Date().toLocaleString(), playerName: this.playerName,
+          difficulty: this.difficulty, score: this.score, survival: this.survival,
+          graze: this.grazeCount, bullets: Math.max(this.bullets.length, 0), status: 'GAME OVER'
+        });
+        if (matchHistory.length > 50) matchHistory.pop();
+        saveHistory();
+      }
+
+      spawnBullet(opts = {}) {
+        if (this.bullets.length >= this.cfg.maxBullets) return;
+        const side = opts.side || Math.floor(rand(0, 4));
+        let x, y;
+        if (side === 0) { x = rand(0, LOGICAL_WIDTH); y = -16; }
+        else if (side === 1) { x = LOGICAL_WIDTH + 16; y = rand(0, LOGICAL_HEIGHT); }
+        else if (side === 2) { x = rand(0, LOGICAL_WIDTH); y = LOGICAL_HEIGHT + 16; }
+        else { x = -16; y = rand(0, LOGICAL_HEIGHT); }
+
+        const targetLead = opts.aimAtCenter ? { x: LOGICAL_WIDTH / 2, y: LOGICAL_HEIGHT / 2 } : this.player;
+        let angle = Math.atan2(targetLead.y - y, targetLead.x - x);
+        angle += rand(-this.cfg.spread, this.cfg.spread) + (opts.angleOffset || 0);
+        const spdRange = this.getDynamicSpeed();
+        let speed = opts.speed;
+        let speedTone = 'normal';
+        if (!speed) {
+          const roll = Math.random();
+          if (opts.fast) { speed = rand(spdRange.max * 0.9, spdRange.max * 1.08); speedTone = 'fast'; }
+          else if (roll < 0.62) { speed = rand(spdRange.min * 0.46, spdRange.min * 0.76); speedTone = 'slow'; }
+          else if (roll > 0.94) { speed = rand(spdRange.max * 0.9, spdRange.max * 1.08); speedTone = 'fast'; }
+          else speed = rand(spdRange.min * 0.78, spdRange.max * 0.92);
+        }
+        const hue = opts.special ? '#FFD34D' : ((opts.fast || speedTone === 'fast') ? '#FF5A66' : (speedTone === 'slow' ? '#64748b' : '#f8fafc'));
+        const radius = opts.radius || this.cfg.size;
+        const id = Math.random().toString(36).slice(2) + Date.now();
+        this.bullets.push({ id, x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, r: radius, color: hue, life: 0, fast: !!opts.fast || speedTone === 'fast' });
+      }
+
+      spawnFan(side, count, spread = 0.55) {
+        const target = { x: this.player.x, y: this.player.y };
+        let origin;
+        if (side === 0) origin = { x: rand(70, LOGICAL_WIDTH - 70), y: -18 };
+        else if (side === 1) origin = { x: LOGICAL_WIDTH + 18, y: rand(80, LOGICAL_HEIGHT - 80) };
+        else if (side === 2) origin = { x: rand(70, LOGICAL_WIDTH - 70), y: LOGICAL_HEIGHT + 18 };
+        else origin = { x: -18, y: rand(80, LOGICAL_HEIGHT - 80) };
+        const base = Math.atan2(target.y - origin.y, target.x - origin.x);
+        const spdRange = this.getDynamicSpeed();
+        for (let i = 0; i < count; i++) {
+          if (this.bullets.length >= this.cfg.maxBullets) break;
+          const t = count === 1 ? 0 : (i / (count - 1) - 0.5);
+          const angle = base + t * spread;
+          const mix = Math.random();
+          const speed = mix < 0.66 ? rand(spdRange.min * 0.46, spdRange.min * 0.76) : (mix > 0.94 ? rand(spdRange.max * 0.9, spdRange.max * 1.08) : rand(spdRange.min * 0.78, spdRange.max * 0.92));
+          const id = Math.random().toString(36).slice(2) + Date.now();
+          const color = mix < 0.66 ? '#64748b' : (mix > 0.94 ? '#FF5A66' : '#f8fafc');
+          this.bullets.push({ id, x: origin.x, y: origin.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, r: this.cfg.size, color, life: 0, fast: mix > 0.94 });
+        }
+      }
+
+      spawnPattern() {
+        const lv = this.difficulty;
+        const side = Math.floor(rand(0, 4));
+        if (lv >= 1 && this.survival > 4) this.spawnFan(side, lv + 4, 0.58 + lv * 0.08);
+        if (lv >= 2 && this.survival > 13) {
+          const opposite = (side + 2) % 4;
+          this.spawnFan(opposite, lv + 4, 0.72);
+        }
+        if (lv >= 3 && this.survival > 22) {
+          for (let s = 0; s < 4; s++) this.spawnBullet({ side: s, aimAtCenter: true, fast: Math.random() > 0.86, radius: 3.8 });
+        }
+        if (lv >= 4 && this.survival > 34) {
+          for (let s = 0; s < 4; s++) this.spawnFan(s, 5, 0.52);
+        }
+      }
+
+      updatePlayer(dt) {
+        const p = this.player;
+        const maxSpeed = 650;
+        const keyboardAccel = 7200;
+        const pointerAccel = 42;
+        const keyX = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+        const keyY = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
+        const keyLen = Math.hypot(keyX, keyY);
+
+        if (keyLen > 0 && !(pointerActive && pointerTarget)) {
+          const nx = keyX / keyLen;
+          const ny = keyY / keyLen;
+          const desiredVx = nx * maxSpeed;
+          const desiredVy = ny * maxSpeed;
+          p.vx += (desiredVx - p.vx) * Math.min(1, keyboardAccel * dt / maxSpeed);
+          p.vy += (desiredVy - p.vy) * Math.min(1, keyboardAccel * dt / maxSpeed);
+        }
+
+        if (pointerActive && pointerTarget) {
+          const dx = pointerTarget.x - p.x;
+          const dy = pointerTarget.y - p.y;
+          p.vx += dx * pointerAccel * dt;
+          p.vy += dy * pointerAccel * dt;
+        }
+
+        const hasInput = keyLen > 0 || (pointerActive && pointerTarget);
+        const damping = hasInput ? 0.92 : 0.76;
+        p.vx *= Math.pow(damping, dt * 60);
+        p.vy *= Math.pow(damping, dt * 60);
+        const speed = Math.hypot(p.vx, p.vy);
+        if (speed > maxSpeed) { p.vx = p.vx / speed * maxSpeed; p.vy = p.vy / speed * maxSpeed; }
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.x = clamp(p.x, SAFE_MARGIN, LOGICAL_WIDTH - SAFE_MARGIN);
+        p.y = clamp(p.y, SAFE_MARGIN, LOGICAL_HEIGHT - SAFE_MARGIN);
+        p.invincible = Math.max(0, p.invincible - dt);
+      }
+
+      updateBullets(dt) {
+        for (const b of this.bullets) {
+          b.x += b.vx * dt;
+          b.y += b.vy * dt;
+          b.life += dt;
+          const d = dist(b.x, b.y, this.player.x, this.player.y);
+          if (!this.grazeSet.has(b.id) && d < PLAYER_RADIUS + b.r + 18 && d > PLAYER_RADIUS + b.r + 3) {
+            this.grazeSet.add(b.id);
+            this.grazeCount++;
+            this.score += 6 + this.difficulty * 2;
+            this.particles.push({ x: b.x, y: b.y, vx: rand(-28,28), vy: rand(-28,28), life: 0.24, color: '#4D8DFF', r: 2 });
+          }
+          if (this.player.invincible <= 0 && d < PLAYER_RADIUS + b.r) {
+            this.gameOver = true;
+            this.screenShake = 1;
+            for (let i = 0; i < 24; i++) this.particles.push({ x: this.player.x, y: this.player.y, vx: rand(-230,230), vy: rand(-230,230), life: rand(0.32,0.7), color: i % 2 ? '#FF5A66' : '#fff', r: rand(2,4) });
+            this.recordEnd();
+            break;
+          }
+        }
+        this.bullets = this.bullets.filter(b => b.x > -60 && b.x < LOGICAL_WIDTH + 60 && b.y > -60 && b.y < LOGICAL_HEIGHT + 60 && b.life < 14);
+      }
+
+      update(dt) {
+        this.particles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.985; p.vy *= 0.985; p.life -= dt; });
+        this.particles = this.particles.filter(p => p.life > 0);
+        this.screenShake = Math.max(0, this.screenShake - dt * 7);
+        this.startFlash = Math.max(0, this.startFlash - dt * 0.9);
+        if (this.gameOver) return;
+
+        this.survival += dt;
+        this.score = Math.floor(this.survival * 10 * this.cfg.scoreMul) + this.grazeCount * (6 + this.difficulty * 2);
+        this.updatePlayer(dt);
+
+        this.spawnTimer -= dt;
+        if (this.spawnTimer <= 0) {
+          const n = this.survival > 18 ? (this.difficulty >= 3 ? 3 : 2) : (this.difficulty >= 4 && this.survival > 8 ? 2 : 1);
+          for (let i = 0; i < n; i++) this.spawnBullet({ fast: Math.random() < 0.035 + this.difficulty * 0.012 });
+          this.spawnTimer = this.getDynamicSpawn() * rand(0.82, 1.2);
+        }
+
+        this.patternTimer -= dt;
+        if (this.patternTimer <= 0) {
+          this.spawnPattern();
+          this.patternTimer = rand(2.15, 3.65) - Math.min(1.25, this.survival / 52);
+        }
+        this.updateBullets(dt);
+      }
+
+      drawGrid(ctx) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.045)';
+        ctx.lineWidth = 1;
+        for (let x = 40; x < LOGICAL_WIDTH; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, LOGICAL_HEIGHT); ctx.stroke(); }
+        for (let y = 40; y < LOGICAL_HEIGHT; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(LOGICAL_WIDTH, y); ctx.stroke(); }
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.strokeRect(12, 12, LOGICAL_WIDTH - 24, LOGICAL_HEIGHT - 24);
+        ctx.restore();
+      }
+
+      draw(ctx) {
+        ctx.save();
+        if (this.screenShake > 0) {
+          const a = this.screenShake * 5;
+          ctx.translate(rand(-a, a), rand(-a, a));
+        }
+        this.drawGrid(ctx);
+
+        ctx.save();
+        const bigTime = Math.floor(this.survival).toString().padStart(2, '0');
+        ctx.font = '900 142px Inter, sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = 'rgba(255,255,255,0.035)';
+        ctx.fillText(bigTime, LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2);
+        ctx.restore();
+
+        for (const b of this.bullets) {
+          ctx.save();
+          ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+          ctx.fillStyle = b.color; ctx.globalAlpha = b.fast ? 0.96 : 0.86;
+          ctx.shadowBlur = b.fast ? 10 : 6; ctx.shadowColor = b.color; ctx.fill();
+          ctx.globalAlpha = 1;
+          if (b.fast) { ctx.beginPath(); ctx.arc(b.x, b.y, b.r + 4, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,90,102,0.28)'; ctx.lineWidth = 1; ctx.stroke(); }
+          ctx.restore();
+        }
+
+        for (const p of this.particles) {
+          ctx.save(); ctx.globalAlpha = Math.max(0, p.life * 2.2);
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r || 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = p.color; ctx.shadowBlur = 8; ctx.shadowColor = p.color; ctx.fill(); ctx.restore();
+        }
+
+        this.drawPlayer(ctx);
+        if (this.startFlash > 0 && !this.gameOver) {
+          ctx.save(); ctx.globalAlpha = this.startFlash;
+          ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+          ctx.font = '700 13px Inter, Noto Sans TC'; ctx.fillStyle = 'rgba(255,255,255,0.68)'; ctx.textAlign = 'center'; ctx.letterSpacing = '0.15em';
+          ctx.fillText('SURVIVE AS LONG AS YOU CAN', LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2 + 96);
+          ctx.restore();
+        }
+        ctx.restore();
+      }
+
+      drawPlayer(ctx) {
+        const p = this.player;
+        const angle = Math.atan2(p.vy, p.vx) || -Math.PI / 2;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(angle + Math.PI / 2);
+        if (p.invincible > 0) ctx.globalAlpha = 0.55 + Math.sin(performance.now() * 0.02) * 0.25;
+        ctx.beginPath();
+        ctx.moveTo(0, -15); ctx.lineTo(10, 12); ctx.lineTo(0, 7); ctx.lineTo(-10, 12); ctx.closePath();
+        ctx.fillStyle = '#4D8DFF'; ctx.shadowBlur = 12; ctx.shadowColor = 'rgba(77,141,255,0.75)'; ctx.fill();
+        ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(255,255,255,0.86)'; ctx.lineWidth = 1.2; ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 2, 2.5, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    const recordFinishedGame = () => { if (gameState) gameState.recordEnd(); };
+
+    const drawCanvas = () => {
+      const canvas = document.getElementById('gameCanvas'); if (!canvas || !gameState) return;
+      const ctx = canvas.getContext('2d'); const dpr = window.devicePixelRatio || 1;
+      ctx.save(); ctx.setTransform(dpr * canvasScale, 0, 0, dpr * canvasScale, 0, 0); ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+      gameState.draw(ctx); ctx.restore();
+    };
+
+    const gameLoop = (time) => {
+      if (!lastFrame) lastFrame = time;
+      const dt = Math.min(0.05, (time - lastFrame) / 1000);
+      lastFrame = time;
+      if (gameState && !isMenuOpen && !isRecordOpen) {
+        gameState.update(dt);
+        updateStatusDOM();
+      }
+      drawCanvas();
+      animationFrameId = requestAnimationFrame(gameLoop);
+    };
+
+    const canvasPoint = (clientX, clientY) => {
+      const canvas = document.getElementById('gameCanvas');
+      const rect = canvas.getBoundingClientRect();
+      return { x: (clientX - rect.left) / canvasScale, y: (clientY - rect.top) / canvasScale };
+    };
+
+    const attachInputs = () => {
+      const canvas = document.getElementById('gameCanvas'); if (!canvas || canvas.dataset.ready) return;
+      canvas.dataset.ready = 'true';
+      window.addEventListener('keydown', (e) => {
+        if (['ArrowLeft','KeyA'].includes(e.code)) { keys.left = true; e.preventDefault(); }
+        if (['ArrowRight','KeyD'].includes(e.code)) { keys.right = true; e.preventDefault(); }
+        if (['ArrowUp','KeyW'].includes(e.code)) { keys.up = true; e.preventDefault(); }
+        if (['ArrowDown','KeyS'].includes(e.code)) { keys.down = true; e.preventDefault(); }
+        if (e.code === 'Space' && gameState && gameState.gameOver) { e.preventDefault(); window.initGame(); }
+      });
+      window.addEventListener('keyup', (e) => {
+        if (['ArrowLeft','KeyA'].includes(e.code)) keys.left = false;
+        if (['ArrowRight','KeyD'].includes(e.code)) keys.right = false;
+        if (['ArrowUp','KeyW'].includes(e.code)) keys.up = false;
+        if (['ArrowDown','KeyS'].includes(e.code)) keys.down = false;
+      });
+      canvas.addEventListener('pointerdown', (e) => { if (!gameState || isMenuOpen || isRecordOpen) return; pointerActive = true; pointerTarget = canvasPoint(e.clientX, e.clientY); canvas.setPointerCapture(e.pointerId); e.preventDefault(); });
+      canvas.addEventListener('pointermove', (e) => { if (!gameState || !pointerActive) return; pointerTarget = canvasPoint(e.clientX, e.clientY); e.preventDefault(); });
+      canvas.addEventListener('pointerup', (e) => { pointerActive = false; pointerTarget = null; try { canvas.releasePointerCapture(e.pointerId); } catch (_) {} e.preventDefault(); });
+      canvas.addEventListener('pointercancel', () => { pointerActive = false; pointerTarget = null; });
+    };
+
+    window.setSetting = (key, value) => { pendingSettings[key] = value; };
+    window.setDifficulty = (val) => {
+      pendingSettings.difficulty = val;
+      for (let i = 1; i <= 4; i++) {
+        let btn = document.getElementById(`btn-diff-${i}`);
+        if (btn) btn.className = `flex items-center justify-center py-2.5 lg:py-3 rounded text-[12px] lg:text-[14px] transition-colors key-base ${i === val ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900 hover:text-white'}`;
+      }
+    };
+    window.toggleRecord = () => { isRecordOpen = !isRecordOpen; render(); };
+    window.initGame = () => {
+      isMenuOpen = false; isRecordOpen = false; pointerActive = false; pointerTarget = null;
+      settings = cloneState(pendingSettings);
+      gameState = new GameState();
+      lastFrame = 0;
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      render(); gameLoop(performance.now());
+    };
+    window.openMenu = () => { pendingSettings = cloneState(settings); isMenuOpen = true; isRecordOpen = false; render(); };
+
+    const updateStatusDOM = () => {
+      if (!gameState) return;
+      const scoreEl = document.getElementById('score-current');
+      const highEl = document.getElementById('score-high');
+      const timeEl = document.getElementById('meta-time');
+      const bulletsEl = document.getElementById('meta-bullets');
+      if (scoreEl) scoreEl.innerText = gameState.score;
+      if (highEl) highEl.innerText = Math.max(gameState.score, gameState.highScore);
+      if (timeEl) timeEl.innerText = gameState.survival.toFixed(1) + 's';
+      if (bulletsEl) bulletsEl.innerText = gameState.bullets.length;
+      const overlay = document.getElementById('game-overlay');
+      const finalTime = document.getElementById('final-time');
+      if (finalTime) finalTime.innerText = gameState.survival.toFixed(1) + 's';
+      if (overlay) {
+        if (gameState.gameOver) { overlay.classList.remove('hidden'); overlay.classList.add('flex'); }
+        else { overlay.classList.add('hidden'); overlay.classList.remove('flex'); }
+      }
+    };
+
+    const getMenuHTML = () => {
+      if (!isMenuOpen) return '';
+      const closeBtn = gameState ? `<button onclick="window.openMenu=false; render();" class="text-white text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-neutral-300 transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white" onerror="this.outerHTML='✕'"></button>` : `<div class="h-[12px] lg:h-[15px] pt-1 lg:pt-1.5"></div>`;
+      let diffGrid = '<div class="grid grid-cols-4 gap-1.5 lg:gap-2 w-full mt-1">';
+      for (let i = 1; i <= 4; i++) diffGrid += `<button id="btn-diff-${i}" onclick="window.setDifficulty(${i})" class="flex items-center justify-center py-2.5 lg:py-3 rounded text-[12px] lg:text-[14px] transition-colors key-base ${i === pendingSettings.difficulty ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900 hover:text-white'}">${i}</button>`;
+      diffGrid += '</div>';
+      return `
+        <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-y-auto ${menuJustOpened ? 'animate-fade-in' : ''}">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+            <a href="index.html" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] hover:text-white transition-colors pt-1 lg:pt-1.5 flex items-center gap-1.5 key-base" style="text-decoration:none;"><img src="./assets/gamehub.svg" alt="Hub" class="h-[12px] opacity-70 icon-white" onerror="this.style.display='none'"> 返回遊戲大堂</a>
+            ${closeBtn}
+          </header>
+          <div class="flex-1 flex flex-col items-center justify-center gap-6 pb-10 px-6 w-full mt-4 lg:mt-0">
+            <div class="flex flex-col items-center justify-center gap-3 mb-2">
+              <img src="./assets/Logo.svg" alt="LOGO" class="h-[22px] lg:h-[28px] object-contain opacity-90 icon-white" onerror="this.style.display='none'">
+              <div class="text-white tracking-[0.4em] text-[15px] lg:text-[18px] font-light opacity-60">特訓99</div>
+            </div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3 mt-4">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase w-full text-center">PLAYER NAME</div>
+              <input type="text" value="${pendingSettings.playerName}" oninput="window.setSetting('playerName', this.value)" placeholder="你的名字" class="w-full bg-[#111] border border-neutral-800 rounded-lg py-3.5 px-4 text-[12px] lg:text-[14px] text-white text-center focus:outline-none focus:border-neutral-500 transition-colors placeholder-neutral-600 font-medium tracking-widest">
+            </div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3 mt-2">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase flex justify-between w-full"><span>DIFFICULTY 難度</span></div>
+              ${diffGrid}
+            </div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] mt-4">
+              <button onclick="window.initGame()" class="w-full bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black py-4 lg:py-5 rounded-lg font-bold tracking-[0.15em] text-[12px] lg:text-[16px] uppercase key-base">${gameState ? 'RESTART 重新開始' : '開始新局'}</button>
+            </div>
+          </div>
+        </div>`;
+    };
+
+    const getRecordHTML = () => {
+      if (!isRecordOpen) return '';
+      const listHTML = matchHistory.map((m) => `
+        <div class="w-full text-left border border-neutral-800 bg-[#111] rounded-xl p-4 key-base hover:border-neutral-600">
+          <div class="flex justify-between items-start gap-4">
+            <div>
+              <div class="text-white font-bold tracking-widest text-[14px] lg:text-[16px] mb-1">${m.playerName}</div>
+              <div class="text-red-500 font-bold tracking-widest text-[12px]">${m.status}</div>
+              <div class="text-neutral-500 text-[11px] mt-2">${m.timestamp}</div>
+            </div>
+            <div class="text-right flex flex-col justify-between">
+              <div class="text-white font-light text-[22px] leading-none mb-2">${m.score}</div>
+              <div class="text-neutral-600 text-[10px] uppercase">LV.${m.difficulty} | ${m.survival.toFixed(1)}s | GRAZE ${m.graze}</div>
+            </div>
+          </div>
+        </div>`).join('') || `<div class="text-neutral-500 text-center py-16 uppercase tracking-widest text-[11px]">暫無戰績記錄</div>`;
+      return `
+        <div class="fixed inset-0 z-[60] bg-black/95 flex flex-col animate-fade-in">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex justify-between items-center">
+            <div class="text-white font-bold tracking-[0.25em] text-[12px] lg:text-[16px]">MATCH RECORD</div>
+            <button onclick="window.toggleRecord()" class="p-2"><img src="./assets/close.svg" class="h-[13px] icon-white" onerror="this.outerHTML='✕'"></button>
+          </header>
+          <main class="flex-1 overflow-y-auto px-6 pb-10 max-w-[620px] w-full mx-auto hide-scrollbar mt-4">
+            <div class="flex flex-col gap-3">${listHTML}</div>
+          </main>
+        </div>`;
+    };
+
+    const render = () => {
+      const app = document.getElementById('app');
+      if (!gameState && isMenuOpen) { app.innerHTML = getMenuHTML(); menuJustOpened = false; return; }
+      app.innerHTML = `
+        ${getMenuHTML()}${getRecordHTML()}
+        <div class="w-full h-full bg-black flex flex-col overflow-hidden relative">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+            <div class="flex items-center"><img src="./assets/Logo.svg" alt="LOGO" class="h-[19px] lg:h-[25px] object-contain opacity-90 icon-white" onerror="this.style.display='none'"></div>
+            <div class="flex items-center gap-4 lg:gap-6">
+              <button onclick="window.initGame()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/back.svg" alt="RESTART" class="h-[14px] lg:h-[18px] icon-white" onerror="this.outerHTML='↶'"></button>
+              <button onclick="window.toggleRecord()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/record.svg" alt="REC" class="h-[16px] lg:h-[22px] icon-white" onerror="this.outerHTML='◷'"></button>
+              <button onclick="window.openMenu()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/setting.svg" alt="SET" class="h-[14px] lg:h-[18px] icon-white" onerror="this.outerHTML='⚙'"></button>
+            </div>
+          </header>
+          <div class="game-stage relative z-10">
+            <div class="game-meta">
+              <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase mb-3 lg:mb-5">
+                <div class="text-white font-bold tracking-[0.2em] text-[13px] lg:text-[16px] mb-1">特訓99</div>
+                <div class="mb-1"><span class="text-white font-bold">LV.${gameState.difficulty}</span> <span class="mx-2 opacity-50">|</span> 生存：<span id="meta-time">${gameState.survival.toFixed(1)}s</span></div>
+                <div class="text-neutral-500">彈幕：<span id="meta-bullets">${gameState.bullets.length}</span> / ${gameState.cfg.maxBullets}</div>
+              </div>
+              <section class="score-panel meta-score flex flex-col items-start">
+                <div class="score-row pointer-events-auto">
+                  <div class="score-pill"><div class="score-label text-neutral-400 font-normal">SCORE</div><div id="score-current" class="text-white score-number text-[21px] lg:text-[34px] leading-none font-light">${gameState.score}</div></div>
+                  <div class="score-divider" aria-hidden="true"></div>
+                  <div class="score-pill"><div class="score-label text-neutral-400 font-normal">LV HIGH</div><div id="score-high" class="text-white score-number text-[21px] lg:text-[34px] leading-none font-light">${Math.max(gameState.score, gameState.highScore)}</div></div>
+                </div>
+              </section>
+            </div>
+            <main class="board-stage">
+              <div class="board-frame">
+                <canvas id="gameCanvas" class="strike-board"></canvas>
+                <div id="game-overlay" class="absolute inset-0 z-40 bg-black/72 backdrop-blur-sm hidden flex-col items-center justify-center rounded-xl animate-fade-in pointer-events-auto">
+                  <div class="text-white font-black tracking-[0.28em] text-[24px] lg:text-[34px] mb-2">GAME OVER</div>
+                  <div class="text-neutral-400 text-[10px] lg:text-[12px] tracking-[0.16em] mb-6">SURVIVED <span id="final-time">${gameState.survival.toFixed(1)}s</span></div>
+                  <button onclick="window.initGame()" class="px-8 py-3 bg-white text-black font-bold tracking-[0.12em] rounded-full hover:bg-neutral-200 transition-colors pointer-events-auto">再玩一次</button>
+                </div>
+              </div>
+              <div class="control-hint">DRAG TO MOVE · WASD / ARROW KEYS</div>
+            </main>
+          </div>
+        </div>`;
+      updateStatusDOM(); setupCanvasSize(); attachInputs(); menuJustOpened = false;
+    };
+
+    const setupCanvasSize = () => {
+      const canvas = document.getElementById('gameCanvas'); if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      canvasScale = rect.width / LOGICAL_WIDTH;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
+      drawCanvas();
+    };
+
+    window.onload = () => { loadHistory(); render(); };
+    window.addEventListener('resize', () => { if (gameState) setupCanvasSize(); });
+  </script>
+</body>
+</html>
