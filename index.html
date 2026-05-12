@@ -41,6 +41,7 @@
     .stagger-5 { animation-delay: 0.5s; }
     .stagger-6 { animation-delay: 0.6s; }
     .stagger-7 { animation-delay: 0.7s; }
+    .stagger-8 { animation-delay: 0.8s; } /* Karina 新增: 為第12個卡片準備的延遲 */
 
     html, body { 
       background-color: #000000; 
@@ -71,7 +72,7 @@
 <body class="bg-black selection:bg-white/30 flex flex-col items-center min-h-screen overflow-x-hidden relative">
 
   <!-- 主內容區 -->
-  <main class="flex-1 w-full max-w-[1000px] mx-auto px-6 py-16 lg:py-24 flex flex-col items-center justify-center relative z-10">
+  <main class="flex-1 w-full max-w-[1000px] mx-auto px-6 pt-16 lg:pt-24 pb-10 lg:pb-12 flex flex-col items-center justify-center relative z-10">
     
     <!-- 標題 -->
     <div class="flex flex-col items-center mb-12 lg:mb-16 animate-fade-in">
@@ -86,7 +87,6 @@
         <a href="chess.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-1 overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-red-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             
-            <!-- Karina 優化：線框風格象棋 Icon -->
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-red-900/40 rounded-xl overflow-hidden">
                 <!-- 九宮格線 -->
                 <div class="absolute inset-0 flex flex-col justify-evenly py-1 lg:py-2"><div class="w-full h-[1px] bg-red-900/30"></div><div class="w-full h-[1px] bg-red-900/30"></div></div>
@@ -95,12 +95,12 @@
                 <div class="absolute w-[150%] h-[1px] bg-red-900/30 -rotate-45"></div>
                 
                 <!-- 線框棋子 -->
-                <div class="absolute w-[36px] h-[36px] lg:w-[46px] lg:h-[46px] bg-[#111] rounded-full border-[2px] border-red-500 flex items-center justify-center shadow-[0_0_12px_rgba(239,68,68,0.4)] z-10 transition-transform duration-300 group-hover:-translate-y-[8px] lg:group-hover:-translate-y-[10px]">
-                    <span class="text-red-500 font-tc text-[18px] lg:text-[22px] font-bold drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] leading-none mt-[2px]">帥</span>
-                </div>
+            <div class="absolute w-[36px] h-[36px] lg:w-[46px] lg:h-[46px] bg-[#111] rounded-full border-[2px] border-red-500 flex items-center justify-center shadow-[0_0_12px_rgba(239,68,68,0.4)] z-10 transition-transform duration-300 group-hover:-translate-y-[8px] lg:group-hover:-translate-y-[10px]">
+                <span class="text-red-500 font-tc text-[18px] lg:text-[22px] font-bold drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] leading-none -translate-y-[2px]">帥</span>
             </div>
-            
-            <div class="flex flex-col items-center mt-2">
+        </div>
+        
+        <div class="flex flex-col items-center mt-2">
                 <span class="text-white font-tc font-bold text-[16px] lg:text-[18px] tracking-wider">中國象棋</span>
                 <span class="text-neutral-500 text-[9px] lg:text-[11px] tracking-[0.2em] uppercase mt-1">Chinese Chess</span>
             </div>
@@ -110,7 +110,6 @@
         <a href="reversi.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-2 overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             
-            <!-- Karina 優化：線框風格黑白棋 Icon -->
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-neutral-700/50 rounded-xl overflow-hidden">
                 <!-- 棋盤格線 -->
                 <div class="absolute inset-0 flex flex-col justify-evenly py-1 lg:py-2"><div class="w-full h-[1px] bg-neutral-800"></div><div class="w-full h-[1px] bg-neutral-800"></div><div class="w-full h-[1px] bg-neutral-800"></div></div>
@@ -132,14 +131,11 @@
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-amber-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-neutral-800 rounded-2xl overflow-hidden">
-                <!-- 棋盤格線 -->
                 <div class="absolute inset-0 flex flex-col justify-evenly py-2 lg:py-3"><div class="w-full h-[1px] bg-neutral-800"></div><div class="w-full h-[1px] bg-neutral-800"></div><div class="w-full h-[1px] bg-neutral-800"></div></div>
                 <div class="absolute inset-0 flex justify-evenly px-2 lg:px-3"><div class="h-full w-[1px] bg-neutral-800"></div><div class="h-full w-[1px] bg-neutral-800"></div><div class="h-full w-[1px] bg-neutral-800"></div></div>
                 
-                <!-- 棋子 (Karina 新增：五連勝發光連線) -->
                 <div class="absolute w-0 h-[2px] bg-amber-400/90 rotate-45 z-0 transition-all duration-500 group-hover:w-[120%] group-hover:shadow-[0_0_10px_rgba(251,191,36,1)]"></div>
                 
-                <!-- 對角線 5 粒棋 -->
                 <div class="absolute w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] bg-[#111] rounded-full border-2 border-amber-500 translate-x-[-24px] translate-y-[-24px] lg:translate-x-[-30px] lg:translate-y-[-30px] z-10 transition-colors duration-300 group-hover:bg-amber-900/40"></div>
                 <div class="absolute w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] bg-[#111] rounded-full border-2 border-amber-500 translate-x-[-12px] translate-y-[-12px] lg:translate-x-[-15px] lg:translate-y-[-15px] z-10 transition-colors duration-300 group-hover:bg-amber-900/40"></div>
                 <div class="absolute w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] bg-[#111] rounded-full border-2 border-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.6)] z-10 transition-colors duration-300 group-hover:bg-amber-900/40"></div>
@@ -158,16 +154,13 @@
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-end justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-blue-900/50 rounded-xl overflow-hidden pb-[4px] lg:pb-[6px]">
-                <!-- 直向支架線 -->
                 <div class="absolute inset-0 flex justify-evenly px-1">
                     <div class="h-full w-[1px] bg-blue-600/30"></div>
                     <div class="h-full w-[1px] bg-blue-600/30"></div>
                     <div class="h-full w-[1px] bg-blue-600/30"></div>
                 </div>
                 
-                <!-- 獨立圓形棋子排版 -->
                 <div class="grid grid-cols-4 gap-[3px] lg:gap-1 w-[80%] relative z-10">
-                    <!-- 頂層 (Karina 新增：頂部跌棋動畫) -->
                     <div class="w-full aspect-square relative">
                         <div class="absolute inset-0 bg-red-500 rounded-full shadow-[0_0_5px_rgba(239,68,68,0.5)] -translate-y-[200%] opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500 ease-out"></div>
                     </div>
@@ -175,13 +168,11 @@
                     <div class="w-full aspect-square"></div>
                     <div class="w-full aspect-square"></div>
                     
-                    <!-- 中層 -->
                     <div class="w-full aspect-square"></div>
                     <div class="w-full aspect-square bg-yellow-400 rounded-full shadow-[0_0_5px_rgba(250,204,21,0.5)]"></div>
                     <div class="w-full aspect-square bg-red-500 rounded-full shadow-[0_0_5px_rgba(239,68,68,0.5)]"></div>
                     <div class="w-full aspect-square"></div>
                     
-                    <!-- 底層 -->
                     <div class="w-full aspect-square bg-yellow-400 rounded-full shadow-[0_0_5px_rgba(250,204,21,0.5)]"></div>
                     <div class="w-full aspect-square bg-red-500 rounded-full shadow-[0_0_5px_rgba(239,68,68,0.5)]"></div>
                     <div class="w-full aspect-square bg-red-500 rounded-full shadow-[0_0_5px_rgba(239,68,68,0.5)]"></div>
@@ -200,15 +191,12 @@
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-emerald-900/40 rounded-xl overflow-hidden">
-                <!-- 陸地格線 -->
                 <div class="absolute inset-0 flex flex-col justify-evenly py-1 lg:py-2"><div class="w-full h-[1px] bg-neutral-800"></div><div class="w-full h-[1px] bg-neutral-800"></div></div>
                 <div class="absolute inset-0 flex justify-evenly px-1 lg:px-2"><div class="h-full w-[1px] bg-neutral-800"></div><div class="h-full w-[1px] bg-neutral-800"></div></div>
                 
-                <!-- 河流 (Rivers) -->
                 <div class="absolute w-[14px] h-[22px] lg:w-[18px] lg:h-[28px] bg-cyan-900/40 border border-cyan-800/60 translate-x-[-14px] lg:translate-x-[-18px] rounded-sm"></div>
                 <div class="absolute w-[14px] h-[22px] lg:w-[18px] lg:h-[28px] bg-cyan-900/40 border border-cyan-800/60 translate-x-[14px] lg:translate-x-[18px] rounded-sm"></div>
                 
-                <!-- 棋子 (Karina 新增：雙方靠攏對峙動畫) -->
                 <div class="absolute w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] bg-[#111] border-[2px] border-white rounded-full translate-x-[-14px] translate-y-[-20px] lg:translate-x-[-18px] lg:translate-y-[-26px] shadow-[0_0_10px_rgba(255,255,255,0.5)] z-10 transition-transform duration-300 group-hover:translate-x-[-8px] group-hover:translate-y-[-10px]"></div>
                 <div class="absolute w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] bg-[#111] border-[2px] border-rose-500 rounded-full translate-x-[14px] translate-y-[20px] lg:translate-x-[18px] lg:translate-y-[26px] shadow-[0_0_10px_rgba(244,63,94,0.5)] z-10 transition-transform duration-300 group-hover:translate-x-[8px] group-hover:translate-y-[10px]"></div>
             </div>
@@ -224,16 +212,13 @@
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-purple-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-purple-900/40 rounded-xl overflow-hidden">
-                <!-- 九宮格線 (3x3) -->
                 <div class="absolute inset-0 flex flex-col justify-evenly py-0"><div class="w-full h-[1px] bg-purple-500/30"></div><div class="w-full h-[1px] bg-purple-500/30"></div></div>
                 <div class="absolute inset-0 flex justify-evenly px-0"><div class="h-full w-[1px] bg-purple-500/30"></div><div class="h-full w-[1px] bg-purple-500/30"></div></div>
                 
-                <!-- 數字點綴 (Neon Numbers) -->
                 <span class="absolute text-purple-400 font-inter text-[12px] lg:text-[16px] font-semibold translate-x-[-18px] translate-y-[-18px] lg:translate-x-[-24px] lg:translate-y-[-24px]">5</span>
                 <span class="absolute text-purple-300 font-inter text-[12px] lg:text-[16px] font-semibold translate-x-[18px] translate-y-[0px] lg:translate-x-[24px] lg:translate-y-[0px]">9</span>
                 <span class="absolute text-purple-500 font-inter text-[12px] lg:text-[16px] font-bold translate-x-[0px] translate-y-[18px] lg:translate-x-[0px] lg:translate-y-[24px] shadow-[0_0_10px_rgba(168,85,247,0.8)]">3</span>
                 
-                <!-- (Karina 新增：填字解謎動畫) -->
                 <span class="absolute text-purple-200 font-inter text-[14px] lg:text-[18px] font-black translate-x-[18px] translate-y-[18px] lg:translate-x-[24px] lg:translate-y-[24px] opacity-0 scale-50 group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 shadow-[0_0_12px_rgba(216,180,254,1)]">7</span>
             </div>
             
@@ -249,7 +234,6 @@
             
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-pink-900/40 rounded-xl p-[8px] lg:p-[10px]">
                 <div class="w-full h-full relative">
-                    <!-- Background Grid (4x4 空白格) -->
                     <div class="absolute inset-0 grid grid-cols-4 grid-rows-4 gap-[2px]">
                         <div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div>
                         <div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div>
@@ -257,34 +241,26 @@
                         <div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div><div class="bg-pink-950/40 rounded-[2px]"></div>
                     </div>
 
-                    <!-- Row 0: Sliding 2s (向右滑動合併) -->
-                    <!-- 被撞擊的 2 (Karina 優化：合併後顯示數字 4) -->
                     <div class="absolute top-0 left-[calc(25%+0.5px)] w-[calc(25%-1.5px)] h-[calc(25%-1.5px)] bg-pink-950 border border-pink-700/50 rounded-[2px] flex items-center justify-center z-10 transition-colors duration-300 group-hover:bg-pink-700 group-hover:border-pink-400">
                         <span class="absolute text-pink-400 font-inter text-[8px] lg:text-[10px] font-bold group-hover:opacity-0 transition-opacity duration-300">2</span>
                         <span class="absolute text-pink-100 font-inter text-[8px] lg:text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity duration-300">4</span>
                     </div>
-                    <!-- 負責滑動的 2 -->
                     <div class="absolute top-0 left-0 group-hover:left-[calc(25%+0.5px)] group-hover:opacity-0 w-[calc(25%-1.5px)] h-[calc(25%-1.5px)] bg-pink-900 border border-pink-500 rounded-[2px] flex items-center justify-center z-20 transition-all duration-500 shadow-[0_0_5px_rgba(244,114,182,0.3)]">
                         <span class="text-pink-200 font-inter text-[8px] lg:text-[10px] font-bold">2</span>
                     </div>
 
-                    <!-- Row 2&3: Sliding 8s (向上滑動合併) -->
-                    <!-- 被撞擊的 8 (Karina 優化：合併後顯示數字 16) -->
                     <div class="absolute top-[calc(50%+1px)] left-[calc(50%+1px)] w-[calc(25%-1.5px)] h-[calc(25%-1.5px)] bg-pink-800 border border-pink-400 rounded-[2px] flex items-center justify-center z-10 transition-colors duration-300 group-hover:bg-pink-600 group-hover:border-pink-300 group-hover:shadow-[0_0_8px_rgba(236,72,153,0.5)] delay-100">
                         <span class="absolute text-pink-200 font-inter text-[8px] lg:text-[10px] font-bold group-hover:opacity-0 transition-opacity duration-300 delay-100">8</span>
                         <span class="absolute text-white font-inter text-[8px] lg:text-[10px] font-bold opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100">16</span>
                     </div>
-                    <!-- 負責滑動的 8 -->
                     <div class="absolute top-[calc(75%+1.5px)] group-hover:top-[calc(50%+1px)] left-[calc(50%+1px)] group-hover:opacity-0 w-[calc(25%-1.5px)] h-[calc(25%-1.5px)] bg-pink-800 border border-pink-400 rounded-[2px] flex items-center justify-center z-20 transition-all duration-500 delay-100">
                         <span class="text-pink-200 font-inter text-[8px] lg:text-[10px] font-bold">8</span>
                     </div>
 
-                    <!-- 靜態點綴磚塊 -->
                     <div class="absolute top-[calc(25%+0.5px)] left-[calc(75%+1.5px)] w-[calc(25%-1.5px)] h-[calc(25%-1.5px)] bg-pink-900 border border-pink-700/50 rounded-[2px] flex items-center justify-center z-10">
                         <span class="text-pink-500 font-inter text-[8px] lg:text-[10px] font-bold">4</span>
                     </div>
 
-                    <!-- 終極 2048 磚塊 -->
                     <div class="absolute top-[calc(75%+1.5px)] left-[calc(75%+1.5px)] w-[calc(25%-1.5px)] h-[calc(25%-1.5px)] bg-pink-500 rounded-[2px] flex items-center justify-center z-10 shadow-[0_0_10px_rgba(236,72,153,0.8)] group-hover:scale-[1.15] transition-transform duration-300 delay-200 origin-center">
                         <span class="text-white font-inter text-[5px] lg:text-[6px] font-black tracking-tighter">2048</span>
                     </div>
@@ -302,20 +278,15 @@
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#322EFF] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-[#322EFF]/40 rounded-xl overflow-hidden">
-                <!-- Zoom-in 棋盤角落線條 (斜線點綴) -->
                 <div class="absolute top-[15%] right-[-15%] w-[130%] h-[1px] bg-[#322EFF]/30 rotate-45"></div>
                 <div class="absolute top-[25%] right-[-15%] w-[130%] h-[1px] bg-[#322EFF]/10 rotate-45"></div>
                 
-                <!-- 右上角特寫球洞 (Pocket) -->
                 <div class="absolute top-[-8px] right-[-8px] w-[28px] h-[28px] lg:w-[36px] lg:h-[36px] bg-[#050505] rounded-full border-[2px] border-[#322EFF]/60 shadow-[inset_0_4px_8px_rgba(0,0,0,0.8)] z-0"></div>
 
-                <!-- 靜態干擾棋子 (增加真實感) -->
                 <div class="absolute w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] bg-neutral-600 rounded-full bottom-[20%] right-[25%] border border-neutral-500"></div>
 
-                <!-- 目標紅棋 (被擊中後入右上角洞) -->
                 <div class="absolute w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] bg-rose-500 rounded-full border border-rose-400 shadow-[0_0_8px_rgba(244,63,94,0.6)] top-[35%] right-[35%] z-10 transition-all duration-300 group-hover:top-[2px] group-hover:right-[2px] group-hover:scale-50 group-hover:opacity-0 delay-100"></div>
 
-                <!-- 擊球母子 (Striker，向右上角滑動擊波) -->
                 <div class="absolute w-[14px] h-[14px] lg:w-[20px] lg:h-[20px] bg-[#322EFF] rounded-full border-[2px] border-white/60 shadow-[0_0_10px_rgba(50,46,255,0.8)] bottom-[15%] left-[15%] z-20 transition-all duration-300 group-hover:bottom-[50%] group-hover:left-[50%] group-hover:-translate-x-[2px] group-hover:translate-y-[2px]"></div>
             </div>
             
@@ -330,38 +301,25 @@
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-neutral-800 rounded-xl overflow-hidden">
-                
-                <!-- 泡泡網格 (Hexagonal Grid) -->
-                <!-- R0 (最頂) -->
                 <div class="absolute top-[10%] left-[15%] -translate-x-1/2 w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] rounded-full border-[1.5px] lg:border-[2px] border-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.6)] flex justify-center items-center"><div class="w-[2px] h-[2px] lg:w-[3px] lg:h-[3px] bg-emerald-500 rounded-full"></div></div>
                 <div class="absolute top-[10%] left-[35%] -translate-x-1/2 w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] rounded-full border-[1.5px] lg:border-[2px] border-blue-500 shadow-[0_0_4px_rgba(59,130,246,0.6)] flex justify-center items-center"><div class="w-[2px] h-[2px] lg:w-[3px] lg:h-[3px] bg-blue-500 rounded-full"></div></div>
                 <div class="absolute top-[10%] left-[55%] -translate-x-1/2 w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] rounded-full border-[1.5px] lg:border-[2px] border-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.6)] flex justify-center items-center"><div class="w-[2px] h-[2px] lg:w-[3px] lg:h-[3px] bg-amber-500 rounded-full"></div></div>
                 <div class="absolute top-[10%] left-[75%] -translate-x-1/2 w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] rounded-full border-[1.5px] lg:border-[2px] border-purple-500 shadow-[0_0_4px_rgba(168,85,247,0.6)] flex justify-center items-center"><div class="w-[2px] h-[2px] lg:w-[3px] lg:h-[3px] bg-purple-500 rounded-full"></div></div>
 
-                <!-- R1 (第二排交錯) -->
                 <div class="absolute top-[24%] left-[25%] -translate-x-1/2 w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] rounded-full border-[1.5px] lg:border-[2px] border-purple-500 shadow-[0_0_4px_rgba(168,85,247,0.6)] flex justify-center items-center"><div class="w-[2px] h-[2px] lg:w-[3px] lg:h-[3px] bg-purple-500 rounded-full"></div></div>
                 <div class="absolute top-[24%] left-[45%] -translate-x-1/2 w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] rounded-full border-[1.5px] lg:border-[2px] border-rose-500 shadow-[0_0_4px_rgba(244,63,94,0.6)] flex justify-center items-center"><div class="w-[2px] h-[2px] lg:w-[3px] lg:h-[3px] bg-rose-500 rounded-full"></div></div>
                 <div class="absolute top-[24%] left-[65%] -translate-x-1/2 w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] rounded-full border-[1.5px] lg:border-[2px] border-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.6)] flex justify-center items-center"><div class="w-[2px] h-[2px] lg:w-[3px] lg:h-[3px] bg-emerald-500 rounded-full"></div></div>
 
-                <!-- R2 (第三排交錯) -->
-                <!-- 這是藍色目標泡泡 (Target) - 被擊中後消除 -->
                 <div class="absolute top-[38%] left-[35%] -translate-x-1/2 w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] rounded-full border-[1.5px] lg:border-[2px] border-blue-500 shadow-[0_0_4px_rgba(59,130,246,0.6)] flex justify-center items-center z-10 transition-all duration-300 group-hover:scale-[2] group-hover:opacity-0 delay-200"><div class="w-[2px] h-[2px] lg:w-[3px] lg:h-[3px] bg-blue-500 rounded-full"></div></div>
-                <!-- 旁邊的黃色泡泡，受牽連掉落 -->
                 <div class="absolute top-[38%] left-[55%] -translate-x-1/2 w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] rounded-full border-[1.5px] lg:border-[2px] border-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.6)] flex justify-center items-center transition-all duration-500 group-hover:translate-y-[20px] group-hover:opacity-0 delay-300"><div class="w-[2px] h-[2px] lg:w-[3px] lg:h-[3px] bg-amber-500 rounded-full"></div></div>
 
-                <!-- Danger Zone 虛線 -->
                 <div class="absolute top-[70%] w-full border-b border-dashed border-red-500/40"></div>
 
-                <!-- Aiming Line (瞄準線) -->
-                <!-- 利用 border-l 畫直線並旋轉 20 度精準對準左上角目標 -->
                 <div class="absolute top-[43%] left-[50%] h-[42%] border-l-[1.5px] border-dashed border-neutral-400/60 origin-bottom -rotate-[20deg]"></div>
 
-                <!-- Shooter Base (發射台) -->
                 <div class="absolute top-[85%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[18px] h-[18px] lg:w-[24px] lg:h-[24px] rounded-full border border-neutral-600/50 bg-[#111] z-20"></div>
 
-                <!-- Bullet (發射的藍色泡泡) -->
                 <div class="absolute top-[85%] left-[50%] -translate-x-1/2 -translate-y-1/2 w-[10px] h-[10px] lg:w-[14px] lg:h-[14px] rounded-full border-[1.5px] lg:border-[2px] border-blue-500 shadow-[0_0_6px_rgba(59,130,246,0.8)] bg-[#111] flex justify-center items-center z-30 transition-all duration-300 group-hover:top-[38%] group-hover:left-[35%] group-hover:opacity-0 ease-in"><div class="w-[2px] h-[2px] lg:w-[3px] lg:h-[3px] bg-blue-500 rounded-full"></div></div>
-
             </div>
             
             <div class="flex flex-col items-center mt-2">
@@ -375,38 +333,28 @@
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-neutral-800/80 rounded-xl overflow-hidden">
-                
-                <!-- 場地邊界與中線 -->
                 <div class="absolute inset-[6px] lg:inset-[8px] border border-neutral-700/40 rounded-sm z-0"></div>
                 <div class="absolute top-1/2 left-[6px] lg:left-[8px] right-[6px] lg:right-[8px] border-t border-dashed border-neutral-600/50 z-0"></div>
-                
-                <!-- 中圈 -->
                 <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[16px] h-[16px] lg:w-[22px] lg:h-[22px] border border-neutral-600/50 rounded-full z-0"></div>
                 
-                <!-- 龍門 (白線) -->
                 <div class="absolute top-[6px] lg:top-[8px] left-1/2 -translate-x-1/2 w-[16px] lg:w-[20px] border-t-[2px] border-neutral-300 z-0"></div>
                 <div class="absolute bottom-[6px] lg:bottom-[8px] left-1/2 -translate-x-1/2 w-[16px] lg:w-[20px] border-b-[2px] border-neutral-300 z-0"></div>
 
-                <!-- AI 擊球器 (Red) -->
                 <div class="absolute top-[20%] right-[30%] w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] rounded-full border-[2px] border-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)] flex justify-center items-center z-10 transition-transform duration-300 group-hover:-translate-x-[10px] group-hover:translate-y-[6px]">
                     <div class="w-[3px] h-[3px] lg:w-[5px] lg:h-[5px] bg-rose-500 rounded-full"></div>
                 </div>
 
-                <!-- Player 擊球器 (Blue) -->
                 <div class="absolute bottom-[20%] left-[30%] w-[12px] h-[12px] lg:w-[16px] lg:h-[16px] rounded-full border-[2px] border-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] flex justify-center items-center z-20 transition-transform duration-300 group-hover:translate-x-[8px] group-hover:-translate-y-[12px] ease-out">
                     <div class="w-[3px] h-[3px] lg:w-[5px] lg:h-[5px] bg-blue-500 rounded-full"></div>
                 </div>
 
-                <!-- 軌跡粒子 (預設隱藏，Hover 時浮現) -->
                 <div class="absolute top-[48%] left-[45%] w-[2px] h-[2px] bg-white rounded-full opacity-0 group-hover:opacity-80 transition-opacity duration-300 delay-75 z-0 shadow-[0_0_4px_rgba(255,255,255,1)]"></div>
                 <div class="absolute top-[56%] left-[41%] w-[3px] h-[3px] bg-white/70 rounded-full opacity-0 group-hover:opacity-80 transition-opacity duration-300 delay-150 z-0 shadow-[0_0_4px_rgba(255,255,255,0.8)]"></div>
                 <div class="absolute top-[64%] left-[37%] w-[2px] h-[2px] bg-rose-400/60 rounded-full opacity-0 group-hover:opacity-80 transition-opacity duration-300 delay-200 z-0 shadow-[0_0_4px_rgba(251,113,133,0.8)]"></div>
 
-                <!-- 氣墊球 Puck (White) -->
                 <div class="absolute top-[65%] left-[35%] w-[8px] h-[8px] lg:w-[10px] lg:h-[10px] rounded-full border-[1.5px] lg:border-[2px] border-white shadow-[0_0_8px_rgba(255,255,255,0.9)] bg-[#111] flex justify-center items-center z-30 transition-all duration-300 group-hover:top-[30%] group-hover:left-[55%] ease-out">
                     <div class="w-[2px] h-[2px] lg:w-[3px] lg:h-[3px] bg-white rounded-full"></div>
                 </div>
-
             </div>
             
             <div class="flex flex-col items-center mt-2">
@@ -415,30 +363,25 @@
             </div>
         </a>
 
-        <!-- Karina 新增 Game 11: 踩地雷 (Minesweeper) -->
+        <!-- Game 11: 踩地雷 (Minesweeper) -->
         <a href="minesweeper.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-7 overflow-hidden">
             <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-red-600 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
 
             <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-neutral-800/80 rounded-xl overflow-hidden p-[6px] lg:p-[8px]">
-                
                 <div class="w-full h-full grid grid-cols-4 grid-rows-4 gap-[2px]">
-                    <!-- Row 1 -->
                     <div class="bg-[#0f0f0f] rounded-[2px] flex justify-center items-center"><span class="text-blue-500 font-inter font-bold text-[8px] lg:text-[11px]">1</span></div>
                     <div class="bg-[#1f1f1f] rounded-[2px] border border-white/5"></div>
                     <div class="bg-[#1f1f1f] rounded-[2px] border border-white/5"></div>
                     <div class="bg-[#1f1f1f] rounded-[2px] border border-white/5"></div>
 
-                    <!-- Row 2 -->
                     <div class="bg-[#0f0f0f] rounded-[2px] flex justify-center items-center"><span class="text-emerald-500 font-inter font-bold text-[8px] lg:text-[11px]">2</span></div>
                     <div class="bg-[#0f0f0f] rounded-[2px] flex justify-center items-center"><span class="text-emerald-500 font-inter font-bold text-[8px] lg:text-[11px]">2</span></div>
-                    <!-- Hover Animation Cell: Reveal 1 -->
                     <div class="relative w-full h-full">
                         <div class="absolute inset-0 bg-[#1f1f1f] rounded-[2px] border border-white/5 z-10 transition-all duration-300 group-hover:opacity-0 group-hover:scale-90 delay-100"></div>
                         <div class="absolute inset-0 bg-[#0f0f0f] rounded-[2px] flex justify-center items-center z-0">
                             <span class="text-blue-500 font-inter font-bold text-[8px] lg:text-[11px] drop-shadow-[0_0_4px_rgba(59,130,246,0.8)] opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-200">1</span>
                         </div>
                     </div>
-                    <!-- Hover Animation Cell: Reveal Flag -->
                     <div class="relative w-full h-full">
                         <div class="absolute inset-0 bg-[#1f1f1f] rounded-[2px] border border-white/5 z-10 transition-all duration-300 group-hover:opacity-0 group-hover:scale-90 delay-300"></div>
                         <div class="absolute inset-0 bg-[#0f0f0f] rounded-[2px] flex justify-center items-center z-0">
@@ -446,19 +389,16 @@
                         </div>
                     </div>
 
-                    <!-- Row 3 -->
                     <div class="bg-[#0f0f0f] rounded-[2px] flex justify-center items-center"><span class="text-emerald-500 font-inter font-bold text-[8px] lg:text-[11px]">2</span></div>
                     <div class="bg-[#0f0f0f] rounded-[2px] flex justify-center items-center"><span class="text-blue-500 font-inter font-bold text-[8px] lg:text-[11px]">1</span></div>
                     <div class="bg-[#1f1f1f] rounded-[2px] border border-white/5"></div>
                     <div class="bg-[#1f1f1f] rounded-[2px] border border-white/5"></div>
 
-                    <!-- Row 4 -->
                     <div class="bg-[#1f1f1f] rounded-[2px] border border-white/5"></div>
                     <div class="bg-[#0f0f0f] rounded-[2px] flex justify-center items-center"><span class="text-rose-500 font-bold text-[8px] lg:text-[10px]">▲</span></div>
                     <div class="bg-[#1f1f1f] rounded-[2px] border border-white/5"></div>
                     <div class="bg-[#1f1f1f] rounded-[2px] border border-white/5"></div>
                 </div>
-
             </div>
             
             <div class="flex flex-col items-center mt-2">
@@ -467,11 +407,48 @@
             </div>
         </a>
 
+        <!-- Karina 新增 Game 12: 射擊訓練 (Shooting) -->
+        <a href="shooting.html" class="game-card relative group bg-[#0d0d0d] border border-neutral-800 hover:border-neutral-400 rounded-2xl p-6 lg:p-8 flex flex-col items-center justify-center gap-4 transition-all duration-300 hover:-translate-y-1 cursor-pointer animate-fade-in stagger-8 overflow-hidden">
+            <!-- 頂部漸層光 -->
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-orange-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+
+            <div class="w-[60px] h-[60px] lg:w-[80px] lg:h-[80px] relative flex items-center justify-center group-hover:scale-110 transition-transform duration-500 bg-[#111] border-2 border-orange-900/40 rounded-xl overflow-hidden">
+                
+                <!-- 標靶 (Target) -->
+                <div class="absolute w-[40px] h-[40px] lg:w-[54px] lg:h-[54px] rounded-full border border-orange-500/30 flex items-center justify-center">
+                    <div class="w-[20px] h-[20px] lg:w-[28px] lg:h-[28px] rounded-full border border-orange-500/50 flex items-center justify-center bg-orange-950/20">
+                        <div class="w-[6px] h-[6px] lg:w-[8px] lg:h-[8px] rounded-full bg-orange-600/80"></div>
+                    </div>
+                </div>
+
+                <!-- 準星 (Crosshair) 初始有偏差，Hover 時瞄準並發光 -->
+                <div class="absolute inset-0 flex items-center justify-center z-10 transition-transform duration-300 group-hover:translate-x-0 group-hover:translate-y-0 translate-x-[8px] -translate-y-[6px]">
+                    <div class="w-[24px] h-[24px] lg:w-[32px] lg:h-[32px] rounded-full border-[1.5px] border-white/70 group-hover:border-white group-hover:shadow-[0_0_8px_rgba(255,255,255,0.8)] transition-all duration-300 relative flex items-center justify-center">
+                        <!-- 準星中心紅點 (擊中標靶) -->
+                        <div class="w-[2px] h-[2px] bg-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-100"></div>
+                        <!-- 準星四方向線 -->
+                        <div class="absolute top-[-4px] left-1/2 -translate-x-1/2 w-[1.5px] h-[6px] bg-white transition-colors duration-300"></div>
+                        <div class="absolute bottom-[-4px] left-1/2 -translate-x-1/2 w-[1.5px] h-[6px] bg-white transition-colors duration-300"></div>
+                        <div class="absolute left-[-4px] top-1/2 -translate-y-1/2 w-[6px] h-[1.5px] bg-white transition-colors duration-300"></div>
+                        <div class="absolute right-[-4px] top-1/2 -translate-y-1/2 w-[6px] h-[1.5px] bg-white transition-colors duration-300"></div>
+                    </div>
+                </div>
+
+                <!-- 射擊火花/爆破效果 (Hover 時中心閃爍) -->
+                <div class="absolute w-[12px] h-[12px] bg-orange-400 rounded-full opacity-0 group-hover:opacity-100 group-hover:scale-150 transition-all duration-100 delay-200 shadow-[0_0_15px_rgba(251,146,60,1)] z-20 mix-blend-screen pointer-events-none blur-[1px]"></div>
+            </div>
+            
+            <div class="flex flex-col items-center mt-2">
+                <span class="text-white font-tc font-bold text-[16px] lg:text-[18px] tracking-wider">射擊訓練</span>
+                <span class="text-neutral-500 text-[9px] lg:text-[11px] tracking-[0.2em] uppercase mt-1">Shooting</span>
+            </div>
+        </a>
+
     </div>
   </main>
 
-  <footer class="flex-none w-full py-6 text-center text-neutral-600 text-[10px] tracking-[0.15em] uppercase z-10 animate-fade-in stagger-4 relative">
-    © 2026 Board Games Hub. All rights reserved.
+  <footer class="flex-none w-full pt-0 pb-10 lg:pb-12 text-center text-neutral-600 text-[10px] tracking-[0.15em] uppercase z-10 animate-fade-in stagger-4 relative">
+    © 2026 Games. All rights reserved.
   </footer>
 
   <!-- 處理 Mobile 點擊觸發 Hover 動畫 -->
@@ -481,7 +458,6 @@
         const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
         if (isTouchDevice) {
-            // 1. 動態將所有 hover / group-hover class 複製為 is-clicked 的觸發條件 (Tailwind JIT 會自動編譯)
             document.querySelectorAll('*').forEach(el => {
                 const classes = Array.from(el.classList);
                 classes.forEach(cls => {
@@ -493,23 +469,19 @@
                 });
             });
 
-            // 2. 攔截卡片點擊，先播放動畫再跳轉頁面
             document.querySelectorAll('.game-card:not(.disabled)').forEach(card => {
                 card.addEventListener('click', function(e) {
-                    e.preventDefault(); // 阻止原本的 A 標籤直接跳轉
+                    e.preventDefault(); 
                     const targetUrl = this.getAttribute('href');
                     
-                    // 加上觸發動畫的 class
                     this.classList.add('is-clicked');
                     
-                    // 延遲跳轉，留時間給動畫播放 (設定 650ms 確保包含 delay 的動畫都能順利播完)
                     setTimeout(() => {
                         window.location.href = targetUrl;
                     }, 650); 
                 });
             });
 
-            // 3. 解決 iOS Safari 返回上一頁時，動畫卡住的問題 (BFCache 清理)
             window.addEventListener('pageshow', function(e) {
                 if (e.persisted) {
                     document.querySelectorAll('.game-card').forEach(card => card.classList.remove('is-clicked'));

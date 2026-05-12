@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Games - 射擊訓練</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=Noto+Sans+TC:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { future: { hoverOnlyWhenSupported: true } };</script>
+  <style>
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.28s ease-out; }
+    html, body {
+      overscroll-behavior-y: none;
+      background-color: #000;
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+      color: #fff;
+      height: 100%;
+      height: -webkit-fill-available;
+      overflow: hidden;
+      margin: 0;
+      touch-action: none;
+    }
+    .app-container { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+    button, canvas, input { -webkit-tap-highlight-color: transparent; outline: none; touch-action: manipulation; }
+    .key-base { transition: background-color 0.2s ease-out, color 0.2s ease-out, border-color 0.2s, opacity 0.2s; }
+    .key-base:active { opacity: 0.5; transition: none; }
+    .icon-white { filter: brightness(0) invert(1); }
+
+    .game-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .board-stage { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; padding: 10px 16px 18px; }
+    .board-frame { width: min(88vw, 65vh, 480px); max-width: 480px; position: relative; }
+    .strike-board {
+      width: 100%; aspect-ratio: 3 / 4; display: block;
+      background: #050505; border: 1.5px solid rgba(255,255,255,0.24); border-radius: 12px;
+      box-shadow: 0 0 40px rgba(0,0,0,0.85); cursor: crosshair;
+      position: relative; z-index: 2;
+    }
+    .game-meta { position: fixed; top: 60px; left: 20px; z-index: 20; pointer-events: none; text-align: left; }
+    .meta-score { margin-top: 18px; }
+    .score-panel { pointer-events: none; }
+    .score-row { display: inline-grid; grid-template-columns: max-content 1px max-content; column-gap: 18px; align-items: start; }
+    .score-divider { width: 1px; height: 48px; background: rgba(255,255,255,0.22); align-self: start; margin-top: 1px; }
+    .score-pill { border: 0; background: transparent; border-radius: 0; padding: 0; min-width: 46px; }
+    .score-label { font-size: 10px; letter-spacing: 0.12em; margin-bottom: 5px; line-height: 1.1; }
+    .score-number { font-family: 'Inter', sans-serif; font-weight: 300; letter-spacing: -0.04em; display:block; }
+
+    @media (min-width: 1024px) {
+      .game-stage { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(420px, 560px) minmax(260px, 1fr); align-items: center; }
+      .game-meta { top: 85px; left: 48px; }
+      .meta-score { margin-top: 20px; }
+      .score-panel { position: static; grid-column: 1; align-self: center; justify-self: start; padding-left: 0; }
+      .score-divider { height: 56px; }
+      .score-label { font-size: 11px; font-weight: 400; }
+      .board-stage { grid-column: 2; padding: 0; align-self: center; justify-self: center; }
+      .board-frame { width: min(480px, 70vh); max-width: 480px; }
+    }
+    @media (max-width: 1023px) {
+      .game-meta { top: 60px; left: 20px; right: 20px; display: grid; grid-template-columns: max-content 1fr; align-items: end; width: auto; }
+      .meta-score { margin-top: 0; grid-column: 2; justify-self: end; align-self: end; }
+      .score-panel { position: static; text-align: left; align-items: flex-start !important; padding: 0; z-index: 21; }
+      .score-row { justify-content: flex-start; align-items: start; column-gap: 14px; }
+      .score-divider { height: 40px; }
+      .score-label { font-size: 9px; margin-bottom: 4px; }
+      .board-stage { transform: translateY(-2vh); }
+      .board-frame { width: min(92vw, 60vh); }
+    }
+  </style>
+</head>
+<body class="bg-black selection:bg-white/30">
+  <div id="app" class="app-container"></div>
+
+  <script>
+    const cloneState = (state) => JSON.parse(JSON.stringify(state));
+    const LOGICAL_WIDTH = 600;
+    const LOGICAL_HEIGHT = 800;
+    const GAME_SECONDS = 40;
+
+    const DIFF_CONFIG = {
+      // LV tuning: each level now has a clearer jump in size, speed, trap pressure and screen density.
+      1: { label: 'BASIC', targetRadius: 38, targetLife: 1.55, spawnGap: 0.90, trapChance: 0.03, bonusChance: 0.045, moveSpeed: 12, maxTargets: 3 },
+      2: { label: 'NORMAL', targetRadius: 32, targetLife: 1.22, spawnGap: 0.68, trapChance: 0.08, bonusChance: 0.055, moveSpeed: 30, maxTargets: 4 },
+      3: { label: 'HARD', targetRadius: 28, targetLife: 0.98, spawnGap: 0.54, trapChance: 0.13, bonusChance: 0.065, moveSpeed: 48, maxTargets: 5 },
+      4: { label: 'MASTER', targetRadius: 24, targetLife: 0.82, spawnGap: 0.43, trapChance: 0.17, bonusChance: 0.075, moveSpeed: 68, maxTargets: 6 }
+    };
+
+    let settings = { playerName: '', difficulty: 2 };
+    let pendingSettings = cloneState(settings);
+    let gameState = null;
+    let canvasScale = 1;
+    let animationFrameId = null;
+    let lastFrame = 0;
+    let isMenuOpen = true;
+    let isRecordOpen = false;
+    let menuJustOpened = true;
+    let matchHistory = [];
+
+    const loadHistory = () => {
+      try { const saved = localStorage.getItem('shooting_training_history'); if (saved) matchHistory = JSON.parse(saved); } catch (e) { matchHistory = []; }
+    };
+    const saveHistory = () => { try { localStorage.setItem('shooting_training_history', JSON.stringify(matchHistory)); } catch (e) {} };
+
+    const rand = (min, max) => min + Math.random() * (max - min);
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+    class GameState {
+      constructor() {
+        this.playerName = settings.playerName.trim() || 'PLAYER 1';
+        this.difficulty = settings.difficulty;
+        this.cfg = DIFF_CONFIG[this.difficulty];
+        this.score = 0;
+        this.highScoreKey = `shooting_training_high_score_lv${this.difficulty}`;
+        this.highScore = parseInt(localStorage.getItem(this.highScoreKey)) || 0;
+        this.hits = 0;
+        this.misses = 0;
+        this.combo = 0;
+        this.maxCombo = 0;
+        this.accuracyClicks = 0;
+        this.goodClicks = 0;
+        this.timeLeft = GAME_SECONDS;
+        this.spawnTimer = 0.25;
+        this.targets = [];
+        this.particles = [];
+        this.rings = [];
+        this.floatTexts = [];
+        this.screenShake = 0;
+        this.gameOver = false;
+        this.victory = false;
+        this.hasRecorded = false;
+        this.lastSpawnSide = 0;
+      }
+
+      getAccuracy() {
+        if (this.accuracyClicks === 0) return 100;
+        return Math.round((this.goodClicks / this.accuracyClicks) * 100);
+      }
+
+      spawnTarget(forceType = null) {
+        const cfg = this.cfg;
+        let type = forceType || 'target';
+        const roll = Math.random();
+        if (!forceType) {
+          if (roll < cfg.bonusChance) type = 'bonus';
+          else if (roll < cfg.bonusChance + cfg.trapChance) type = 'trap';
+        }
+
+        const radius = type === 'bonus' ? cfg.targetRadius * 0.72 : (type === 'trap' ? cfg.targetRadius * 0.86 : cfg.targetRadius);
+        const margin = radius + 22;
+        const x = rand(margin, LOGICAL_WIDTH - margin);
+        const y = rand(104, LOGICAL_HEIGHT - 110);
+        const angle = rand(0, Math.PI * 2);
+        const speed = type === 'bonus' ? cfg.moveSpeed * 1.35 : cfg.moveSpeed;
+
+        this.targets.push({
+          id: Date.now() + Math.random(),
+          type,
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          radius,
+          life: type === 'bonus' ? cfg.targetLife * 0.72 : cfg.targetLife,
+          maxLife: type === 'bonus' ? cfg.targetLife * 0.72 : cfg.targetLife,
+          spawnAge: 0,
+          hit: false
+        });
+      }
+
+      addFloatText(text, x, y, good = true) {
+        this.floatTexts.push({ text, x, y, vy: -42, life: 0.7, maxLife: 0.7, good });
+      }
+
+      addBurst(x, y, color, count = 10) {
+        this.rings.push({ x, y, radius: 8, life: 0.35, maxLife: 0.35, color });
+        for (let i = 0; i < count; i++) {
+          const a = Math.random() * Math.PI * 2;
+          const sp = rand(80, 260);
+          this.particles.push({
+            x, y,
+            vx: Math.cos(a) * sp,
+            vy: Math.sin(a) * sp,
+            r: rand(2, 4.5),
+            life: rand(0.25, 0.55),
+            maxLife: 0.55,
+            color
+          });
+        }
+      }
+
+      registerHit(target) {
+        if (target.hit) return;
+        target.hit = true;
+        this.accuracyClicks++;
+        if (target.type === 'trap') {
+          this.combo = 0;
+          this.misses++;
+          this.score = Math.max(0, this.score - 45);
+          this.timeLeft = Math.max(0, this.timeLeft - 2.5);
+          this.screenShake = 0.5;
+          this.addBurst(target.x, target.y, '#ff5a66', 13);
+          this.addFloatText('-45', target.x, target.y, false);
+        } else {
+          const isBonus = target.type === 'bonus';
+          this.goodClicks++;
+          this.hits += isBonus ? 3 : 1;
+          this.combo++;
+          this.maxCombo = Math.max(this.maxCombo, this.combo);
+          const lifeRatio = Math.max(0, target.life / target.maxLife);
+          const reactionBonus = Math.round(lifeRatio * (isBonus ? 140 : 55));
+          const comboBonus = Math.min(80, Math.floor(this.combo / 5) * 8);
+          const point = (isBonus ? 120 : 25) + reactionBonus + comboBonus;
+          this.score += point;
+          this.addBurst(target.x, target.y, isBonus ? '#ffd34d' : '#4d8dff', isBonus ? 16 : 10);
+          this.addFloatText(`+${point}`, target.x, target.y, true);
+        }
+        this.targets = this.targets.filter(t => t.id !== target.id);
+      }
+
+      missTap(x, y) {
+        if (this.gameOver || this.victory) return;
+        this.accuracyClicks++;
+        this.combo = 0;
+        this.misses++;
+        this.score = Math.max(0, this.score - 8);
+        this.addFloatText('MISS', x, y, false);
+        this.rings.push({ x, y, radius: 6, life: 0.18, maxLife: 0.18, color: 'rgba(255,255,255,0.35)' });
+      }
+
+      handlePointer(x, y) {
+        if (this.gameOver || this.victory) return;
+        let best = null;
+        let bestDist = Infinity;
+        for (const t of this.targets) {
+          const d = Math.hypot(x - t.x, y - t.y);
+          if (d < t.radius + 8 && d < bestDist) { best = t; bestDist = d; }
+        }
+        if (best) this.registerHit(best);
+        else this.missTap(x, y);
+      }
+
+      finish(win = true) {
+        if (this.gameOver || this.victory) return;
+        this.victory = !!win;
+        this.gameOver = false;
+        if (this.score > this.highScore) {
+          this.highScore = this.score;
+          localStorage.setItem(this.highScoreKey, this.score);
+        }
+        recordFinishedGame();
+      }
+
+      update(dt) {
+        if (this.gameOver || this.victory) return;
+        this.timeLeft -= dt;
+        if (this.timeLeft <= 0) {
+          this.timeLeft = 0;
+          this.finish(true);
+          return;
+        }
+
+        this.spawnTimer -= dt;
+        const dynamicGap = Math.max(0.22, this.cfg.spawnGap - Math.min(0.22, this.combo * 0.004));
+        if (this.spawnTimer <= 0) {
+          const maxTargets = this.cfg.maxTargets || 5;
+          if (this.targets.length < maxTargets) {
+            this.spawnTarget();
+            if (this.combo >= 15 && this.targets.length < maxTargets && Math.random() < 0.16) this.spawnTarget('target');
+          }
+          this.spawnTimer = dynamicGap;
+        }
+
+        this.targets.forEach(t => {
+          t.spawnAge += dt;
+          t.life -= dt;
+          t.x += t.vx * dt;
+          t.y += t.vy * dt;
+          if (t.x < t.radius + 12 || t.x > LOGICAL_WIDTH - t.radius - 12) {
+            t.vx *= -1;
+            t.x = clamp(t.x, t.radius + 12, LOGICAL_WIDTH - t.radius - 12);
+          }
+          if (t.y < 92 + t.radius || t.y > LOGICAL_HEIGHT - t.radius - 86) {
+            t.vy *= -1;
+            t.y = clamp(t.y, 92 + t.radius, LOGICAL_HEIGHT - t.radius - 86);
+          }
+        });
+
+        const expired = this.targets.filter(t => t.life <= 0 && t.type !== 'trap');
+        if (expired.length > 0) {
+          this.combo = 0;
+          this.misses += expired.length;
+          expired.forEach(t => this.addFloatText('LOST', t.x, t.y, false));
+        }
+        this.targets = this.targets.filter(t => t.life > 0);
+
+        this.particles.forEach(p => {
+          p.x += p.vx * dt; p.y += p.vy * dt;
+          p.vx *= Math.pow(0.96, dt * 60);
+          p.vy *= Math.pow(0.96, dt * 60);
+          p.life -= dt;
+        });
+        this.particles = this.particles.filter(p => p.life > 0);
+
+        this.rings.forEach(r => { r.radius += 110 * dt; r.life -= dt; });
+        this.rings = this.rings.filter(r => r.life > 0);
+
+        this.floatTexts.forEach(f => { f.y += f.vy * dt; f.life -= dt; });
+        this.floatTexts = this.floatTexts.filter(f => f.life > 0);
+        this.screenShake = Math.max(0, this.screenShake - dt * 5);
+      }
+
+      drawGrid(ctx) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.055)';
+        ctx.lineWidth = 1;
+        for (let x = 60; x < LOGICAL_WIDTH; x += 60) {
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, LOGICAL_HEIGHT); ctx.stroke();
+        }
+        for (let y = 80; y < LOGICAL_HEIGHT; y += 60) {
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(LOGICAL_WIDTH, y); ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      drawTarget(ctx, t) {
+        const lifeRatio = Math.max(0, t.life / t.maxLife);
+        const spawnScale = Math.min(1, t.spawnAge / 0.14);
+        const pulse = Math.sin(performance.now() / 120 + t.x) * 0.04;
+        const r = t.radius * (0.92 + spawnScale * 0.08 + pulse);
+        let color = '#4d8dff';
+        let fill = 'rgba(77,141,255,0.18)';
+        if (t.type === 'bonus') { color = '#ffd34d'; fill = 'rgba(255,211,77,0.20)'; }
+        if (t.type === 'trap') { color = '#ff5a66'; fill = 'rgba(255,90,102,0.14)'; }
+
+        ctx.save();
+        ctx.translate(t.x, t.y);
+        ctx.scale(spawnScale, spawnScale);
+        ctx.globalAlpha = Math.min(1, spawnScale * 1.4);
+
+        ctx.beginPath(); ctx.arc(0, 0, r + 8, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * lifeRatio);
+        ctx.strokeStyle = lifeRatio < 0.28 ? 'rgba(255,90,102,0.75)' : 'rgba(255,255,255,0.28)';
+        ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.stroke();
+
+        ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.fillStyle = '#050505'; ctx.fill();
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.lineWidth = t.type === 'bonus' ? 5 : 4;
+        ctx.strokeStyle = color;
+        ctx.shadowBlur = t.type === 'trap' ? 5 : 10;
+        ctx.shadowColor = color;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        if (t.type === 'trap') {
+          ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.lineCap = 'round';
+          ctx.beginPath(); ctx.moveTo(-r * 0.35, -r * 0.35); ctx.lineTo(r * 0.35, r * 0.35); ctx.moveTo(r * 0.35, -r * 0.35); ctx.lineTo(-r * 0.35, r * 0.35); ctx.stroke();
+        } else {
+          ctx.beginPath(); ctx.arc(0, 0, t.type === 'bonus' ? 6 : 4.5, 0, Math.PI * 2);
+          ctx.fillStyle = color; ctx.fill();
+        }
+        ctx.restore();
+      }
+
+      draw(ctx) {
+        ctx.save();
+        if (this.screenShake > 0) {
+          const amt = this.screenShake * 6;
+          ctx.translate((Math.random() - 0.5) * amt, (Math.random() - 0.5) * amt);
+        }
+
+        this.drawGrid(ctx);
+
+        ctx.save();
+        ctx.globalAlpha = 0.055;
+        ctx.fillStyle = '#fff';
+        ctx.font = '900 150px Inter';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(Math.ceil(this.timeLeft)).padStart(2, '0'), LOGICAL_WIDTH / 2, LOGICAL_HEIGHT / 2);
+        ctx.restore();
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(255,255,255,0.10)';
+        ctx.font = '700 11px Inter';
+        ctx.textAlign = 'center';
+        ctx.letterSpacing = '0.15em';
+        ctx.fillText('TAP BLUE · AVOID RED · YELLOW BONUS', LOGICAL_WIDTH / 2, 42);
+        ctx.restore();
+
+        this.targets.forEach(t => this.drawTarget(ctx, t));
+
+        this.rings.forEach(r => {
+          const a = Math.max(0, r.life / r.maxLife);
+          ctx.save();
+          ctx.globalAlpha = a * 0.8;
+          ctx.beginPath(); ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+          ctx.strokeStyle = r.color; ctx.lineWidth = 2.2; ctx.stroke();
+          ctx.restore();
+        });
+
+        this.particles.forEach(p => {
+          const a = Math.max(0, p.life / p.maxLife);
+          ctx.save(); ctx.globalAlpha = a;
+          ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fillStyle = p.color; ctx.fill();
+          ctx.restore();
+        });
+
+        this.floatTexts.forEach(f => {
+          const a = Math.max(0, f.life / f.maxLife);
+          ctx.save();
+          ctx.globalAlpha = a;
+          ctx.font = '800 20px Inter';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = f.good ? '#ffffff' : '#ff5a66';
+          ctx.fillText(f.text, f.x, f.y);
+          ctx.restore();
+        });
+
+        ctx.save();
+        ctx.fillStyle = this.timeLeft <= 10 ? 'rgba(255,90,102,0.95)' : 'rgba(255,255,255,0.18)';
+        ctx.font = '900 54px Inter';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(Math.ceil(this.timeLeft).toString().padStart(2, '0'), LOGICAL_WIDTH / 2, LOGICAL_HEIGHT - 44);
+        ctx.restore();
+
+        ctx.restore();
+      }
+    }
+
+    const recordFinishedGame = () => {
+      if (!gameState || (!gameState.gameOver && !gameState.victory) || gameState.hasRecorded) return;
+      gameState.hasRecorded = true;
+      const rec = {
+        id: Date.now(),
+        timestamp: new Date().toLocaleString(),
+        playerName: gameState.playerName,
+        score: gameState.score,
+        difficulty: gameState.difficulty,
+        status: 'TIME UP',
+        hits: gameState.hits,
+        combo: gameState.maxCombo,
+        accuracy: gameState.getAccuracy()
+      };
+      matchHistory.unshift(rec);
+      if (matchHistory.length > 50) matchHistory.pop();
+      saveHistory();
+    };
+
+    const drawCanvas = () => {
+      const canvas = document.getElementById('gameCanvas'); if (!canvas || !gameState) return;
+      const ctx = canvas.getContext('2d'); const dpr = window.devicePixelRatio || 1;
+      ctx.save(); ctx.setTransform(dpr * canvasScale, 0, 0, dpr * canvasScale, 0, 0); ctx.clearRect(0, 0, LOGICAL_WIDTH, LOGICAL_HEIGHT);
+      gameState.draw(ctx); ctx.restore();
+    };
+
+    const gameLoop = (time) => {
+      if (!lastFrame) lastFrame = time;
+      const dt = Math.min(0.05, (time - lastFrame) / 1000);
+      lastFrame = time;
+      if (gameState && !isMenuOpen && !isRecordOpen) {
+        gameState.update(dt);
+        updateStatusDOM();
+      }
+      drawCanvas();
+      animationFrameId = requestAnimationFrame(gameLoop);
+    };
+
+    const setupCanvasSize = () => {
+      const canvas = document.getElementById('gameCanvas'); if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      canvasScale = rect.width / LOGICAL_WIDTH;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(rect.width * dpr); canvas.height = Math.round(rect.height * dpr);
+      drawCanvas();
+    };
+
+    const attachInputs = () => {
+      const canvas = document.getElementById('gameCanvas'); if (!canvas || canvas.dataset.ready) return;
+      canvas.dataset.ready = 'true';
+      const getPoint = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.clientX ?? (e.touches && e.touches[0]?.clientX);
+        const clientY = e.clientY ?? (e.touches && e.touches[0]?.clientY);
+        return { x: (clientX - rect.left) / canvasScale, y: (clientY - rect.top) / canvasScale };
+      };
+      canvas.addEventListener('pointerdown', (e) => {
+        if (!gameState || isMenuOpen || isRecordOpen) return;
+        const p = getPoint(e);
+        gameState.handlePointer(p.x, p.y);
+        e.preventDefault();
+      }, { passive: false });
+    };
+
+    window.setSetting = (key, value) => { pendingSettings[key] = value; };
+    window.setDifficulty = (val) => {
+      pendingSettings.difficulty = val;
+      for(let i=1; i<=4; i++) {
+        let btn = document.getElementById(`btn-diff-${i}`);
+        if(btn) btn.className = `flex items-center justify-center py-2.5 lg:py-3 rounded text-[12px] lg:text-[14px] transition-colors key-base ${i === val ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900 hover:text-white'}`;
+      }
+    };
+    window.toggleRecord = () => { isRecordOpen = !isRecordOpen; render(); };
+    window.openMenu = () => { pendingSettings = cloneState(settings); isMenuOpen = true; isRecordOpen = false; render(); };
+    window.closeMenu = () => { isMenuOpen = false; render(); };
+
+    window.initGame = () => {
+      isMenuOpen = false; isRecordOpen = false;
+      settings = cloneState(pendingSettings);
+      gameState = new GameState();
+      lastFrame = 0;
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      render();
+      gameLoop(performance.now());
+    };
+
+    const updateStatusDOM = () => {
+      if (!gameState) return;
+      const scoreEl = document.getElementById('score-current');
+      const highEl = document.getElementById('score-high');
+      const hitsEl = document.getElementById('meta-hits');
+      const accEl = document.getElementById('meta-acc');
+      if (scoreEl) scoreEl.innerText = gameState.score;
+      if (highEl) highEl.innerText = Math.max(gameState.score, gameState.highScore);
+      if (hitsEl) hitsEl.innerText = gameState.hits;
+      if (accEl) accEl.innerText = gameState.getAccuracy();
+
+      const result = document.getElementById('game-result');
+      if (result) {
+        if (gameState.gameOver || gameState.victory) {
+          result.classList.remove('hidden');
+          const title = document.getElementById('result-title');
+          const sub = document.getElementById('result-sub');
+          if (title) title.innerText = 'TIME UP';
+          if (sub) sub.innerText = `HITS ${gameState.hits} · ACC ${gameState.getAccuracy()}% · MAX COMBO ${gameState.maxCombo}`;
+        } else {
+          result.classList.add('hidden');
+        }
+      }
+    };
+
+    const getMenuHTML = () => {
+      if (!isMenuOpen) return '';
+      const closeBtn = gameState ? `<button onclick="window.closeMenu()" class="text-white text-[11px] lg:text-[14px] font-medium tracking-[0.15em] uppercase hover:text-neutral-300 transition-colors pt-1 lg:pt-1.5 key-base"><img src="./assets/close.svg" alt="X" class="h-[12px] lg:h-[15px] icon-white" onerror="this.outerHTML='✕'"></button>` : `<div class="h-[12px] lg:h-[15px] pt-1 lg:pt-1.5"></div>`;
+      let diffGrid = '<div class="grid grid-cols-4 gap-1.5 lg:gap-2 w-full mt-1">';
+      for (let i = 1; i <= 4; i++) diffGrid += `<button id="btn-diff-${i}" onclick="window.setDifficulty(${i})" class="flex items-center justify-center py-2.5 lg:py-3 rounded text-[12px] lg:text-[14px] transition-colors key-base ${i === pendingSettings.difficulty ? 'bg-white text-black font-bold' : 'bg-[#111] text-neutral-400 font-medium border border-neutral-800 hover:bg-neutral-900 hover:text-white'}">${i}</button>`;
+      diffGrid += '</div>';
+      return `
+        <div class="fixed inset-0 z-50 bg-black flex flex-col overflow-y-auto ${menuJustOpened ? 'animate-fade-in' : ''}">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+            <a href="index.html" class="text-neutral-400 text-[11px] lg:text-[14px] font-medium tracking-[0.15em] hover:text-white transition-colors pt-1 lg:pt-1.5 flex items-center gap-1.5 key-base" style="text-decoration:none;"><img src="./assets/gamehub.svg" alt="Hub" class="h-[12px] opacity-70 icon-white" onerror="this.style.display='none'"> 返回遊戲大堂</a>
+            ${closeBtn}
+          </header>
+          <div class="flex-1 flex flex-col items-center justify-center gap-6 pb-10 px-6 w-full mt-4 lg:mt-0">
+            <div class="flex flex-col items-center justify-center gap-3 mb-2">
+              <img src="./assets/Logo.svg" alt="LOGO" class="h-[22px] lg:h-[28px] object-contain opacity-90 icon-white" onerror="this.style.display='none'">
+              <div class="text-white tracking-[0.4em] text-[15px] lg:text-[18px] font-light opacity-60">射擊訓練</div>
+            </div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3 mt-4">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase w-full text-center">PLAYER NAME</div>
+              <input type="text" value="${pendingSettings.playerName}" oninput="window.setSetting('playerName', this.value)" placeholder="你的名字" class="w-full bg-[#111] border border-neutral-800 rounded-lg py-3.5 px-4 text-[12px] lg:text-[14px] text-white text-center focus:outline-none focus:border-neutral-500 transition-colors placeholder-neutral-600 font-medium tracking-widest">
+            </div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] flex flex-col items-center gap-3 mt-2">
+              <div class="text-neutral-500 text-[10px] lg:text-[13px] font-medium tracking-[0.15em] uppercase flex justify-between w-full"><span>DIFFICULTY 難度</span></div>
+              ${diffGrid}
+            </div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] text-center text-neutral-600 text-[10px] lg:text-[12px] leading-relaxed tracking-[0.08em]">40 秒一局。愈快擊中分數愈高，藍色加分，黃色 Bonus，紅色扣分。</div>
+            <div class="w-full max-w-[340px] lg:max-w-[440px] mt-2">
+              <button onclick="window.initGame()" class="w-full bg-white hover:bg-neutral-200 active:bg-neutral-300 text-black py-4 lg:py-5 rounded-lg font-bold tracking-[0.15em] text-[12px] lg:text-[16px] uppercase key-base">${gameState ? 'RESTART 重新開始' : '開始特訓'}</button>
+            </div>
+          </div>
+        </div>`;
+    };
+
+    const getRecordHTML = () => {
+      if (!isRecordOpen) return '';
+      const listHTML = matchHistory.map((m) => {
+        const isWin = m.status === 'STAGE CLEAR';
+        return `
+          <div class="w-full text-left border border-neutral-800 bg-[#111] rounded-xl p-4 key-base hover:border-neutral-600">
+            <div class="flex justify-between items-start gap-4">
+              <div>
+                <div class="text-white font-bold tracking-widest text-[14px] lg:text-[16px] mb-1">${m.playerName}</div>
+                <div class="${isWin ? 'text-green-400' : 'text-red-500'} font-bold tracking-widest text-[12px]">${m.status}</div>
+                <div class="text-neutral-500 text-[11px] mt-2">${m.timestamp}</div>
+              </div>
+              <div class="text-right flex flex-col justify-between">
+                <div class="text-white font-light text-[22px] leading-none mb-2">${m.score}</div>
+                <div class="text-neutral-600 text-[10px] uppercase">LV.${m.difficulty} | HIT ${m.hits} | ACC ${m.accuracy}% | COMBO ${m.combo}</div>
+              </div>
+            </div>
+          </div>`;
+      }).join('') || `<div class="text-neutral-500 text-center py-16 uppercase tracking-widest text-[11px]">暫無戰績記錄</div>`;
+      return `
+        <div class="fixed inset-0 z-[60] bg-black/95 flex flex-col animate-fade-in">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex justify-between items-center">
+            <div class="text-white font-bold tracking-[0.25em] text-[12px] lg:text-[16px]">MATCH RECORD</div>
+            <button onclick="window.toggleRecord()" class="p-2"><img src="./assets/close.svg" class="h-[13px] icon-white" onerror="this.outerHTML='✕'"></button>
+          </header>
+          <main class="flex-1 overflow-y-auto px-6 pb-10 max-w-[620px] w-full mx-auto hide-scrollbar mt-4"><div class="flex flex-col gap-3">${listHTML}</div></main>
+        </div>`;
+    };
+
+    const render = () => {
+      const app = document.getElementById('app');
+      if (!gameState && isMenuOpen) { app.innerHTML = getMenuHTML(); menuJustOpened = false; return; }
+      app.innerHTML = `
+        ${getMenuHTML()}${getRecordHTML()}
+        <div class="w-full h-full bg-black flex flex-col overflow-hidden relative">
+          <header class="flex-none pt-6 pb-2 px-5 lg:px-12 flex items-center justify-between z-30 w-full shrink-0">
+            <div class="flex items-center"><img src="./assets/Logo.svg" alt="LOGO" class="h-[19px] lg:h-[25px] object-contain opacity-90 icon-white" onerror="this.style.display='none'"></div>
+            <div class="flex items-center gap-4 lg:gap-6">
+              <button onclick="window.initGame()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/back.svg" alt="RESTART" class="h-[14px] lg:h-[18px] icon-white" onerror="this.outerHTML='↶'"></button>
+              <button onclick="window.toggleRecord()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/record.svg" alt="REC" class="h-[16px] lg:h-[22px] icon-white" onerror="this.outerHTML='◷'"></button>
+              <button onclick="window.openMenu()" class="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity key-base"><img src="./assets/setting.svg" alt="SET" class="h-[14px] lg:h-[18px] icon-white" onerror="this.outerHTML='⚙'"></button>
+            </div>
+          </header>
+          <div class="game-stage relative z-10">
+            <div class="game-meta">
+              <div class="text-[10px] lg:text-[13px] text-neutral-400 font-medium tracking-[0.15em] leading-relaxed uppercase mb-3 lg:mb-5">
+                <div class="text-white font-bold tracking-[0.2em] text-[13px] lg:text-[16px] mb-1">射擊訓練</div>
+                <div class="mb-1"><span class="text-white font-bold">LV.${gameState.difficulty}</span> <span class="mx-2 opacity-50">|</span> HIT：<span id="meta-hits">${gameState.hits}</span></div>
+                <div class="text-neutral-500">ACC <span id="meta-acc">${gameState.getAccuracy()}</span>% · ${gameState.playerName}</div>
+              </div>
+              <section class="score-panel meta-score flex flex-col items-start">
+                <div class="score-row pointer-events-auto">
+                  <div class="score-pill"><div class="score-label text-neutral-400 font-normal">SCORE</div><div id="score-current" class="text-white score-number text-[21px] lg:text-[34px] leading-none font-light">${gameState.score}</div></div>
+                  <div class="score-divider" aria-hidden="true"></div>
+                  <div class="score-pill"><div class="score-label text-neutral-400 font-normal">LV HIGH</div><div id="score-high" class="text-white score-number text-[21px] lg:text-[34px] leading-none font-light">${Math.max(gameState.score, gameState.highScore)}</div></div>
+                </div>
+              </section>
+            </div>
+            <main class="board-stage">
+              <div class="board-frame">
+                <canvas id="gameCanvas" class="strike-board"></canvas>
+              </div>
+              <div id="game-result" class="hidden mt-4 text-center animate-fade-in">
+                <div id="result-title" class="text-white font-black tracking-[0.25em] text-[18px] lg:text-[24px] mb-1">TIME UP</div>
+                <div id="result-sub" class="text-neutral-500 text-[10px] lg:text-[12px] tracking-[0.12em] mb-4">HITS 0</div>
+                <button onclick="window.initGame()" class="px-8 py-3 bg-white text-black font-bold tracking-[0.1em] rounded-full hover:bg-neutral-200 transition-colors pointer-events-auto">再玩一次</button>
+              </div>
+            </main>
+          </div>
+        </div>`;
+      updateStatusDOM();
+      setupCanvasSize();
+      attachInputs();
+      menuJustOpened = false;
+    };
+
+    window.onload = () => { loadHistory(); render(); };
+    window.addEventListener('resize', () => { if (gameState) setupCanvasSize(); });
+  </script>
+</body>
+</html>
